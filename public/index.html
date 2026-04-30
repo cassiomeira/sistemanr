@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro Multi-Empresa</title>
+    <meta name="description" content="Sistema de controle financeiro da Loja Nunes Rocha">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- LOGIN -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-card">
+            <div class="login-logo"><i class="fas fa-store"></i><h2>Controle Financeiro</h2><p style="color:var(--text3);font-size:.85rem;margin-top:6px">Faça login para continuar</p></div>
+            <form id="formLogin">
+                <div class="form-group"><label>Usuário</label><input type="text" id="login-user" required autocomplete="username" placeholder="admin"></div>
+                <div class="form-group"><label>Senha</label><input type="password" id="login-senha" required autocomplete="current-password" placeholder="••••••"></div>
+                <div id="login-erro" class="login-erro" style="display:none"></div>
+                <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px"><i class="fas fa-sign-in-alt"></i> Entrar</button>
+            </form>
+        </div>
+    </div>
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header"><div class="logo"><i class="fas fa-store"></i><span id="empresaNome">Carregando...</span></div></div>
+        <ul class="nav-links">
+            <li><a href="#" class="nav-link active" data-section="dashboard" id="nav-dashboard"><i class="fas fa-chart-pie"></i><span>Painel Geral</span></a></li>
+            <li><a href="#" class="nav-link" data-section="acerto" id="nav-acerto"><i class="fas fa-cash-register"></i><span>Acerto Financeiro</span></a></li>
+            <li><a href="#" class="nav-link" data-section="fat" id="nav-fat"><i class="fas fa-redo"></i><span>Fat (Recorrentes)</span></a></li>
+            <li><a href="#" class="nav-link" data-section="contas-pagar" id="nav-contas-pagar"><i class="fas fa-file-invoice-dollar"></i><span>Contas a Pagar</span></a></li>
+            <li><a href="#" class="nav-link" data-section="drogaria" id="nav-drogaria"><i class="fas fa-pills"></i><span>Drogaria</span></a></li>
+            <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
+            <li><a href="#" class="nav-link" data-section="conta-dono" id="nav-conta-dono"><i class="fas fa-user-tie"></i><span>Conta do Celso</span></a></li>
+            <li><a href="#" class="nav-link" data-section="distribuicao" id="nav-distribuicao"><i class="fas fa-percentage"></i><span>Distribuição</span></a></li>
+            <li><a href="#" class="nav-link" data-section="colaboradores" id="nav-colaboradores"><i class="fas fa-users"></i><span>Comissionados</span></a></li>
+            <li><a href="#" class="nav-link" data-section="relatorios" id="nav-relatorios"><i class="fas fa-file-alt"></i><span>Relatórios</span></a></li>
+            <li><a href="#" class="nav-link" data-section="configuracoes" id="nav-configuracoes"><i class="fas fa-cog"></i><span>Configurações</span></a></li>
+            <li><a href="#" class="nav-link" data-section="caixas" id="nav-caixas"><i class="fas fa-cash-register"></i><span>Caixas</span></a></li>
+            <li><a href="#" class="nav-link" data-section="usuarios" id="nav-usuarios"><i class="fas fa-users-cog"></i><span>Usuários</span></a></li>
+        </ul>
+        <div class="sidebar-footer"><div class="month-selector"><label>Mês/Ano</label><input type="month" id="monthSelector"></div></div>
+    </nav>
+
+    <main class="main-content" id="mainContent">
+        <header class="topbar">
+            <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+            <h1 id="pageTitle">Painel Geral</h1>
+            <div class="topbar-actions" style="display:flex;gap:10px;align-items:center">
+                <div class="topbar-user" id="topbarUser" style="cursor:pointer" onclick="NR.openSenha()" title="Alterar senha"><i class="fas fa-user-circle"></i><span id="topbarUserName"></span><i class="fas fa-key" style="font-size:.65rem;color:var(--text3)"></i></div>
+                <button class="btn-logout" onclick="NR.logout()" title="Sair"><i class="fas fa-sign-out-alt"></i> Sair</button>
+                <select id="empresaSelector" style="padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:13px;cursor:pointer"></select>
+                <button class="btn btn-sm" style="background:var(--green);color:#000;font-size:12px" onclick="NR.novaEmpresa()"><i class="fas fa-plus"></i> Nova</button>
+                <button class="btn btn-sm btn-danger" style="font-size:12px" onclick="NR.delEmpresa()" title="Excluir empresa selecionada"><i class="fas fa-trash"></i></button>
+                <button class="btn btn-outline" id="btnExport"><i class="fas fa-file-export"></i> Exportar</button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD -->
+        <section class="content-section active" id="section-dashboard">
+            <div class="cards-grid">
+                <div class="card card-green"><div class="card-icon"><i class="fas fa-arrow-up"></i></div><div class="card-info"><span class="card-label">Lucro Loja</span><span class="card-value" id="dash-receita-loja">R$ 0,00</span></div></div>
+                <div class="card card-blue"><div class="card-icon"><i class="fas fa-pills"></i></div><div class="card-info"><span class="card-label">Saldo Drogaria</span><span class="card-value" id="dash-receita-drogaria">R$ 0,00</span></div></div>
+                <div class="card card-purple"><div class="card-icon"><i class="fas fa-money-check-alt"></i></div><div class="card-info"><span class="card-label">Lucro Cheques</span><span class="card-value" id="dash-lucro-cheques">R$ 0,00</span></div></div>
+                <div class="card card-orange"><div class="card-icon"><i class="fas fa-wallet"></i></div><div class="card-info"><span class="card-label">Lucro Total</span><span class="card-value" id="dash-lucro-total">R$ 0,00</span></div></div>
+            </div>
+            <div class="cards-grid mt-20">
+                <div class="card card-cyan"><div class="card-icon"><i class="fas fa-user-shield"></i></div><div class="card-info"><span class="card-label" id="dash-label-admin">Parte Cássio (23%)</span><span class="card-value" id="dash-parte-admin">R$ 0,00</span></div></div>
+                <div class="card card-amber"><div class="card-icon"><i class="fas fa-user-tie"></i></div><div class="card-info"><span class="card-label" id="dash-label-dono">Parte Celso (36%)</span><span class="card-value" id="dash-parte-dono">R$ 0,00</span></div></div>
+                <div class="card card-pink"><div class="card-icon"><i class="fas fa-users"></i></div><div class="card-info"><span class="card-label" id="dash-label-colab">Comissões</span><span class="card-value" id="dash-parte-colab">R$ 0,00</span><small class="card-sub">Base: Lucro da Loja</small></div></div>
+                <div class="card card-teal"><div class="card-icon"><i class="fas fa-piggy-bank"></i></div><div class="card-info"><span class="card-label" id="dash-label-reserva">Reserva (30%)</span><span class="card-value" id="dash-reserva">R$ 0,00</span></div></div>
+            </div>
+            <div class="panel mt-20"><h3><i class="fas fa-exclamation-triangle"></i> Saldo Conta do Celso</h3><p class="big-value" id="dash-saldo-dono">R$ 0,00</p><small>Positivo = Celso deve à empresa | Negativo = Empresa deve ao Celso</small></div>
+            <div class="panel mt-20"><h3><i class="fas fa-cash-register"></i> Saldos dos Caixas</h3><div class="cards-grid" id="dashCaixasCards"><p style="color:var(--text3)">Nenhum caixa cadastrado</p></div></div>
+        </section>
+
+        <!-- ACERTO FINANCEIRO -->
+        <section class="content-section" id="section-acerto">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Lançamento</h3></div>
+                <form id="formAcerto" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="ac-data" required></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="ac-desc" placeholder="Ex: Venda de produto" required></div>
+                    <div class="form-group"><label>Entrada (R$)</label><input type="number" id="ac-entrada" step="0.01" min="0" placeholder="0,00"></div>
+                    <div class="form-group"><label>Saída (R$)</label><input type="number" id="ac-saida" step="0.01" min="0" placeholder="0,00"></div>
+                    <div class="form-group"><label>Categoria <button type="button" class="btn-inline-add" onclick="NR.addCatInline('ac-cat','loja')" title="Nova categoria">+</button></label><select id="ac-cat"></select></div>
+                    <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline()" title="Novo fornecedor">+</button></label><select id="ac-forn"><option value="">—</option></select></div>
+                    <div class="form-group"><label>Recorrente</label><select id="ac-rec"><option value="0">Não</option><option value="1">Sim</option></select></div>
+                    <div class="form-group"><label>D/F</label><select id="ac-nota"><option value="">—</option><option value="D">D</option><option value="F">F</option></select></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header">
+                    <h3><i class="fas fa-list"></i> Acerto Financeiro</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Acerto Financeiro','acerto')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                    <div class="summary-badges">
+                        <span class="badge badge-green">Entradas: <b id="ac-total-ent">R$ 0,00</b></span>
+                        <span class="badge badge-red">Saídas: <b id="ac-total-sai">R$ 0,00</b></span>
+                        <span class="badge badge-blue">Saldo: <b id="ac-saldo">R$ 0,00</b></span>
+                    </div>
+                </div>
+                <div class="filter-bar"><label>Filtrar:</label><select id="ac-filtro"><option value="todos">Todos</option><option value="D">D - Com Nota</option><option value="F">F - Sem Nota</option><option value="rec">Recorrentes</option></select></div>
+                <div class="table-wrap"><table class="data-table" id="tabelaAcerto"><thead><tr><th>Data</th><th>Descrição</th><th>Entrada</th><th>Saída</th><th>Cat.</th><th>Forn.</th><th>Rec.</th><th>D/F</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+            <!-- GRÁFICOS -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="mt-20">
+                <div class="panel">
+                    <h3><i class="fas fa-chart-bar"></i> Gastos por Categoria</h3>
+                    <div class="chart-container" id="chartCategorias"></div>
+                </div>
+                <div class="panel">
+                    <h3><i class="fas fa-truck"></i> Gastos por Fornecedor</h3>
+                    <div class="chart-container" id="chartFornecedores"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAT (RECORRENTES) -->
+        <section class="content-section" id="section-fat">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-redo"></i> Gastos Recorrentes do Mês</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Fat (Recorrentes)','fat')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                    <div class="summary-badges"><span class="badge badge-orange">Total Recorrente: <b id="fat-total">R$ 0,00</b></span></div>
+                </div>
+                <p class="config-desc">Estes são os gastos marcados como "Recorrente" no Acerto Financeiro. Use para planejar o que pagar nos próximos meses.</p>
+                <div class="table-wrap mt-20"><table class="data-table" id="tabelaFat"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Categoria</th></tr></thead><tbody></tbody></table></div>
+            </div>
+            <div class="panel mt-20">
+                <h3><i class="fas fa-chart-bar"></i> Recorrentes por Categoria</h3>
+                <div class="chart-container" id="chartFat"></div>
+            </div>
+        </section>
+
+        <!-- CONTAS A PAGAR -->
+        <section class="content-section" id="section-contas-pagar">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Boleto / Conta</h3></div>
+                <form id="formContaPagar" class="form-grid">
+                    <div class="form-group"><label>Vencimento</label><input type="date" id="cp-venc" required></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="cp-desc" placeholder="Ex: Aluguel" required></div>
+                    <div class="form-group"><label>Valor (R$)</label><input type="number" id="cp-valor" step="0.01" min="0" required></div>
+                    <div class="form-group"><label>Categoria <button type="button" class="btn-inline-add" onclick="NR.addCatInline('cp-cat','loja')" title="Nova categoria">+</button></label><select id="cp-cat"></select></div>
+                    <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline('cp-forn')" title="Novo fornecedor">+</button></label><select id="cp-forn"><option value="">—</option></select></div>
+                    <div class="form-group"><label>Recorrente</label><select id="cp-rec"><option value="0">Não</option><option value="1">Sim</option></select></div>
+                    <div class="form-group"><label>D/F</label><select id="cp-nota"><option value="">—</option><option value="D">D</option><option value="F">F</option></select></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header">
+                    <h3><i class="fas fa-list"></i> Contas a Pagar</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Contas a Pagar','contas-pagar')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                    <div class="summary-badges">
+                        <span class="badge badge-red">Total Pendente: <b id="cp-total-pend">R$ 0,00</b></span>
+                        <span class="badge badge-green">Total Pago: <b id="cp-total-pago">R$ 0,00</b></span>
+                    </div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaContasPagar"><thead><tr><th>Venc.</th><th>Descrição</th><th>Valor</th><th>Cat.</th><th>Forn.</th><th>Rec.</th><th>D/F</th><th>Boleto Chegou</th><th>Pago por</th><th>Saiu do Caixa</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- DROGARIA -->
+        <section class="content-section" id="section-drogaria">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Lançamento - Drogaria</h3></div>
+                <form id="formDrogaria" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="drog-data" required></div>
+                    <div class="form-group"><label>Tipo</label><select id="drog-tipo"><option value="entrada">Crédito (Drogaria → Loja)</option><option value="saida">Débito (Loja pagou p/ Drogaria)</option></select></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="drog-desc" placeholder="Ex: Caixa do dia, Conta de luz" required></div>
+                    <div class="form-group"><label>Valor (R$)</label><input type="number" id="drog-valor" step="0.01" min="0" required></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-list"></i> Extrato Drogaria × Loja</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Drogaria','drogaria')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                    <div class="summary-badges"><span class="badge badge-green">Créditos (Drog→Loja): <b id="drog-total-ent">R$ 0,00</b></span><span class="badge badge-red">Débitos (Loja pagou): <b id="drog-total-sai">R$ 0,00</b></span><span class="badge badge-blue">Saldo: <b id="drog-saldo">R$ 0,00</b></span></div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaDrogaria"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Saldo Acum.</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+            <div class="panel mt-20" style="padding:24px;text-align:center">
+                <div id="drogSaldoCard"></div>
+            </div>
+        </section>
+
+        <!-- CHEQUES -->
+        <section class="content-section" id="section-cheques">
+            <div class="cards-grid">
+                <div class="card card-green"><div class="card-icon"><i class="fas fa-check-circle"></i></div><div class="card-info"><span class="card-label">Disponíveis (Bom p/ Hoje)</span><span class="card-value" id="chq-disp-qtd">0</span><small class="card-sub" id="chq-disp-val">R$ 0,00</small></div></div>
+                <div class="card card-orange"><div class="card-icon"><i class="fas fa-clock"></i></div><div class="card-info"><span class="card-label">Pré-datados</span><span class="card-value" id="chq-pre-qtd">0</span><small class="card-sub" id="chq-pre-val">R$ 0,00</small></div></div>
+                <div class="card card-purple"><div class="card-icon"><i class="fas fa-money-check-alt"></i></div><div class="card-info"><span class="card-label">Total Pendentes</span><span class="card-value" id="chq-pend-qtd">0</span><small class="card-sub" id="chq-pend-val">R$ 0,00</small></div></div>
+                <div class="card card-blue"><div class="card-icon"><i class="fas fa-hand-holding-usd"></i></div><div class="card-info"><span class="card-label">Lucro Estimado</span><span class="card-value" id="chq-lucro-total">R$ 0,00</span></div></div>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Nova Operação de Cheque</h3></div>
+                <form id="formCheque" class="form-grid">
+                    <div class="form-group"><label>Nº Cheque</label><input type="text" id="chq-numero" placeholder="Ex: 000123" required></div>
+                    <div class="form-group"><label>Data</label><input type="date" id="chq-data" required></div>
+                    <div class="form-group"><label>Responsável</label><input type="text" id="chq-cliente" required></div>
+                    <div class="form-group"><label>Dono do Cheque</label><input type="text" id="chq-dono" placeholder="Titular do cheque"></div>
+                    <div class="form-group"><label>Valor (R$)</label><input type="number" id="chq-valor" step="0.01" min="0" required></div>
+                    <div class="form-group"><label>Bom Para</label><input type="date" id="chq-bompara" required></div>
+                    <div class="form-group"><label>Vencimento</label><input type="date" id="chq-venc" required></div>
+                    <div class="form-group"><label>Dias</label><input type="number" id="chq-dias" readonly></div>
+                    <div class="form-group"><label>Taxa (%/mês)</label><input type="number" id="chq-taxa" step="0.1" value="5"></div>
+                    <div class="form-group"><label>Taxa Extra (R$)</label><input type="number" id="chq-taxa-extra" step="0.01" value="0" min="0" placeholder="Valor fixo adicional"></div>
+                    <div class="form-group"><label>Lucro (R$)</label><input type="text" id="chq-lucro" readonly></div>
+                    <div class="form-group"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="chq-juros-ant" style="accent-color:var(--green);width:16px;height:16px"> Descontar juros</label><input type="text" id="chq-valor-passar" readonly placeholder="Valor a passar" style="margin-top:4px"></div>
+                    <div class="form-group"><label>Origem $</label><select id="chq-origem"><option value="caixa-empresa">Caixa Empresa</option><option value="dinheiro-dono">Dinheiro Celso</option></select></div>
+                    <div class="form-group"><label>Status</label><select id="chq-status"><option value="pendente">A Retirar</option><option value="retirado">Retirado</option><option value="compensado">Compensado</option><option value="devolvido">Devolvido</option></select></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-list"></i> Operações de Cheques</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Troca de Cheques','cheques')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                    <div class="summary-badges"><span class="badge badge-purple">Total: <b id="chq-total-trocado">R$ 0,00</b></span><span class="badge badge-green">Lucro: <b id="chq-total-lucro">R$ 0,00</b></span><span class="badge badge-orange">Pendentes: <b id="chq-pendentes">0</b></span></div>
+                </div>
+                <div style="padding:0 20px 10px;display:flex;gap:10px;align-items:center">
+                    <select id="chq-filtro-status" style="padding:8px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;cursor:pointer;min-width:140px">
+                        <option value="todos">Todos</option>
+                        <option value="pendente" selected>A Retirar</option>
+                        <option value="retirado">Retirados</option>
+                        <option value="compensado">Compensados</option>
+                        <option value="devolvido">Devolvidos</option>
+                    </select>
+                    <div style="flex:1;position:relative">
+                        <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
+                        <input type="text" id="chq-busca" placeholder="Pesquisar por nº, responsável, dono, destino ou valor..." style="width:100%;padding:10px 10px 10px 36px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--text1);font-size:14px">
+                    </div>
+                    <button class="btn btn-sm" id="chq-busca-limpar" style="display:none;background:var(--border);color:var(--text1)" onclick="document.getElementById('chq-busca').value='';NR.chqBusca();this.style.display='none'"><i class="fas fa-times"></i> Limpar</button>
+                    <button class="btn btn-sm" id="btnPrintSelecionados" style="display:none;background:var(--blue);color:#fff" onclick="NR.printSelecionados()"><i class="fas fa-print"></i> Imprimir <span id="chqSelCount">0</span> selecionados</button>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaCheques"><thead><tr><th style="width:30px"><input type="checkbox" id="chqSelectAll" onchange="NR.toggleAllChq(this.checked)" style="accent-color:var(--green);width:16px;height:16px;cursor:pointer"></th><th>Nº</th><th>Data</th><th>Responsável</th><th>Dono</th><th>Valor</th><th>Destino</th><th>Bom Para</th><th>Dias</th><th>Taxa</th><th>Lucro</th><th>Origem</th><th>Venc.</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- CONTA DO DONO -->
+        <section class="content-section" id="section-conta-dono">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Lançamento - Conta do Celso</h3></div>
+                <form id="formDono" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="dono-data" required></div>
+                    <div class="form-group"><label>Tipo</label><select id="dono-tipo"><option value="debito">Débito (Celso deve)</option><option value="credito">Crédito (Celso pagou)</option></select></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="dono-desc" required></div>
+                    <div class="form-group"><label>Valor (R$)</label><input type="number" id="dono-valor" step="0.01" min="0" required></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-list"></i> Extrato do Celso</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Conta do Celso','conta-dono')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                    <div class="summary-badges"><span class="badge badge-red">Débitos: <b id="dono-total-deb">R$ 0,00</b></span><span class="badge badge-green">Créditos: <b id="dono-total-cred">R$ 0,00</b></span><span class="badge badge-blue">Saldo: <b id="dono-saldo">R$ 0,00</b></span></div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaDono"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Saldo Acum.</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- DISTRIBUIÇÃO -->
+        <section class="content-section" id="section-distribuicao">
+            <div class="panel"><h3><i class="fas fa-calculator"></i> Distribuição de Lucros do Mês</h3><div class="distrib-grid" id="distribGrid"></div></div>
+            <div class="panel mt-20"><h3><i class="fas fa-info-circle"></i> Resumo do Cálculo</h3><div class="calc-summary" id="calcSummary"></div></div>
+        </section>
+
+        <!-- COMISSIONADOS -->
+        <section class="content-section" id="section-colaboradores">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-user-plus"></i> Adicionar Comissionado</h3></div>
+                <form id="formColab" class="form-grid">
+                    <div class="form-group"><label>Nome</label><input type="text" id="colab-nome" required></div>
+                    <div class="form-group"><label>Comissão (%)</label><input type="number" id="colab-pct" step="0.1" min="0" required></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Adicionar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-users"></i> Comissionados</h3>
+                    <div class="summary-badges"><span class="badge badge-pink">Total: <b id="colab-total-pct">0%</b></span><span class="badge badge-green">Base: Lucro Loja <b id="colab-base-valor">R$ 0,00</b></span></div>
+                </div>
+                <div class="colab-list" id="colabList"></div>
+            </div>
+        </section>
+
+        <!-- CONFIGURAÇÕES -->
+        <section class="content-section" id="section-configuracoes">
+            <div class="panel">
+                <h3><i class="fas fa-sliders-h"></i> Percentuais de Distribuição</h3>
+                <p class="config-desc">Distribuição do lucro total. Comissões são calculadas separadamente sobre o lucro da Loja.</p>
+                <form id="formPercentuais" class="form-grid mt-20">
+                    <div class="form-group"><label>Cássio (%)</label><input type="number" id="cfg-pct-admin" step="0.1"></div>
+                    <div class="form-group"><label>Celso (%)</label><input type="number" id="cfg-pct-dono" step="0.1"></div>
+                    <div class="form-group"><label>Reserva (%)</label><input type="number" id="cfg-pct-reserva" step="0.1"></div>
+                    <div class="form-group"><label>Total</label><input type="text" id="cfg-pct-total" readonly></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20"><h3><i class="fas fa-tags"></i> Categorias da Loja</h3>
+                <form id="formCatLoja" class="form-inline"><div class="form-group"><label>Nova Categoria</label><input type="text" id="cfg-cat-loja"></div><div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i></button></div></form>
+                <div class="tags-list mt-20" id="catLojaList"></div>
+            </div>
+            <div class="panel mt-20"><h3><i class="fas fa-tags"></i> Categorias da Drogaria</h3>
+                <form id="formCatDrog" class="form-inline"><div class="form-group"><label>Nova Categoria</label><input type="text" id="cfg-cat-drog"></div><div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i></button></div></form>
+                <div class="tags-list mt-20" id="catDrogList"></div>
+            </div>
+        </section>
+
+        <!-- RELATÓRIOS -->
+        <section class="content-section" id="section-relatorios">
+            <div class="panel">
+                <h3><i class="fas fa-filter"></i> Filtros do Relatório</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Tipo Nota</label><select id="rel-nota"><option value="">Todos</option><option value="D">D</option><option value="F">F</option></select></div>
+                    <div class="form-group"><label>Categoria</label><select id="rel-cat"><option value="">Todas</option></select></div>
+                    <div class="form-group"><label>Recorrente</label><select id="rel-rec"><option value="">Todos</option><option value="1">Sim</option><option value="0">Não</option></select></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button class="btn btn-primary" id="btnGerarRel"><i class="fas fa-search"></i> Gerar</button></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button class="btn btn-outline" id="btnPrintRel"><i class="fas fa-print"></i> Imprimir</button></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button class="btn btn-outline" id="btnCsvRel"><i class="fas fa-download"></i> CSV</button></div>
+                </div>
+            </div>
+            <div class="panel mt-20" id="relResultPanel" style="display:none">
+                <div class="panel-header">
+                    <h3><i class="fas fa-list"></i> Resultado</h3>
+                    <div class="summary-badges">
+                        <span class="badge badge-green">Entradas: <b id="rel-tot-ent">R$ 0,00</b></span>
+                        <span class="badge badge-red">Saídas: <b id="rel-tot-sai">R$ 0,00</b></span>
+                        <span class="badge badge-blue">Saldo: <b id="rel-saldo">R$ 0,00</b></span>
+                        <span class="badge badge-purple">Registros: <b id="rel-count">0</b></span>
+                    </div>
+                </div>
+                <div class="table-wrap" id="relTableWrap"><table class="data-table" id="tabelaRel"><thead><tr><th>Data</th><th>Descrição</th><th>Entrada</th><th>Saída</th><th>Cat.</th><th>Rec.</th><th>D/F</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- CAIXAS -->
+        <section class="content-section" id="section-caixas">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Caixa</h3></div>
+                <form id="formCaixa" class="form-grid">
+                    <div class="form-group"><label>Nome do Caixa</label><input type="text" id="cx-nome" placeholder="Ex: Caixa Loja, Caixa Banco, PIX" required></div>
+                    <div class="form-group"><label>Saldo Inicial (R$)</label><input type="number" id="cx-saldo" step="0.01" value="0"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-cash-register"></i> Caixas Cadastrados</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Caixas','caixas')"><i class="fas fa-trash"></i> Excluir Tudo</button></div>
+                <div class="cards-grid" id="caixasList" style="padding:0 20px 20px"></div>
+            </div>
+        </section>
+
+        <!-- USUÁRIOS -->
+        <section class="content-section" id="section-usuarios">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-user-plus"></i> Novo Usuário</h3></div>
+                <form id="formUsuario" class="form-grid">
+                    <div class="form-group"><label>Nome Completo</label><input type="text" id="usr-nome" required></div>
+                    <div class="form-group"><label>Login</label><input type="text" id="usr-login" required placeholder="ex: joao"></div>
+                    <div class="form-group"><label>Senha</label><input type="password" id="usr-senha" required></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+                <div class="mt-20"><label style="font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Permissões de Menu</label><div class="perms-grid" id="permsGrid"></div></div>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-users-cog"></i> Usuários Cadastrados</h3></div>
+                <div class="table-wrap"><table class="data-table" id="tabelaUsuarios"><thead><tr><th>Nome</th><th>Login</th><th>Tipo</th><th>Permissões</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+    </main>
+    <!-- MODAL EDITAR PERMISSÕES -->
+    <div class="modal-overlay" id="modalEditPerms" style="display:none">
+        <div class="modal-card" style="max-width:480px">
+            <div class="modal-header"><h3><i class="fas fa-user-shield"></i> Editar Permissões — <span id="editPermsUserName"></span></h3><button class="modal-close" onclick="NR.closeEditPerms()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px">
+                <div class="perm-grid" id="editPermsGrid"></div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button class="btn btn-outline" onclick="NR.closeEditPerms()">Cancelar</button><button class="btn btn-primary" onclick="NR.saveEditPerms()"><i class="fas fa-check"></i> Salvar</button></div>
+            </div>
+        </div>
+    </div>
+    <!-- MODAL PAGAR COM CHEQUE -->
+    <div class="modal-overlay" id="modalCheque" style="display:none">
+        <div class="modal-card">
+            <div class="modal-header"><h3><i class="fas fa-money-check-alt"></i> Pagar Conta com Cheque</h3><button class="modal-close" onclick="NR.closeChequePag()"><i class="fas fa-times"></i></button></div>
+            <div id="chequePagInfo" class="cpag-info-box"></div>
+            <div class="form-group" style="padding:0 24px"><label>Selecionar Cheque Disponível</label><select id="chequePagSelect" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"><option value="">— Selecione um cheque —</option></select></div>
+            <div id="chequePagCalc" style="display:none"></div>
+            <div class="modal-footer"><button class="btn btn-primary" id="btnConfirmChequePag" disabled><i class="fas fa-check"></i> Confirmar Pagamento</button><button class="btn btn-outline" onclick="NR.closeChequePag()">Cancelar</button></div>
+        </div>
+    </div>
+    <!-- MODAL ALTERAR SENHA -->
+    <div class="modal-overlay" id="modalSenha" style="display:none">
+        <div class="modal-card" style="max-width:400px">
+            <div class="modal-header"><h3><i class="fas fa-key"></i> Alterar Senha</h3><button class="modal-close" onclick="NR.closeSenha()"><i class="fas fa-times"></i></button></div>
+            <form id="formAlterarSenha" style="padding:0 24px 24px">
+                <div class="form-group" style="margin-bottom:14px"><label>Senha Atual</label><input type="password" id="pwd-atual" required style="width:100%;padding:10px"></div>
+                <div class="form-group" style="margin-bottom:14px"><label>Nova Senha</label><input type="password" id="pwd-nova" required style="width:100%;padding:10px" minlength="3"></div>
+                <div class="form-group" style="margin-bottom:14px"><label>Confirmar Nova Senha</label><input type="password" id="pwd-confirma" required style="width:100%;padding:10px" minlength="3"></div>
+                <div id="pwd-erro" class="login-erro" style="display:none"></div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button type="button" class="btn btn-outline" onclick="NR.closeSenha()">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button></div>
+            </form>
+        </div>
+    </div>
+    <!-- MODAL CONFIRMAR EXCLUSÃO -->
+    <div class="modal-overlay" id="modalConfirmDel" style="display:none">
+        <div class="modal-card" style="max-width:420px">
+            <div class="modal-header"><h3><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i> Confirmar Exclusão</h3><button class="modal-close" onclick="NR.closeConfirmDel()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px">
+                <p id="confirmDelMsg" style="margin-bottom:12px;color:var(--text2);font-size:.95rem"></p>
+                <p style="margin-bottom:8px;font-size:.85rem;color:var(--text3)">Digite <b style="color:var(--red)">deletar</b> para confirmar:</p>
+                <input type="text" id="confirmDelInput" placeholder="deletar" autocomplete="off" style="width:100%;padding:10px;margin-bottom:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+                <div style="display:flex;gap:10px;justify-content:flex-end">
+                    <button class="btn btn-outline" onclick="NR.closeConfirmDel()">Cancelar</button>
+                    <button class="btn btn-danger" id="btnConfirmDel" disabled style="background:var(--red);color:#fff;opacity:.5"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="toast-container" id="toastContainer"></div>
+    <script src="app.js?v=4"></script>
+</body>
+</html>

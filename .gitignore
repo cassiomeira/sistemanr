@@ -1,0 +1,4 @@
+node_modules/
+data/
+server_logs.txt
+*.db
