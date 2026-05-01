@@ -196,7 +196,7 @@ async function renderContasPagar(){
 // PAGAR COM CHEQUE (MODAL)
 async function openChequePag(contaId){
   let conta=chequePagContas.find(c=>c.id===contaId);
-  if(!conta){toast('Conta não encontrada','error');return;}
+  if(!conta)return;
   chequePagContaId=contaId;
   document.getElementById('chequePagInfo').innerHTML=
     '<div class="cpag-info-line"><span>Descrição:</span><b>'+conta.descricao+'</b></div>'+
@@ -204,46 +204,54 @@ async function openChequePag(contaId){
     '<div class="cpag-info-line"><span>Valor da Conta:</span><b style="color:var(--red);font-size:1.1rem">'+fmt(conta.valor)+'</b></div>';
   let cheques=await api('GET','/api/cheques');
   let pendentes=cheques.filter(c=>c.status==='pendente');
-  let sel=document.getElementById('chequePagSelect');
-  sel.innerHTML='<option value="">— Selecione um cheque —</option>'+pendentes.map(c=>
-    '<option value="'+c.id+'" data-valor="'+c.valor+'">'+(c.numero?'Nº '+c.numero+' — ':'')+c.cliente+(c.dono_cheque?' ('+c.dono_cheque+')':'')+' — '+fmt(c.valor)+(c.bom_para?' (Bom p/ '+fD(c.bom_para)+')':'')+' ['+c.dias+'d]</option>').join('');
-  sel.dataset.contaValor=conta.valor;
-  sel.dataset.contaForn=conta.fornecedor||conta.descricao;
+  let list=document.getElementById('chequePagList');
+  list.innerHTML=pendentes.length ? pendentes.map(c=>
+    '<label style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px">' +
+    '<input type="checkbox" class="chq-pag-cb" value="'+c.id+'" data-valor="'+c.valor+'" data-label="'+(c.numero?'Nº '+c.numero:c.cliente)+'" onchange="NR.calcChequePag()"> ' +
+    (c.numero?'Nº '+c.numero+' — ':'')+c.cliente+(c.dono_cheque?' ('+c.dono_cheque+')':'')+' — '+fmt(c.valor)+(c.bom_para?' (Bom p/ '+fD(c.bom_para)+')':'')+' ['+c.dias+'d]' +
+    '</label>'
+  ).join('') : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:10px">Nenhum cheque disponível</div>';
+  list.dataset.contaValor=conta.valor;
+  list.dataset.contaForn=conta.fornecedor||conta.descricao;
   document.getElementById('chequePagCalc').style.display='none';
   document.getElementById('btnConfirmChequePag').disabled=true;
   document.getElementById('modalCheque').style.display='flex';
 }
 function calcChequePag(){
-  let sel=document.getElementById('chequePagSelect'),calc=document.getElementById('chequePagCalc'),btn=document.getElementById('btnConfirmChequePag');
-  if(!sel.value){calc.style.display='none';btn.disabled=true;return;}
-  let opt=sel.options[sel.selectedIndex];
-  let chequeV=parseFloat(opt.dataset.valor)||0,contaV=parseFloat(sel.dataset.contaValor)||0;
+  let list=document.getElementById('chequePagList'),calc=document.getElementById('chequePagCalc'),btn=document.getElementById('btnConfirmChequePag');
+  let cbs=Array.from(document.querySelectorAll('.chq-pag-cb:checked'));
+  if(cbs.length===0){calc.style.display='none';btn.disabled=true;return;}
+  let chequeV=cbs.reduce((sum,cb)=>sum+parseFloat(cb.dataset.valor),0);
+  let contaV=parseFloat(list.dataset.contaValor)||0;
   let resto=contaV-chequeV;
   calc.style.display='';
   btn.disabled=false;
   calc.innerHTML='<div class="cpag-calc-box">'+
     '<div class="cpag-calc-line"><span>Valor da Conta:</span><b style="color:var(--text)">'+fmt(contaV)+'</b></div>'+
-    '<div class="cpag-calc-line"><span>Valor do Cheque:</span><b style="color:var(--green)">- '+fmt(chequeV)+'</b></div>'+
-    '<div class="cpag-calc-line result"><span>'+(resto>0?'💵 Pagar em Dinheiro:':'✅ Cheque cobre tudo')+'</span><b style="color:'+(resto>0?'var(--amber)':'var(--green)')+'">'+
+    '<div class="cpag-calc-line"><span>Valor do(s) Cheque(s) ('+cbs.length+'):</span><b style="color:var(--green)">- '+fmt(chequeV)+'</b></div>'+
+    '<div class="cpag-calc-line result"><span>'+(resto>0?'💵 Pagar em Dinheiro:':'✅ Cheques cobrem tudo')+'</span><b style="color:'+(resto>0?'var(--amber)':'var(--green)')+'">'+
     (resto>0?fmt(resto):(resto<0?'Troco: '+fmt(Math.abs(resto)):'R$ 0,00'))+'</b></div></div>';
 }
 async function confirmChequePag(){
-  let sel=document.getElementById('chequePagSelect');
-  if(!sel.value||!chequePagContaId)return;
-  let chequeId=sel.value,forn=sel.dataset.contaForn;
-  let opt=sel.options[sel.selectedIndex];
-  let chequeV=parseFloat(opt.dataset.valor)||0,contaV=parseFloat(sel.dataset.contaValor)||0;
+  let list=document.getElementById('chequePagList');
+  let cbs=Array.from(document.querySelectorAll('.chq-pag-cb:checked'));
+  if(cbs.length===0||!chequePagContaId)return;
+  let forn=list.dataset.contaForn;
+  let chequeV=cbs.reduce((sum,cb)=>sum+parseFloat(cb.dataset.valor),0);
+  let contaV=parseFloat(list.dataset.contaValor)||0;
   let resto=contaV-chequeV;
-  await api('PUT','/api/cheques/'+chequeId+'/destino',{destino:forn});
-  let pagLabel='Cheque'+(opt.text.includes('Nº')?' '+opt.text.split('—')[0].trim():'');
+  for(let cb of cbs){
+    await api('PUT','/api/cheques/'+cb.value+'/destino',{destino:forn});
+  }
+  let labels=cbs.map(cb=>cb.dataset.label).join(', ');
+  let pagLabel='Cheques: '+labels;
   await api('PUT','/api/contas-pagar/'+chequePagContaId,{pago_por:pagLabel});
   closeChequePag();
-  let msg='Conta paga com cheque!';
+  let msg='Conta paga com cheque(s)!';
   if(resto>0)msg+=' Falta '+fmt(resto)+' em dinheiro.';
   toast(msg);refreshAll();
 }
 function closeChequePag(){document.getElementById('modalCheque').style.display='none';chequePagContaId='';}
-document.getElementById('chequePagSelect').addEventListener('change',calcChequePag);
 document.getElementById('btnConfirmChequePag').addEventListener('click',confirmChequePag);
 // DROGARIA
 document.getElementById('formDrogaria').addEventListener('submit',async function(e){e.preventDefault();await api('POST','/api/drogaria',{data:document.getElementById('drog-data').value,tipo:document.getElementById('drog-tipo').value,descricao:document.getElementById('drog-desc').value,valor:parseFloat(document.getElementById('drog-valor').value),categoria:'Geral'});this.reset();setToday('drog-data');toast('Salvo!');refreshAll();});
@@ -661,6 +669,6 @@ document.getElementById('btnConfirmDel').addEventListener('click',async function
   }
   closeConfirmDel();refreshAll();
 });
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,delMov};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,delMov};
 checkAuth();
 })();
