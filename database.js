@@ -27,6 +27,20 @@ function initUsersDB() {
   if (cnt === 0) usersDB.run("INSERT INTO usuarios (username,senha_hash,nome,role,permissoes,ativo) VALUES (?,?,?,?,?,1)",
     ['admin', hashSenha('admin'), 'Administrador', 'admin', JSON.stringify(['dashboard','acerto','fat','contas-pagar','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','usuarios']), ]);
   persistUsers();
+  // Migration: adicionar novas permissões aos usuários existentes
+  const allUsers = usersDB.exec("SELECT id, permissoes FROM usuarios");
+  if (allUsers.length) {
+    const newPerms = ['movimentacao', 'caixas'];
+    allUsers[0].values.forEach(([id, permsJson]) => {
+      try {
+        const perms = JSON.parse(permsJson || '[]');
+        let changed = false;
+        newPerms.forEach(p => { if (!perms.includes(p)) { perms.push(p); changed = true; } });
+        if (changed) usersDB.run('UPDATE usuarios SET permissoes=? WHERE id=?', [JSON.stringify(perms), id]);
+      } catch(e) {}
+    });
+    persistUsers();
+  }
 }
 
 const empresasPath = path.join(dataDir, 'empresas.json');
