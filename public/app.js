@@ -202,7 +202,7 @@ async function openChequePag(contaId){
     '<div class="cpag-info-line"><span>Descrição:</span><b>'+conta.descricao+'</b></div>'+
     '<div class="cpag-info-line"><span>Fornecedor:</span><b>'+(conta.fornecedor||'—')+'</b></div>'+
     '<div class="cpag-info-line"><span>Valor da Conta:</span><b style="color:var(--red);font-size:1.1rem">'+fmt(conta.valor)+'</b></div>';
-  let cheques=await api('GET','/api/cheques');
+  let cheques=await api('GET','/api/cheques?mes='+gM());
   let pendentes=cheques.filter(c=>c.status==='pendente');
   let list=document.getElementById('chequePagList');
   list.innerHTML=pendentes.length ? pendentes.map(c=>
