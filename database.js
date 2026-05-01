@@ -188,7 +188,7 @@ module.exports = {
   },
   delAcerto(slug, id) { run(slug, 'DELETE FROM acerto WHERE id=?', [id]); },
   updateAcerto(slug, id, fields) {
-    const allowed = ['categoria','fornecedor','recorrente','tipo_nota'];
+    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida'];
     const sets = [], vals = [];
     allowed.forEach(k => {
       if (fields[k] !== undefined) {
