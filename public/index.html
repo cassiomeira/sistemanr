@@ -231,6 +231,43 @@
                 <div class="table-wrap"><table class="data-table" id="tabelaCheques"><thead><tr><th style="width:30px"><input type="checkbox" id="chqSelectAll" onchange="NR.toggleAllChq(this.checked)" style="accent-color:var(--green);width:16px;height:16px;cursor:pointer"></th><th>Nº</th><th>Data</th><th>Responsável</th><th>Dono</th><th>Valor</th><th>Destino</th><th>Bom Para</th><th>Dias</th><th>Taxa</th><th>Lucro</th><th>Origem</th><th>Venc.</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
             </div>
         </section>
+        <!-- MOVIMENTAÇÃO -->
+        <section class="content-section" id="section-movimentacao">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-exchange-alt"></i> Novo Lançamento - Movimentação</h3></div>
+                <form id="formMov" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="mov-data" required></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="mov-desc" required placeholder="Ex: Maria Jose, Troca de óleo..."></div>
+                    <div class="form-group"><label>Entrada (R$)</label><input type="number" id="mov-entrada" step="0.01" min="0" value="0"></div>
+                    <div class="form-group"><label>Saída (R$)</label><input type="number" id="mov-saida" step="0.01" min="0" value="0"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header">
+                    <h3><i class="fas fa-list"></i> Acerto Loja</h3>
+                    <button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Movimentação','movimentacao')"><i class="fas fa-trash"></i> Excluir Tudo</button>
+                </div>
+                <div style="padding:10px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label style="font-size:12px;color:var(--text3);font-weight:600">Saldo Anterior:</label>
+                        <input type="number" id="mov-saldo-ant" step="0.01" value="0" style="width:140px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-weight:bold">
+                        <button class="btn btn-sm btn-primary" onclick="NR.saveMovConfig()" style="font-size:11px"><i class="fas fa-save"></i></button>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <label style="font-size:12px;color:var(--text3);font-weight:600">Diferença do Caixa:</label>
+                        <input type="number" id="mov-diferenca" step="0.01" value="0" style="width:140px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--amber);font-size:14px;font-weight:bold">
+                        <button class="btn btn-sm" onclick="NR.saveMovConfig()" style="font-size:11px;background:var(--amber);color:#000"><i class="fas fa-save"></i></button>
+                    </div>
+                    <div class="summary-badges" style="margin-left:auto">
+                        <span class="badge badge-green">Entradas: <b id="mov-total-ent">R$ 0,00</b></span>
+                        <span class="badge badge-red">Saídas: <b id="mov-total-sai">R$ 0,00</b></span>
+                        <span class="badge badge-purple">Saldo: <b id="mov-saldo-atual">R$ 0,00</b></span>
+                    </div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaMov"><thead><tr><th>Dia</th><th>Descrição</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
 
         <!-- CONTA DO DONO -->
         <section class="content-section" id="section-conta-dono">
@@ -409,6 +446,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

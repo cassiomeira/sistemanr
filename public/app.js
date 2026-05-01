@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[];
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -101,7 +101,7 @@ let now=new Date(),ms=document.getElementById('monthSelector');
 ms.value=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
 ms.addEventListener('change',()=>refreshAll());
 function setToday(id){let e=document.getElementById(id);if(e)e.value=now.toISOString().split('T')[0];}
-['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc'].forEach(setToday);
+['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc','mov-data'].forEach(setToday);
 function populateCats(){
   document.getElementById('ac-cat').innerHTML=CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
   let drogCat=document.getElementById('drog-cat');if(drogCat)drogCat.innerHTML=CFG.categoriasDrog.map(c=>'<option>'+c+'</option>').join('');
@@ -446,9 +446,9 @@ document.getElementById('btnCsvRel').addEventListener('click',()=>{
   let b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='relatorio_'+gM()+'.csv';a.click();toast('CSV exportado!');
 });
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderAcerto(),renderFat(),renderContasPagar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderAcerto(),renderFat(),renderContasPagar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard','acerto','fat','contas-pagar','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
+const ALL_PERMS=['dashboard','acerto','fat','contas-pagar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -523,6 +523,53 @@ document.getElementById('formAlterarSenha').addEventListener('submit',async func
     closeSenha();toast('Senha alterada com sucesso!');
   }catch(err){errEl.textContent='Erro de conexão';errEl.style.display='block';}
 });
+// === MOVIMENTAÇÃO ===
+document.getElementById('formMov').addEventListener('submit',async function(e){
+  e.preventDefault();
+  let ent=parseFloat(document.getElementById('mov-entrada').value)||0;
+  let sai=parseFloat(document.getElementById('mov-saida').value)||0;
+  if(!ent&&!sai){toast('Preencha entrada ou saída','error');return;}
+  await api('POST','/api/movimentacao',{data:document.getElementById('mov-data').value,descricao:document.getElementById('mov-desc').value,entrada:ent,saida:sai});
+  this.reset();setToday('mov-data');document.getElementById('mov-entrada').value='0';document.getElementById('mov-saida').value='0';
+  toast('Lançamento salvo!');refreshAll();
+});
+async function renderMovimentacao(){
+  let mes=gM();
+  let items=await api('GET','/api/movimentacao?mes='+mes);
+  let cfg=await api('GET','/api/movimentacao/config?mes='+mes);
+  let saldoAnt=cfg.saldo_anterior||0;
+  let dif=cfg.diferenca||0;
+  document.getElementById('mov-saldo-ant').value=saldoAnt.toFixed(2);
+  document.getElementById('mov-diferenca').value=dif.toFixed(2);
+  let totalEnt=0,totalSai=0,running=saldoAnt;
+  let tb=document.querySelector('#tabelaMov tbody');
+  let rows='<tr style="background:var(--bg3);font-weight:bold"><td>—</td><td>Saldo anterior</td><td></td><td></td><td class="tipo-entrada">'+fmt(saldoAnt)+'</td><td></td></tr>';
+  items.forEach(i=>{
+    totalEnt+=i.entrada;totalSai+=i.saida;
+    running+=i.entrada-i.saida;
+    let dia=i.data.split('-')[2];
+    rows+='<tr><td>'+parseInt(dia)+'</td><td>'+i.descricao+'</td>'
+      +'<td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td>'
+      +'<td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td>'
+      +'<td style="font-weight:bold">'+fmt(running)+'</td>'
+      +'<td><button class="btn btn-sm btn-danger" onclick="NR.delMov(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  });
+  if(dif!==0){
+    rows+='<tr style="background:rgba(245,158,11,0.1);font-weight:bold"><td>—</td><td>Diferença do caixa</td><td class="'+(dif>0?'tipo-entrada':'tipo-saida')+'">'+fmt(Math.abs(dif))+'</td><td></td><td style="font-weight:bold;color:var(--amber)">'+fmt(running+dif)+'</td><td></td></tr>';
+  }
+  tb.innerHTML=rows||'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">Nenhum lançamento</td></tr>';
+  document.getElementById('mov-total-ent').textContent=fmt(totalEnt);
+  document.getElementById('mov-total-sai').textContent=fmt(totalSai);
+  document.getElementById('mov-saldo-atual').textContent=fmt(running+dif);
+}
+async function saveMovConfig(){
+  let mes=gM();
+  let sa=parseFloat(document.getElementById('mov-saldo-ant').value)||0;
+  let dif=parseFloat(document.getElementById('mov-diferenca').value)||0;
+  await api('PUT','/api/movimentacao/config',{mes:mes,saldo_anterior:sa,diferenca:dif});
+  toast('Configuração salva!');renderMovimentacao();
+}
+async function delMov(id){if(!confirm('Remover este lançamento?'))return;await api('DELETE','/api/movimentacao/'+id);toast('Removido!','info');refreshAll();}
 // === CAIXAS ===
 document.getElementById('formCaixa').addEventListener('submit',async function(e){
   e.preventDefault();
@@ -608,6 +655,6 @@ document.getElementById('btnConfirmDel').addEventListener('click',async function
   }
   closeConfirmDel();refreshAll();
 });
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,delMov};
 checkAuth();
 })();

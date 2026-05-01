@@ -80,6 +80,13 @@ function initDB(dbInstance) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL,
       saldo REAL NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS movimentacao (
+      id TEXT PRIMARY KEY, data TEXT NOT NULL, descricao TEXT NOT NULL,
+      entrada REAL DEFAULT 0, saida REAL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS mov_config (
+      mes TEXT PRIMARY KEY, saldo_anterior REAL DEFAULT 0, diferenca REAL DEFAULT 0
+    );
   `);
   // Seed config
   const cfgCount = dbInstance.exec("SELECT COUNT(*) FROM configuracoes")[0]?.values[0][0] || 0;
@@ -257,6 +264,21 @@ module.exports = {
   debitCaixa(slug, id, valor) { run(slug, 'UPDATE caixas SET saldo=saldo-? WHERE id=?', [valor, id]); },
   delCaixa(slug, id) { run(slug, 'DELETE FROM caixas WHERE id=?', [id]); },
   clearCaixas(slug) { run(slug, 'DELETE FROM caixas'); },
+
+  // -- Movimentação --
+  getMovimentacao(slug, mes) { return query(slug, 'SELECT * FROM movimentacao WHERE data LIKE ? ORDER BY data, rowid', [mes + '%']); },
+  addMovimentacao(slug, item) { run(slug, 'INSERT INTO movimentacao (id,data,descricao,entrada,saida) VALUES (?,?,?,?,?)', [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0]); },
+  delMovimentacao(slug, id) { run(slug, 'DELETE FROM movimentacao WHERE id=?', [id]); },
+  clearMovimentacao(slug) { run(slug, 'DELETE FROM movimentacao'); },
+  getMovConfig(slug, mes) {
+    const r = query(slug, 'SELECT * FROM mov_config WHERE mes=?', [mes]);
+    return r[0] || { mes, saldo_anterior: 0, diferenca: 0 };
+  },
+  setMovConfig(slug, mes, saldo_anterior, diferenca) {
+    const exists = query(slug, 'SELECT COUNT(*) as c FROM mov_config WHERE mes=?', [mes])[0]?.c;
+    if (exists) run(slug, 'UPDATE mov_config SET saldo_anterior=?, diferenca=? WHERE mes=?', [saldo_anterior, diferenca, mes]);
+    else run(slug, 'INSERT INTO mov_config (mes, saldo_anterior, diferenca) VALUES (?,?,?)', [mes, saldo_anterior, diferenca]);
+  },
 
   // -- Config --
   getConfig(slug) {

@@ -214,6 +214,22 @@ app.put('/api/caixas/:id', (req, res) => { db.updateCaixaSaldo(req.emp, parseInt
 app.delete('/api/caixas/:id', (req, res) => { db.delCaixa(req.emp, parseInt(req.params.id)); res.json({ ok: true }); });
 app.delete('/api/clear/caixas', adminOnly, (req, res) => { db.clearCaixas(req.emp); res.json({ ok: true }); });
 
+// === MOVIMENTAÇÃO ===
+app.get('/api/movimentacao', (req, res) => res.json(db.getMovimentacao(req.emp, req.query.mes)));
+app.post('/api/movimentacao', (req, res) => {
+  const b = req.body;
+  db.addMovimentacao(req.emp, { id: uid(), data: b.data, descricao: b.descricao, entrada: b.entrada || 0, saida: b.saida || 0 });
+  res.json({ ok: true });
+});
+app.delete('/api/movimentacao/:id', (req, res) => { db.delMovimentacao(req.emp, req.params.id); res.json({ ok: true }); });
+app.delete('/api/clear/movimentacao', adminOnly, (req, res) => { db.clearMovimentacao(req.emp); res.json({ ok: true }); });
+app.get('/api/movimentacao/config', (req, res) => res.json(db.getMovConfig(req.emp, req.query.mes)));
+app.put('/api/movimentacao/config', (req, res) => {
+  const b = req.body;
+  db.setMovConfig(req.emp, b.mes, parseFloat(b.saldo_anterior) || 0, parseFloat(b.diferenca) || 0);
+  res.json({ ok: true });
+});
+
 app.get('/api/dashboard', (req, res) => {
   const summary = db.getSummary(req.emp, req.query.mes);
   const config = db.getConfig(req.emp);
