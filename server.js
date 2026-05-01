@@ -88,18 +88,7 @@ app.delete('/api/empresas/:slug', (req, res) => {
 // === ACERTO FINANCEIRO ===
 app.get('/api/acerto', (req, res) => res.json(db.getAcerto(req.emp, req.query.mes)));
 app.post('/api/acerto', (req, res) => {
-  const b = req.body;
-  if (b.recorrente && b.categoria) {
-    const mes = b.data.substring(0, 7);
-    const existing = db.getRecorrentes(req.emp, mes).find(x => x.categoria === b.categoria);
-    if (existing) {
-      const newEntrada = (existing.entrada || 0) + (parseFloat(b.entrada) || 0);
-      const newSaida = (existing.saida || 0) + (parseFloat(b.saida) || 0);
-      db.updateAcerto(req.emp, existing.id, { entrada: newEntrada, saida: newSaida });
-      return res.json({ ok: true, id: existing.id, merged: true });
-    }
-  }
-  const item = { id: uid(), ...b };
+  const item = { id: uid(), ...req.body };
   db.addAcerto(req.emp, item);
   res.json({ ok: true, id: item.id });
 });

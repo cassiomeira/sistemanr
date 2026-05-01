@@ -156,11 +156,17 @@ async function renderAcerto(){
 }
 async function renderFat(){
   let items=await api('GET','/api/fat?mes='+gM()),total=0;
-  document.querySelector('#tabelaFat tbody').innerHTML=items.map(i=>{total+=i.saida||0;return'<tr><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td></tr>';}).join('');
+  let agrupados = {};
+  items.forEach(i => {
+    let cat = i.categoria || 'Outros';
+    if(!agrupados[cat]) agrupados[cat] = { data: i.data, descricao: i.descricao, saida: 0, categoria: cat };
+    agrupados[cat].saida += (i.saida || 0);
+  });
+  let itemsAgrupados = Object.values(agrupados);
+  document.querySelector('#tabelaFat tbody').innerHTML=itemsAgrupados.map(i=>{total+=i.saida||0;return'<tr><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td></tr>';}).join('');
   document.getElementById('fat-total').textContent=fmt(total);
   // Chart por categoria
-  let catMap={};items.forEach(i=>{let c=i.categoria||'Outros';catMap[c]=(catMap[c]||0)+(i.saida||0);});
-  let cats=Object.entries(catMap).map(([k,v])=>({categoria:k,total:v})).sort((a,b)=>b.total-a.total);
+  let cats=itemsAgrupados.map(i=>({categoria:i.categoria,total:i.saida})).sort((a,b)=>b.total-a.total);
   let ch=document.getElementById('chartFat');
   if(!cats.length){ch.innerHTML='<p style="color:var(--text3)">Sem dados recorrentes</p>';return;}
   let max=Math.max(...cats.map(c=>c.total));
