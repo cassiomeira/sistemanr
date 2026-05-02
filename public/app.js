@@ -12,7 +12,7 @@ function fD(d){if(!d)return'-';let p=d.split('-');return p.length===3?p[2]+'/'+p
 function gM(){return document.getElementById('monthSelector').value;}
 function toast(m,t){t=t||'success';let c=document.getElementById('toastContainer'),e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),3000);}
 async function api(method,path,body){
-  const o={method,headers:{'Content-Type':'application/json','X-Empresa':currentEmpresa}};
+  const o={method,headers:{'Content-Type':'application/json','X-Empresa':currentEmpresa}, cache:'no-store'};
   if(authToken)o.headers['Authorization']='Bearer '+authToken;
   if(body)o.body=JSON.stringify(body);
   const resp=await fetch(path,o);
