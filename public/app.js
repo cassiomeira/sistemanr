@@ -2,7 +2,7 @@
 'use strict';
 let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[]},COLABS=[];
 let currentEmpresa='nunesrocha';
-let empresasList=[],chequePagContaId='',chequePagContas=[];
+let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[];
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
 const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
 const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
@@ -133,13 +133,16 @@ async function renderAcerto(){
   else if(f==='F')items=items.filter(i=>i.tipo_nota==='F');
   else if(f==='rec')items=items.filter(i=>i.recorrente);
   let tb=document.querySelector('#tabelaAcerto tbody');
+  acertoFinanceiroGeral=items;
   tb.innerHTML=items.map(i=>{
     te+=i.entrada||0;ts+=i.saida||0;
+    let pago = i.origem_conta_pagar && i.origem_conta_pagar.includes('Cheques:');
+    let chqBtn = (i.saida > 0 && !pago) ? '<button class="btn-cheque-pay" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="NR.openChequePag(\''+i.id+'\',\'acerto\')" title="Pagar com cheque"><i class="fas fa-money-check-alt"></i></button>' : (pago ? '<span style="font-size:11px;color:var(--green);margin-right:4px" title="'+i.origem_conta_pagar+'"><i class="fas fa-check"></i> Chq</span>' : '');
     let catSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'categoria\',this.value)">'+CFG.categoriasLoja.map(c=>'<option'+(c===i.categoria?' selected':'')+'>'+c+'</option>').join('')+'</select>';
     let fornSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'fornecedor\',this.value)"><option value=""'+((!i.fornecedor||i.fornecedor==='')?' selected':'')+'>—</option>'+(CFG.fornecedores||[]).map(f=>'<option'+(f===i.fornecedor?' selected':'')+'>'+f+'</option>').join('')+'</select>';
     let recSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'recorrente\',this.value)"><option value="0"'+(i.recorrente?'':' selected')+'>Não</option><option value="1"'+(i.recorrente?' selected':'')+'>Sim</option></select>';
     let dfSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'tipo_nota\',this.value)"><option value=""'+(!i.tipo_nota?' selected':'')+'>—</option><option value="D"'+(i.tipo_nota==='D'?' selected':'')+'>D</option><option value="F"'+(i.tipo_nota==='F'?' selected':'')+'>F</option></select>';
-    return'<tr><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');
+    return'<tr><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
   document.getElementById('ac-total-ent').textContent=fmt(te);
   document.getElementById('ac-total-sai').textContent=fmt(ts);
   document.getElementById('ac-saldo').textContent=fmt(te-ts);
@@ -194,14 +197,18 @@ async function renderContasPagar(){
   document.getElementById('cp-total-pago').textContent=fmt(tpg);
 }
 // PAGAR COM CHEQUE (MODAL)
-async function openChequePag(contaId){
-  let conta=chequePagContas.find(c=>c.id===contaId);
+async function openChequePag(contaId, context='contas-pagar'){
+  chequePagContext=context;
+  let conta=null;
+  if(context==='contas-pagar') conta=chequePagContas.find(c=>c.id===contaId);
+  else conta=acertoFinanceiroGeral.find(c=>c.id===contaId);
   if(!conta)return;
   chequePagContaId=contaId;
+  let valor = context==='contas-pagar' ? conta.valor : conta.saida;
   document.getElementById('chequePagInfo').innerHTML=
     '<div class="cpag-info-line"><span>Descrição:</span><b>'+conta.descricao+'</b></div>'+
     '<div class="cpag-info-line"><span>Fornecedor:</span><b>'+(conta.fornecedor||'—')+'</b></div>'+
-    '<div class="cpag-info-line"><span>Valor da Conta:</span><b style="color:var(--red);font-size:1.1rem">'+fmt(conta.valor)+'</b></div>';
+    '<div class="cpag-info-line"><span>Valor:</span><b style="color:var(--red);font-size:1.1rem">'+fmt(valor)+'</b></div>';
   let cheques=await api('GET','/api/cheques?mes='+gM());
   let pendentes=cheques.filter(c=>c.status==='pendente');
   let list=document.getElementById('chequePagList');
@@ -211,7 +218,7 @@ async function openChequePag(contaId){
     (c.numero?'Nº '+c.numero+' — ':'')+c.cliente+(c.dono_cheque?' ('+c.dono_cheque+')':'')+' — '+fmt(c.valor)+(c.bom_para?' (Bom p/ '+fD(c.bom_para)+')':'')+' ['+c.dias+'d]' +
     '</label>'
   ).join('') : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:10px">Nenhum cheque disponível</div>';
-  list.dataset.contaValor=conta.valor;
+  list.dataset.contaValor=valor;
   list.dataset.contaForn=conta.fornecedor||conta.descricao;
   document.getElementById('chequePagCalc').style.display='none';
   document.getElementById('btnConfirmChequePag').disabled=true;
@@ -245,7 +252,11 @@ async function confirmChequePag(){
   }
   let labels=cbs.map(cb=>cb.dataset.label).join(', ');
   let pagLabel='Cheques: '+labels;
-  await api('PUT','/api/contas-pagar/'+chequePagContaId,{pago_por:pagLabel});
+  if(chequePagContext==='contas-pagar'){
+    await api('PUT','/api/contas-pagar/'+chequePagContaId,{pago_por:pagLabel});
+  }else{
+    await api('PUT','/api/acerto/'+chequePagContaId,{origem_conta_pagar:pagLabel});
+  }
   closeChequePag();
   let msg='Conta paga com cheque(s)!';
   if(resto>0)msg+=' Falta '+fmt(resto)+' em dinheiro.';
