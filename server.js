@@ -158,7 +158,8 @@ app.post('/api/cheques', (req, res) => {
   db.addCheque(req.emp, item);
   // Se saiu do caixa da empresa, Celso deve à empresa
   if (item.origem_dinheiro === 'caixa-empresa') {
-    db.addContaDono(req.emp, { id: uid(), data: item.data, tipo: 'debito', descricao: 'Troca de cheque (caixa empresa) - ' + item.cliente, valor: item.valor, origem_cheque: item.id });
+    const valorDebito = item.juros_antecipado ? (item.valor - item.lucro) : item.valor;
+    db.addContaDono(req.emp, { id: uid(), data: item.data, tipo: 'debito', descricao: 'Troca de cheque (caixa empresa) - ' + item.cliente, valor: valorDebito, origem_cheque: item.id });
   }
   res.json({ ok: true, id: item.id });
 });
