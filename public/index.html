@@ -242,6 +242,7 @@
                     <div class="form-group"><label>Descrição</label><input type="text" id="mov-desc" required placeholder="Ex: Maria Jose, Troca de óleo..."></div>
                     <div class="form-group"><label>Entrada (R$)</label><input type="number" id="mov-entrada" step="0.01" min="0" value="0"></div>
                     <div class="form-group"><label>Saída (R$)</label><input type="number" id="mov-saida" step="0.01" min="0" value="0"></div>
+                    <div class="form-group"><label>Diferença (R$)</label><input type="number" id="mov-diferenca-form" step="0.01" value="0"></div>
                     <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
                 </form>
             </div>
@@ -267,7 +268,7 @@
                         <span class="badge badge-purple">Saldo: <b id="mov-saldo-atual">R$ 0,00</b></span>
                     </div>
                 </div>
-                <div class="table-wrap"><table class="data-table" id="tabelaMov"><thead><tr><th>Dia</th><th>Descrição</th><th>Entrada</th><th>Saída</th><th>Total</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+                <div class="table-wrap"><table class="data-table" id="tabelaMov"><thead><tr><th>Dia</th><th>Descrição</th><th>Entrada</th><th>Saída</th><th>Diferença</th><th>Total</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
             </div>
         </section>
 
@@ -462,6 +463,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
 </body>
 </html>

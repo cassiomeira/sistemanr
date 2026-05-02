@@ -220,7 +220,11 @@ app.delete('/api/clear/caixas', adminOnly, (req, res) => { db.clearCaixas(req.em
 app.get('/api/movimentacao', (req, res) => res.json(db.getMovimentacao(req.emp, req.query.mes)));
 app.post('/api/movimentacao', (req, res) => {
   const b = req.body;
-  db.addMovimentacao(req.emp, { id: uid(), data: b.data, descricao: b.descricao, entrada: b.entrada || 0, saida: b.saida || 0 });
+  db.addMovimentacao(req.emp, { id: uid(), data: b.data, descricao: b.descricao, entrada: b.entrada || 0, saida: b.saida || 0, diferenca: b.diferenca || 0 });
+  res.json({ ok: true });
+});
+app.put('/api/movimentacao/:id/diferenca', (req, res) => {
+  db.updateMovimentacaoDiferenca(req.emp, req.params.id, parseFloat(req.body.diferenca) || 0);
   res.json({ ok: true });
 });
 app.delete('/api/movimentacao/:id', (req, res) => { db.delMovimentacao(req.emp, req.params.id); res.json({ ok: true }); });

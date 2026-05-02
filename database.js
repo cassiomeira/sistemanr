@@ -96,7 +96,7 @@ function initDB(dbInstance) {
     );
     CREATE TABLE IF NOT EXISTS movimentacao (
       id TEXT PRIMARY KEY, data TEXT NOT NULL, descricao TEXT NOT NULL,
-      entrada REAL DEFAULT 0, saida REAL DEFAULT 0
+      entrada REAL DEFAULT 0, saida REAL DEFAULT 0, diferenca REAL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS mov_config (
       mes TEXT PRIMARY KEY, saldo_anterior REAL DEFAULT 0, diferenca REAL DEFAULT 0
@@ -116,7 +116,8 @@ function initDB(dbInstance) {
   // Migrations
   try { dbInstance.run('ALTER TABLE acerto ADD COLUMN fornecedor TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN tipo_nota TEXT DEFAULT ""'); } catch(e) {}
-  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN fornecedor TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.exec("ALTER TABLE contas_pagar ADD COLUMN fornecedor TEXT DEFAULT ''"); } catch (e) {}
+  try { dbInstance.exec("ALTER TABLE movimentacao ADD COLUMN diferenca REAL DEFAULT 0"); } catch (e) {}
   try { dbInstance.run('ALTER TABLE cheques ADD COLUMN dias INTEGER DEFAULT 30'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE cheques ADD COLUMN numero TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE cheques ADD COLUMN bom_para TEXT DEFAULT ""'); } catch(e) {}
@@ -289,8 +290,17 @@ module.exports = {
   clearCaixas(slug) { run(slug, 'DELETE FROM caixas'); },
 
   // -- Movimentação --
-  getMovimentacao(slug, mes) { return query(slug, 'SELECT * FROM movimentacao WHERE data LIKE ? ORDER BY data, rowid', [mes + '%']); },
-  addMovimentacao(slug, item) { run(slug, 'INSERT INTO movimentacao (id,data,descricao,entrada,saida) VALUES (?,?,?,?,?)', [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0]); },
+  getMovimentacao(slug, mes) {
+    if (mes) return query(slug, 'SELECT * FROM movimentacao WHERE data LIKE ? ORDER BY data', [mes + '%']);
+    return query(slug, 'SELECT * FROM movimentacao ORDER BY data');
+  },
+  addMovimentacao(slug, item) {
+    run(slug, 'INSERT INTO movimentacao (id,data,descricao,entrada,saida,diferenca) VALUES (?,?,?,?,?,?)',
+      [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.diferenca || 0]);
+  },
+  updateMovimentacaoDiferenca(slug, id, diferenca) {
+    run(slug, 'UPDATE movimentacao SET diferenca=? WHERE id=?', [diferenca, id]);
+  },
   delMovimentacao(slug, id) { run(slug, 'DELETE FROM movimentacao WHERE id=?', [id]); },
   clearMovimentacao(slug) { run(slug, 'DELETE FROM movimentacao'); },
   getMovConfig(slug, mes) {

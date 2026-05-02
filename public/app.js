@@ -553,9 +553,10 @@ document.getElementById('formMov').addEventListener('submit',async function(e){
   e.preventDefault();
   let ent=parseFloat(document.getElementById('mov-entrada').value)||0;
   let sai=parseFloat(document.getElementById('mov-saida').value)||0;
-  if(!ent&&!sai){toast('Preencha entrada ou saída','error');return;}
-  await api('POST','/api/movimentacao',{data:document.getElementById('mov-data').value,descricao:document.getElementById('mov-desc').value,entrada:ent,saida:sai});
-  this.reset();setToday('mov-data');document.getElementById('mov-entrada').value='0';document.getElementById('mov-saida').value='0';
+  let dif=parseFloat(document.getElementById('mov-diferenca-form').value)||0;
+  if(!ent&&!sai&&!dif){toast('Preencha entrada, saída ou diferença','error');return;}
+  await api('POST','/api/movimentacao',{data:document.getElementById('mov-data').value,descricao:document.getElementById('mov-desc').value,entrada:ent,saida:sai,diferenca:dif});
+  this.reset();setToday('mov-data');document.getElementById('mov-entrada').value='0';document.getElementById('mov-saida').value='0';document.getElementById('mov-diferenca-form').value='0';
   toast('Lançamento salvo!');refreshAll();
 });
 async function renderMovimentacao(){
@@ -568,21 +569,23 @@ async function renderMovimentacao(){
   document.getElementById('mov-diferenca').value=dif.toFixed(2);
   let totalEnt=0,totalSai=0,running=saldoAnt;
   let tb=document.querySelector('#tabelaMov tbody');
-  let rows='<tr style="background:var(--bg3);font-weight:bold"><td>—</td><td>Saldo anterior</td><td></td><td></td><td class="tipo-entrada">'+fmt(saldoAnt)+'</td><td></td></tr>';
+  let rows='<tr style="background:var(--bg3);font-weight:bold"><td>—</td><td>Saldo anterior</td><td></td><td></td><td></td><td class="tipo-entrada">'+fmt(saldoAnt)+'</td><td></td></tr>';
   items.forEach(i=>{
     totalEnt+=i.entrada;totalSai+=i.saida;
-    running+=i.entrada-i.saida;
+    let rDif = i.diferenca||0;
+    running+=i.entrada-i.saida+rDif;
     let dia=i.data.split('-')[2];
     rows+='<tr><td>'+parseInt(dia)+'</td><td>'+i.descricao+'</td>'
       +'<td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td>'
       +'<td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td>'
+      +'<td><input type="number" class="inline-input" value="'+rDif+'" step="0.01" style="width:80px" onchange="NR.updateMovDif(\''+i.id+'\',this.value)"></td>'
       +'<td style="font-weight:bold">'+fmt(running)+'</td>'
       +'<td><button class="btn btn-sm btn-danger" onclick="NR.delMov(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   });
   if(dif!==0){
-    rows+='<tr style="background:rgba(245,158,11,0.1);font-weight:bold"><td>—</td><td>Diferença do caixa</td><td class="'+(dif>0?'tipo-entrada':'tipo-saida')+'">'+fmt(Math.abs(dif))+'</td><td></td><td style="font-weight:bold;color:var(--amber)">'+fmt(running+dif)+'</td><td></td></tr>';
+    rows+='<tr style="background:rgba(245,158,11,0.1);font-weight:bold"><td>—</td><td>Diferença do caixa</td><td class="'+(dif>0?'tipo-entrada':'tipo-saida')+'">'+fmt(Math.abs(dif))+'</td><td></td><td></td><td style="font-weight:bold;color:var(--amber)">'+fmt(running+dif)+'</td><td></td></tr>';
   }
-  tb.innerHTML=rows||'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text3)">Nenhum lançamento</td></tr>';
+  tb.innerHTML=rows||'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Nenhum lançamento</td></tr>';
   document.getElementById('mov-total-ent').textContent=fmt(totalEnt);
   document.getElementById('mov-total-sai').textContent=fmt(totalSai);
   document.getElementById('mov-saldo-atual').textContent=fmt(running+dif);
@@ -593,6 +596,10 @@ async function saveMovConfig(){
   let dif=parseFloat(document.getElementById('mov-diferenca').value)||0;
   await api('PUT','/api/movimentacao/config',{mes:mes,saldo_anterior:sa,diferenca:dif});
   toast('Configuração salva!');renderMovimentacao();
+}
+async function updateMovDif(id, val){
+  await api('PUT','/api/movimentacao/'+id+'/diferenca',{diferenca:parseFloat(val)||0});
+  toast('Diferença atualizada!');renderMovimentacao();
 }
 async function delMov(id){if(!confirm('Remover este lançamento?'))return;await api('DELETE','/api/movimentacao/'+id);toast('Removido!','info');refreshAll();}
 // === CAIXAS ===
@@ -731,6 +738,6 @@ async function restoreDB(input) {
   input.value = '';
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,delMov,exportarPlanilhaGeral,backupDB,restoreDB};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB};
 checkAuth();
 })();
