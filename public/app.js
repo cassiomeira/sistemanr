@@ -680,6 +680,57 @@ document.getElementById('btnConfirmDel').addEventListener('click',async function
   }
   closeConfirmDel();refreshAll();
 });
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,delMov};
+// === BACKUP / EXPORTAÇÃO ===
+async function exportarPlanilhaGeral() {
+  toast('Gerando planilha, aguarde...', 'info');
+  try {
+    const wb = XLSX.utils.book_new();
+    const [acerto, fat, cp, cheques, drog, dono, mov, caixas] = await Promise.all([
+      api('GET','/api/acerto'), api('GET','/api/fat'), api('GET','/api/contas-pagar'),
+      api('GET','/api/cheques'), api('GET','/api/drogaria'), api('GET','/api/conta-dono'),
+      api('GET','/api/movimentacao'), api('GET','/api/caixas')
+    ]);
+    const formatData = (data) => data.length ? data.map(({id, ...rest}) => rest) : [{Aviso: 'Sem dados'}];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(acerto)), "Acerto");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(fat)), "FAT");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(cp)), "Contas a Pagar");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(cheques)), "Cheques");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(drog)), "Drogaria");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(dono)), "Conta Celso");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(mov)), "Movimentacao");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(caixas)), "Caixas");
+    XLSX.writeFile(wb, `Backup_${currentEmpresa}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast('Planilha exportada com sucesso!');
+  } catch (e) { console.error(e); toast('Erro ao exportar planilha', 'error'); }
+}
+async function backupDB() {
+  toast('Baixando banco de dados...', 'info');
+  try {
+    const resp = await fetch('/api/backup', { headers: { 'Authorization': 'Bearer ' + authToken, 'X-Empresa': currentEmpresa } });
+    if (!resp.ok) throw new Error('Falha');
+    const blob = await resp.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentEmpresa}_backup_${new Date().toISOString().split('T')[0]}.db`;
+    document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+  } catch(e) { toast('Erro ao fazer backup do banco', 'error'); }
+}
+async function restoreDB(input) {
+  if(!input.files || input.files.length === 0) return;
+  const file = input.files[0];
+  if(!confirm(`ATENÇÃO!\n\nRestaurar a empresa "${currentEmpresa}" usando o arquivo:\n${file.name}\n\nISSO APAGARÁ OS DADOS ATUAIS. Continuar?`)){ input.value = ''; return; }
+  toast('Restaurando banco de dados...', 'info');
+  try {
+    const formData = new FormData(); formData.append('dbfile', file);
+    const resp = await fetch('/api/restore', { method: 'POST', headers: { 'Authorization': 'Bearer ' + authToken, 'X-Empresa': currentEmpresa }, body: formData });
+    if(!resp.ok) throw new Error('Falha');
+    toast('Restaurado! Recarregando...');
+    setTimeout(() => window.location.reload(), 1500);
+  } catch(e) { toast('Erro ao restaurar banco', 'error'); }
+  input.value = '';
+}
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,delMov,exportarPlanilhaGeral,backupDB,restoreDB};
 checkAuth();
 })();

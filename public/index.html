@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <!-- LOGIN -->
@@ -335,6 +336,17 @@
                 <form id="formCatDrog" class="form-inline"><div class="form-group"><label>Nova Categoria</label><input type="text" id="cfg-cat-drog"></div><div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i></button></div></form>
                 <div class="tags-list mt-20" id="catDrogList"></div>
             </div>
+            
+            <div class="panel mt-20">
+                <h3><i class="fas fa-database"></i> Backup e Exportação</h3>
+                <p class="config-desc">Exporte todas as informações como uma Planilha Excel ou faça backup do Banco de Dados para garantir a segurança dos seus dados.</p>
+                <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap">
+                    <button class="btn btn-primary" onclick="NR.exportarPlanilhaGeral()"><i class="fas fa-file-excel"></i> Baixar Planilha Completa</button>
+                    <button class="btn btn-outline" onclick="NR.backupDB()"><i class="fas fa-download"></i> Baixar Banco de Dados</button>
+                    <button class="btn btn-outline" onclick="document.getElementById('uploadDb').click()"><i class="fas fa-upload"></i> Restaurar Banco de Dados</button>
+                    <input type="file" id="uploadDb" accept=".db" style="display:none" onchange="NR.restoreDB(this)">
+                </div>
+            </div>
         </section>
 
         <!-- RELATÓRIOS -->
@@ -450,6 +462,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
 </body>
 </html>

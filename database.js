@@ -148,7 +148,16 @@ function query(slug, sql, params) { const s = getDB(slug).db.prepare(sql); if (p
 function run(slug, sql, params) { getDB(slug).db.run(sql, params); persist(slug); }
 function scalar(slug, sql, params) { const r = getDB(slug).db.exec(sql, params); return r[0]?.values[0][0] || 0; }
 
+function getDbPath(slug) { return getDB(slug).path; }
+function replaceDB(slug, buffer) {
+  const e = getDB(slug);
+  fs.writeFileSync(e.path, buffer);
+  e.db = new SQL.Database(buffer);
+}
+
 module.exports = {
+  getDbPath,
+  replaceDB,
   async init() {
     SQL = await initSqlJs();
     initUsersDB();

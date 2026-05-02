@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const db = require('./database');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -236,6 +238,17 @@ app.get('/api/dashboard', (req, res) => {
   const colaboradores = db.getColaboradores(req.emp);
   const caixas = db.getCaixas(req.emp);
   res.json({ summary, config, colaboradores, caixas });
+});
+
+// === BACKUP / RESTORE ===
+app.get('/api/backup', (req, res) => {
+  const dbPath = db.getDbPath(req.emp);
+  res.download(dbPath, `${req.emp}_backup.db`);
+});
+app.post('/api/restore', upload.single('dbfile'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+  db.replaceDB(req.emp, req.file.buffer);
+  res.json({ ok: true });
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
