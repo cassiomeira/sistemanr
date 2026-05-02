@@ -302,7 +302,7 @@ module.exports = {
     run(slug, 'UPDATE movimentacao SET diferenca=? WHERE id=?', [diferenca, id]);
   },
   delMovimentacao(slug, id) { run(slug, 'DELETE FROM movimentacao WHERE id=?', [id]); },
-  clearMovimentacao(slug) { run(slug, 'DELETE FROM movimentacao'); },
+  clearMovimentacao(slug) { run(slug, 'DELETE FROM movimentacao'); run(slug, 'DELETE FROM mov_config'); },
   getMovConfig(slug, mes) {
     const r = query(slug, 'SELECT * FROM mov_config WHERE mes=?', [mes]);
     return r[0] || { mes, saldo_anterior: 0, diferenca: 0 };
