@@ -250,6 +250,9 @@ module.exports = {
   marcarChegou(slug, grupoParcela) {
     run(slug, 'UPDATE contas_pagar SET a_chegar=0 WHERE grupo_parcela=?', [grupoParcela]);
   },
+  marcarAChegar(slug, grupoParcela) {
+    run(slug, 'UPDATE contas_pagar SET a_chegar=1 WHERE grupo_parcela=?', [grupoParcela]);
+  },
   getAChegar(slug) {
     return query(slug, 'SELECT * FROM contas_pagar WHERE a_chegar=1 ORDER BY vencimento');
   },

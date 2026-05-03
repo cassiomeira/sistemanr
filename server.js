@@ -159,7 +159,15 @@ app.put('/api/contas-pagar/:id/chegou', (req, res) => {
   }
   res.json({ ok: true });
 });
-
+app.put('/api/contas-pagar/:id/a-chegar', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  if (conta && conta.grupo_parcela) {
+    db.marcarAChegar(req.emp, conta.grupo_parcela);
+  } else {
+    db.updateContaPagar(req.emp, req.params.id, { a_chegar: true });
+  }
+  res.json({ ok: true });
+});
 // === DROGARIA ===
 app.get('/api/drogaria', (req, res) => res.json(db.getLancamentos(req.emp, 'drogaria', req.query.mes)));
 app.post('/api/drogaria', (req, res) => { const item = { id: uid(), origem: 'drogaria', ...req.body }; db.addLancamento(req.emp, item); res.json({ ok: true, id: item.id }); });

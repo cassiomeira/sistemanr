@@ -215,7 +215,7 @@ async function marcarChegou(id){
   refreshAll();
 }
 async function toggleAChegar(id){
-  await api('PUT','/api/contas-pagar/'+id,{a_chegar:true});
+  await api('PUT','/api/contas-pagar/'+id+'/a-chegar');
   toast('Marcado como produto a chegar!');
   refreshAll();
 }
