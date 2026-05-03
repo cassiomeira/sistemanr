@@ -145,7 +145,7 @@
                     <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline('cp-forn')" title="Novo fornecedor">+</button></label><select id="cp-forn"><option value="">—</option></select></div>
                     <div class="form-group"><label>Recorrente</label><select id="cp-rec"><option value="0">Não</option><option value="1">Sim</option></select></div>
                     <div class="form-group"><label>D/F</label><select id="cp-nota"><option value="">—</option><option value="D">D</option><option value="F">F</option></select></div>
-                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><div style="display:flex;gap:8px"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button><button type="button" class="btn btn-outline" onclick="NR.openParcelas()" style="white-space:nowrap"><i class="fas fa-layer-group"></i> Parcelas</button></div></div>
                 </form>
             </div>
             <div class="panel mt-20">
@@ -464,6 +464,30 @@
                 <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button type="button" class="btn btn-outline" onclick="NR.closeSenha()">Cancelar</button><button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button></div>
             </form>
         </div>
+    <!-- MODAL PARCELAS -->
+    <div class="modal-overlay" id="modalParcelas" style="display:none">
+        <div class="modal-card" style="max-width:700px">
+            <div class="modal-header"><h3><i class="fas fa-layer-group"></i> Gerar Parcelas</h3><button class="modal-close" onclick="NR.closeParcelas()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px">
+                <div class="form-grid" style="margin-bottom:16px">
+                    <div class="form-group"><label>Descrição do Produto</label><input type="text" id="parc-desc" required placeholder="Ex: Geladeira Brastemp"></div>
+                    <div class="form-group"><label>Fornecedor</label><select id="parc-forn"></select></div>
+                    <div class="form-group"><label>Categoria</label><select id="parc-cat"></select></div>
+                    <div class="form-group"><label>Nº de Parcelas</label><input type="number" id="parc-qtd" min="1" max="60" value="6"></div>
+                    <div class="form-group"><label>Valor por Parcela</label><input type="number" id="parc-valor" step="0.01" min="0"></div>
+                    <div class="form-group"><label>Mês Inicial</label><input type="month" id="parc-mes"></div>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:16px">
+                    <button class="btn btn-primary btn-sm" onclick="NR.gerarParcelas()"><i class="fas fa-cogs"></i> Gerar Parcelas</button>
+                    <button class="btn btn-outline btn-sm" onclick="NR.addFreteParcela()"><i class="fas fa-truck"></i> + Frete</button>
+                </div>
+                <div style="max-height:300px;overflow-y:auto" id="parcListWrap">
+                    <table class="data-table" style="font-size:.85rem"><thead><tr><th>#</th><th>Vencimento (dia)</th><th>Descrição</th><th>Valor</th><th style="width:40px"></th></tr></thead><tbody id="parcList"></tbody></table>
+                </div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button class="btn btn-outline" onclick="NR.closeParcelas()">Cancelar</button><button class="btn btn-primary" onclick="NR.salvarParcelas()"><i class="fas fa-check"></i> Salvar Todas</button></div>
+            </div>
+        </div>
+    </div>
     </div>
     <!-- MODAL CONFIRMAR EXCLUSÃO -->
     <div class="modal-overlay" id="modalConfirmDel" style="display:none">
@@ -481,6 +505,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=19"></script>
 </body>
 </html>

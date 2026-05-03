@@ -825,7 +825,97 @@ async function importarPlanilha(input) {
   input.value = '';
   refreshAll();
 }
+// === PARCELAS ===
+let parcItems = [];
+function openParcelas(){
+  document.getElementById('modalParcelas').style.display='flex';
+  document.getElementById('parc-desc').value='';
+  document.getElementById('parc-valor').value='';
+  document.getElementById('parc-qtd').value='6';
+  let now=new Date();
+  document.getElementById('parc-mes').value=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
+  // Populate selects
+  document.getElementById('parc-cat').innerHTML=CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
+  document.getElementById('parc-forn').innerHTML='<option value="">—</option>'+(CFG.fornecedores||[]).map(f=>'<option>'+f+'</option>').join('');
+  parcItems=[];
+  renderParcelas();
+}
+function closeParcelas(){document.getElementById('modalParcelas').style.display='none';parcItems=[];}
+function gerarParcelas(){
+  let desc=document.getElementById('parc-desc').value.trim();
+  if(!desc){toast('Preencha a descrição do produto','error');return;}
+  let qtd=parseInt(document.getElementById('parc-qtd').value)||1;
+  let valor=parseFloat(document.getElementById('parc-valor').value)||0;
+  let mesInicial=document.getElementById('parc-mes').value;
+  if(!mesInicial){toast('Selecione o mês inicial','error');return;}
+  // Keep existing frete items
+  let fretes=parcItems.filter(p=>p.frete);
+  parcItems=fretes;
+  let [ano,mes]=mesInicial.split('-').map(Number);
+  for(let i=0;i<qtd;i++){
+    let m=mes+i,a=ano;
+    while(m>12){m-=12;a++;}
+    parcItems.push({
+      mesAno:a+'-'+String(m).padStart(2,'0'),
+      dia:'15',
+      descricao:desc+' '+(i+1)+'/'+qtd,
+      valor:valor,
+      frete:false
+    });
+  }
+  renderParcelas();
+}
+function addFreteParcela(){
+  let desc=document.getElementById('parc-desc').value.trim()||'Produto';
+  let mesInicial=document.getElementById('parc-mes').value;
+  if(!mesInicial){toast('Selecione o mês inicial','error');return;}
+  parcItems.push({
+    mesAno:mesInicial,
+    dia:'15',
+    descricao:'Frete - '+desc,
+    valor:0,
+    frete:true
+  });
+  renderParcelas();
+}
+function removeParcela(idx){parcItems.splice(idx,1);renderParcelas();}
+function renderParcelas(){
+  let tb=document.getElementById('parcList');
+  if(!parcItems.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text3)">Clique em "Gerar Parcelas" para criar as linhas</td></tr>';return;}
+  tb.innerHTML=parcItems.map((p,i)=>{
+    let label=p.frete?'<span style="background:var(--amber);color:#000;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">FRETE</span>':'<b>'+(i+1)+'</b>';
+    return '<tr>'
+      +'<td>'+label+'</td>'
+      +'<td><div style="display:flex;gap:4px;align-items:center"><span style="color:var(--text3);font-size:12px">'+p.mesAno+'-</span><input type="number" class="inline-input" value="'+p.dia+'" min="1" max="31" style="width:50px" onchange="NR.setParcField('+i+',\'dia\',this.value)"></div></td>'
+      +'<td><input type="text" class="inline-input" value="'+p.descricao+'" style="width:100%" onchange="NR.setParcField('+i+',\'descricao\',this.value)"></td>'
+      +'<td><input type="number" class="inline-input" value="'+p.valor+'" step="0.01" style="width:90px" onchange="NR.setParcField('+i+',\'valor\',this.value)"></td>'
+      +'<td><button class="btn btn-sm btn-danger" onclick="NR.removeParcela('+i+')"><i class="fas fa-times"></i></button></td>'
+      +'</tr>';
+  }).join('');
+}
+function setParcField(idx,campo,valor){
+  if(campo==='valor')parcItems[idx][campo]=parseFloat(valor)||0;
+  else if(campo==='dia')parcItems[idx][campo]=valor;
+  else parcItems[idx][campo]=valor;
+}
+async function salvarParcelas(){
+  if(!parcItems.length){toast('Nenhuma parcela para salvar','error');return;}
+  let cat=document.getElementById('parc-cat').value;
+  let forn=document.getElementById('parc-forn').value;
+  toast('Salvando '+parcItems.length+' parcelas...','info');
+  let ok=0,errs=0;
+  for(const p of parcItems){
+    try{
+      let venc=p.mesAno+'-'+String(p.dia).padStart(2,'0');
+      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:false});
+      ok++;
+    }catch(e){errs++;}
+  }
+  toast(ok+' parcelas salvas!'+(errs?' ('+errs+' erros)':''));
+  closeParcelas();
+  refreshAll();
+}
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas};
 checkAuth();
 })();
