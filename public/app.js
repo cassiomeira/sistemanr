@@ -432,7 +432,7 @@ async function delCP(id){if(!confirm('Excluir?'))return;await api('DELETE','/api
 async function comp(id){await api('PUT','/api/cheques/'+id+'/compensar');toast('Compensado!');refreshAll();}
 async function toggleBoleto(id,v){await api('PUT','/api/contas-pagar/'+id,{boleto_chegou:v});refreshAll();}
 async function setPago(id,v){await api('PUT','/api/contas-pagar/'+id,{pago_por:v});toast(v&&v!=='A Pagar'?'Pago por '+v:'Status atualizado');refreshAll();}
-async function setAcField(id,campo,valor){let body={};if(campo==='recorrente')body.recorrente=valor==='1';else body[campo]=valor;await api('PUT','/api/acerto/'+id,body);}
+async function setAcField(id,campo,valor){let body={};if(campo==='recorrente')body.recorrente=valor==='1';else body[campo]=valor;await api('PUT','/api/acerto/'+id,body);refreshAll();}
 async function delCL(i){CFG.categoriasLoja.splice(i,1);await api('PUT','/api/config',{categoriasLoja:CFG.categoriasLoja});refreshAll();}
 async function delCD(i){CFG.categoriasDrog.splice(i,1);await api('PUT','/api/config',{categoriasDrog:CFG.categoriasDrog});refreshAll();}
 // EXPORT
