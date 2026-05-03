@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[];
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -191,10 +191,28 @@ async function renderContasPagar(){
     if(pago)tpg+=i.valor;else tp+=i.valor;
     let chqBtn=pago?'':'<button class="btn-cheque-pay" onclick="NR.openChequePag(\''+i.id+'\')" title="Pagar com cheque"><i class="fas fa-money-check-alt"></i> Cheque</button> ';
     let cxSel='<select class="inline-select" onchange="NR.setCaixaPago(\''+i.id+'\',this.value)">'+caixaOpts.replace('value="'+(i.caixa_id||0)+'"','value="'+(i.caixa_id||0)+'" selected')+'</select>';
-    return'<tr class="'+cls+'"><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(!i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    let achegar=i.a_chegar?'<span style="background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px"><i class="fas fa-truck-loading"></i> A CHEGAR</span>':'';
+    let chegouBtn=i.a_chegar?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px" onclick="NR.marcarChegou(\''+i.id+'\')" title="Marcar como chegou"><i class="fas fa-check"></i> Chegou</button> ':'';
+    return'<tr class="'+cls+'"><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(!i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chegouBtn+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
   document.getElementById('cp-total-pend').textContent=fmt(tp);
   document.getElementById('cp-total-pago').textContent=fmt(tpg);
+}
+// PRODUTOS A CHEGAR
+async function renderAChegar(){
+  let items=await api('GET','/api/a-chegar');
+  let badge=document.getElementById('badge-achegar');
+  if(items.length){badge.textContent=items.length;badge.style.display='inline';}else{badge.style.display='none';}
+  document.getElementById('achegar-total').textContent=items.length;
+  let tb=document.querySelector('#tabelaAChegar tbody');
+  if(!items.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)"><i class="fas fa-check-circle" style="font-size:2rem;margin-bottom:8px;display:block;color:var(--green)"></i>Todos os produtos chegaram!</td></tr>';return;}
+  tb.innerHTML=items.map(i=>'<tr><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+'</td><td>'+fmt(i.valor)+'</td><td>'+(i.fornecedor||'—')+'</td><td><button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.marcarChegou(\''+i.id+'\')"><i class="fas fa-check"></i> Chegou</button></td></tr>').join('');
+}
+async function marcarChegou(id){
+  if(!confirm('Marcar produto como chegou? (Todas as parcelas do mesmo produto serão desmarcadas)'))return;
+  await api('PUT','/api/contas-pagar/'+id+'/chegou');
+  toast('Produto marcado como chegou!');
+  refreshAll();
 }
 // PAGAR COM CHEQUE (MODAL)
 async function openChequePag(contaId, context='contas-pagar'){
@@ -473,7 +491,7 @@ document.getElementById('btnCsvRel').addEventListener('click',()=>{
   let b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='relatorio_'+gM()+'.csv';a.click();toast('CSV exportado!');
 });
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderAcerto(),renderFat(),renderContasPagar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
 // === USUÁRIOS ===
 const ALL_PERMS=['dashboard','acerto','fat','contas-pagar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
 let newUserPerms=[...ALL_PERMS];
@@ -902,12 +920,14 @@ async function salvarParcelas(){
   if(!parcItems.length){toast('Nenhuma parcela para salvar','error');return;}
   let cat=document.getElementById('parc-cat').value;
   let forn=document.getElementById('parc-forn').value;
+  let aChegar=document.getElementById('parc-achegar').checked;
+  let grupo='grp_'+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
   toast('Salvando '+parcItems.length+' parcelas...','info');
   let ok=0,errs=0;
   for(const p of parcItems){
     try{
       let venc=p.mesAno+'-'+String(p.dia).padStart(2,'0');
-      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:false});
+      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:false,a_chegar:aChegar,grupo_parcela:grupo});
       ok++;
     }catch(e){errs++;}
   }
@@ -916,6 +936,6 @@ async function salvarParcelas(){
   refreshAll();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou};
 checkAuth();
 })();

@@ -30,6 +30,7 @@
             <li><a href="#" class="nav-link" data-section="acerto" id="nav-acerto"><i class="fas fa-cash-register"></i><span>Acerto Financeiro</span></a></li>
             <li><a href="#" class="nav-link" data-section="fat" id="nav-fat"><i class="fas fa-redo"></i><span>Fat (Recorrentes)</span></a></li>
             <li><a href="#" class="nav-link" data-section="contas-pagar" id="nav-contas-pagar"><i class="fas fa-file-invoice-dollar"></i><span>Contas a Pagar</span></a></li>
+            <li><a href="#" class="nav-link" data-section="a-chegar" id="nav-a-chegar"><i class="fas fa-truck-loading"></i><span>Produtos a Chegar</span><span class="badge-count" id="badge-achegar" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
             <li><a href="#" class="nav-link" data-section="movimentacao" id="nav-movimentacao"><i class="fas fa-exchange-alt"></i><span>Movimentação</span></a></li>
             <li><a href="#" class="nav-link" data-section="drogaria" id="nav-drogaria"><i class="fas fa-pills"></i><span>Drogaria</span></a></li>
             <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
@@ -157,6 +158,16 @@
                     </div>
                 </div>
                 <div class="table-wrap"><table class="data-table" id="tabelaContasPagar"><thead><tr><th>Venc.</th><th>Descrição</th><th>Valor</th><th>Cat.</th><th>Forn.</th><th>Rec.</th><th>D/F</th><th>Boleto Chegou</th><th>Pago por</th><th>Saiu do Caixa</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- PRODUTOS A CHEGAR -->
+        <section class="content-section" id="section-a-chegar">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-truck-loading"></i> Produtos a Chegar</h3>
+                    <div class="summary-badges"><span class="badge badge-amber" style="background:var(--amber);color:#000">Pendentes: <b id="achegar-total">0</b></span></div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaAChegar"><thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Fornecedor</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
             </div>
         </section>
 
@@ -478,9 +489,10 @@
                     <div class="form-group"><label>Valor por Parcela</label><input type="number" id="parc-valor" step="0.01" min="0"></div>
                     <div class="form-group"><label>Mês Inicial</label><input type="month" id="parc-mes"></div>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:16px">
+                <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
                     <button class="btn btn-primary btn-sm" onclick="NR.gerarParcelas()"><i class="fas fa-cogs"></i> Gerar Parcelas</button>
                     <button class="btn btn-outline btn-sm" onclick="NR.addFreteParcela()"><i class="fas fa-truck"></i> + Frete</button>
+                    <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="parc-achegar" checked style="width:16px;height:16px"> <i class="fas fa-truck-loading" style="color:var(--amber)"></i> Produto a Chegar</label>
                 </div>
                 <div style="max-height:300px;overflow-y:auto" id="parcListWrap">
                     <table class="data-table" style="font-size:.85rem"><thead><tr><th>#</th><th>Vencimento (dia)</th><th>Descrição</th><th>Valor</th><th style="width:40px"></th></tr></thead><tbody id="parcList"></tbody></table>
@@ -505,6 +517,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=20"></script>
 </body>
 </html>

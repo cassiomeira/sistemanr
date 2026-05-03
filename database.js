@@ -88,7 +88,8 @@ function initDB(dbInstance) {
       valor REAL NOT NULL, recorrente INTEGER DEFAULT 0,
       boleto_chegou INTEGER DEFAULT 0, pago_por TEXT DEFAULT '',
       categoria TEXT DEFAULT 'Outros', tipo_nota TEXT DEFAULT '',
-      fornecedor TEXT DEFAULT ''
+      fornecedor TEXT DEFAULT '', a_chegar INTEGER DEFAULT 0,
+      grupo_parcela TEXT DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS caixas (
       id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL,
@@ -129,6 +130,8 @@ function initDB(dbInstance) {
   const hasForn = dbInstance.exec("SELECT COUNT(*) FROM configuracoes WHERE chave='fornecedores'")[0]?.values[0][0] || 0;
   if (!hasForn) dbInstance.run("INSERT INTO configuracoes VALUES ('fornecedores',?)", [JSON.stringify([])]);
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN caixa_id INTEGER DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN a_chegar INTEGER DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN grupo_parcela TEXT DEFAULT ""'); } catch(e) {}
 }
 
 function getDB(slug) {
@@ -233,15 +236,22 @@ module.exports = {
     return query(slug, 'SELECT * FROM contas_pagar ORDER BY vencimento');
   },
   addContaPagar(slug, item) {
-    run(slug, 'INSERT INTO contas_pagar (id,vencimento,descricao,valor,recorrente,boleto_chegou,pago_por,categoria,tipo_nota,fornecedor) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [item.id, item.vencimento, item.descricao, item.valor, item.recorrente ? 1 : 0, item.boleto_chegou ? 1 : 0, item.pago_por || '', item.categoria || 'Outros', item.tipo_nota || '', item.fornecedor || '']);
+    run(slug, 'INSERT INTO contas_pagar (id,vencimento,descricao,valor,recorrente,boleto_chegou,pago_por,categoria,tipo_nota,fornecedor,a_chegar,grupo_parcela) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [item.id, item.vencimento, item.descricao, item.valor, item.recorrente ? 1 : 0, item.boleto_chegou ? 1 : 0, item.pago_por || '', item.categoria || 'Outros', item.tipo_nota || '', item.fornecedor || '', item.a_chegar ? 1 : 0, item.grupo_parcela || '']);
   },
   updateContaPagar(slug, id, fields) {
     const sets = [], vals = [];
     if (fields.boleto_chegou !== undefined) { sets.push('boleto_chegou=?'); vals.push(fields.boleto_chegou ? 1 : 0); }
     if (fields.pago_por !== undefined) { sets.push('pago_por=?'); vals.push(fields.pago_por); }
     if (fields.caixa_id !== undefined) { sets.push('caixa_id=?'); vals.push(parseInt(fields.caixa_id)); }
+    if (fields.a_chegar !== undefined) { sets.push('a_chegar=?'); vals.push(fields.a_chegar ? 1 : 0); }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE contas_pagar SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  marcarChegou(slug, grupoParcela) {
+    run(slug, 'UPDATE contas_pagar SET a_chegar=0 WHERE grupo_parcela=?', [grupoParcela]);
+  },
+  getAChegar(slug) {
+    return query(slug, 'SELECT * FROM contas_pagar WHERE a_chegar=1 ORDER BY vencimento');
   },
   delContaPagar(slug, id) { run(slug, 'DELETE FROM contas_pagar WHERE id=?', [id]); },
   getContaPagarById(slug, id) { const r = query(slug, 'SELECT * FROM contas_pagar WHERE id=?', [id]); return r[0]; },
