@@ -192,8 +192,8 @@ async function renderContasPagar(){
     let chqBtn=pago?'':'<button class="btn-cheque-pay" onclick="NR.openChequePag(\''+i.id+'\')" title="Pagar com cheque"><i class="fas fa-money-check-alt"></i> Cheque</button> ';
     let cxSel='<select class="inline-select" onchange="NR.setCaixaPago(\''+i.id+'\',this.value)">'+caixaOpts.replace('value="'+(i.caixa_id||0)+'"','value="'+(i.caixa_id||0)+'" selected')+'</select>';
     let achegar=i.a_chegar?'<span style="background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px"><i class="fas fa-truck-loading"></i> A CHEGAR</span>':'';
-    let chegouBtn=i.a_chegar?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px" onclick="NR.marcarChegou(\''+i.id+'\')" title="Marcar como chegou"><i class="fas fa-check"></i> Chegou</button> ':'';
-    return'<tr class="'+cls+'"><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(!i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chegouBtn+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    let chegarBtn=i.a_chegar?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px" onclick="NR.marcarChegou(\''+i.id+'\')" title="Marcar como chegou"><i class="fas fa-check"></i> Chegou</button> ':'<button class="btn btn-sm" style="background:var(--bg3);color:var(--amber);font-size:10px;border:1px solid var(--amber)" onclick="NR.toggleAChegar(\''+i.id+'\')" title="Marcar como produto a chegar"><i class="fas fa-truck-loading"></i></button> ';
+    return'<tr class="'+cls+'"><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(!i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chegarBtn+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
   document.getElementById('cp-total-pend').textContent=fmt(tp);
   document.getElementById('cp-total-pago').textContent=fmt(tpg);
@@ -212,6 +212,11 @@ async function marcarChegou(id){
   if(!confirm('Marcar produto como chegou? (Todas as parcelas do mesmo produto serão desmarcadas)'))return;
   await api('PUT','/api/contas-pagar/'+id+'/chegou');
   toast('Produto marcado como chegou!');
+  refreshAll();
+}
+async function toggleAChegar(id){
+  await api('PUT','/api/contas-pagar/'+id,{a_chegar:true});
+  toast('Marcado como produto a chegar!');
   refreshAll();
 }
 // PAGAR COM CHEQUE (MODAL)
@@ -936,6 +941,6 @@ async function salvarParcelas(){
   refreshAll();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar};
 checkAuth();
 })();
