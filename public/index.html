@@ -348,6 +348,16 @@
                     <input type="file" id="uploadDb" accept=".db" style="display:none" onchange="NR.restoreDB(this)">
                 </div>
             </div>
+            
+            <div class="panel mt-20">
+                <h3><i class="fas fa-file-import"></i> Importar Dados via Planilha</h3>
+                <p class="config-desc">Baixe o modelo da planilha, preencha com os dados e importe. Os dados serão <b>adicionados</b> ao sistema sem apagar os existentes.</p>
+                <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap">
+                    <button class="btn btn-outline" onclick="NR.baixarModelo()"><i class="fas fa-file-download"></i> Baixar Modelo da Planilha</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('uploadXlsx').click()"><i class="fas fa-file-import"></i> Importar Planilha</button>
+                    <input type="file" id="uploadXlsx" accept=".xlsx,.xls" style="display:none" onchange="NR.importarPlanilha(this)">
+                </div>
+            </div>
         </section>
 
         <!-- RELATÓRIOS -->
@@ -463,6 +473,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=16"></script>
 </body>
 </html>

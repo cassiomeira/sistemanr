@@ -738,6 +738,81 @@ async function restoreDB(input) {
   input.value = '';
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB};
+function baixarModelo() {
+  const wb = XLSX.utils.book_new();
+  const acertoEx = [{ data: '2026-05-01', descricao: 'Exemplo Café', entrada: 0, saida: 150.00, categoria: 'Fornecedor', fornecedor: 'Betano', recorrente: 'Sim', tipo_nota: 'D' }];
+  const cpEx = [{ vencimento: '2026-05-10', descricao: 'Exemplo Conta Luz', valor: 350.00, categoria: 'Energia', fornecedor: 'CEMIG', recorrente: 'Não' }];
+  const chqEx = [{ data: '2026-05-01', cliente: 'João Silva', valor: 1000, taxa: 5, vencimento: '2026-06-01', bom_para: '2026-06-01', origem_dinheiro: 'caixa-empresa', dono_cheque: '', juros_antecipado: 'Não' }];
+  const movEx = [{ data: '2026-05-01', descricao: 'Venda do dia', entrada: 500, saida: 0, diferenca: 0 }];
+  const donoEx = [{ data: '2026-05-01', tipo: 'debito', descricao: 'Retirada pessoal', valor: 200 }];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(acertoEx), "Acerto");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cpEx), "Contas a Pagar");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(chqEx), "Cheques");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(movEx), "Movimentacao");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(donoEx), "Conta Celso");
+  XLSX.writeFile(wb, 'Modelo_Importacao.xlsx');
+  toast('Modelo baixado! Preencha e importe.');
+}
+async function importarPlanilha(input) {
+  if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  toast('Lendo planilha...', 'info');
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data);
+  let total = 0, erros = 0;
+  const sheetMap = {
+    'Acerto': '/api/acerto',
+    'Contas a Pagar': '/api/contas-pagar',
+    'Cheques': '/api/cheques',
+    'Movimentacao': '/api/movimentacao',
+    'Conta Celso': '/api/conta-dono'
+  };
+  for (const [sheetName, endpoint] of Object.entries(sheetMap)) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) continue;
+    const rows = XLSX.utils.sheet_to_json(ws);
+    for (const row of rows) {
+      try {
+        // Normalizar campos
+        if (sheetName === 'Acerto') {
+          row.entrada = parseFloat(row.entrada) || 0;
+          row.saida = parseFloat(row.saida) || 0;
+          row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
+        }
+        if (sheetName === 'Contas a Pagar') {
+          row.valor = parseFloat(row.valor) || 0;
+          row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
+        }
+        if (sheetName === 'Cheques') {
+          row.valor = parseFloat(row.valor) || 0;
+          row.taxa = parseFloat(row.taxa) || 5;
+          row.juros_antecipado = (row.juros_antecipado || '').toString().toLowerCase() === 'sim' || row.juros_antecipado === '1' || row.juros_antecipado === 1;
+        }
+        if (sheetName === 'Movimentacao') {
+          row.entrada = parseFloat(row.entrada) || 0;
+          row.saida = parseFloat(row.saida) || 0;
+          row.diferenca = parseFloat(row.diferenca) || 0;
+        }
+        if (sheetName === 'Conta Celso') {
+          row.valor = parseFloat(row.valor) || 0;
+        }
+        // Converter datas do Excel (número serial) para string YYYY-MM-DD
+        ['data', 'vencimento', 'bom_para'].forEach(campo => {
+          if (row[campo] && typeof row[campo] === 'number') {
+            const dt = XLSX.SSF.parse_date_code(row[campo]);
+            row[campo] = `${dt.y}-${String(dt.m).padStart(2,'0')}-${String(dt.d).padStart(2,'0')}`;
+          }
+        });
+        await api('POST', endpoint, row);
+        total++;
+      } catch (e) { erros++; console.error('Erro importando:', sheetName, row, e); }
+    }
+  }
+  toast(`Importação concluída! ${total} registros adicionados` + (erros ? `, ${erros} erros` : ''));
+  input.value = '';
+  refreshAll();
+}
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha};
 checkAuth();
 })();
