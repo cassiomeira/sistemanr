@@ -60,13 +60,20 @@ app.delete('/api/usuarios/:id', adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 app.put('/api/me/senha', (req, res) => {
-  const { senhaAtual, senhaNova } = req.body;
-  if (!senhaAtual || !senhaNova) return res.status(400).json({ error: 'Informe a senha atual e a nova senha' });
+  const { senhaAtual, senhaNova, novoUsername, novoNome } = req.body;
+  if (!senhaAtual) return res.status(400).json({ error: 'Informe a senha atual para confirmar' });
   const user = db.authenticateUser(req.user.username, senhaAtual);
   if (!user) return res.status(401).json({ error: 'Senha atual incorreta' });
-  if (senhaNova.length < 3) return res.status(400).json({ error: 'Senha nova deve ter pelo menos 3 caracteres' });
-  db.updateUsuario(req.user.id, { senha: senhaNova });
-  res.json({ ok: true });
+  const updates = {};
+  if (novoUsername && novoUsername.trim().length >= 3) updates.username = novoUsername.trim();
+  if (novoNome && novoNome.trim()) updates.nome = novoNome.trim();
+  if (senhaNova && senhaNova.length >= 3) updates.senha = senhaNova;
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nenhuma alteração informada' });
+  db.updateUsuario(req.user.id, updates);
+  // Update session data
+  if (updates.username) req.user.username = updates.username;
+  if (updates.nome) req.user.nome = updates.nome;
+  res.json({ ok: true, user: { username: req.user.username, nome: req.user.nome } });
 });
 app.post('/api/logout', (req, res) => {
   const token = (req.headers.authorization || '').replace('Bearer ', '');

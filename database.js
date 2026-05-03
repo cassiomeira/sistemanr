@@ -341,6 +341,7 @@ module.exports = {
   },
   updateUsuario(id, fields) {
     const sets = [], vals = [];
+    if (fields.username !== undefined) { sets.push('username=?'); vals.push(fields.username); }
     if (fields.nome !== undefined) { sets.push('nome=?'); vals.push(fields.nome); }
     if (fields.senha) { sets.push('senha_hash=?'); vals.push(hashSenha(fields.senha)); }
     if (fields.permissoes !== undefined) { sets.push('permissoes=?'); vals.push(JSON.stringify(fields.permissoes)); }

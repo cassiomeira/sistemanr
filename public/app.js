@@ -535,19 +535,30 @@ async function saveEditPerms(){
   closeEditPerms();renderUsuarios();
 }
 // === ALTERAR SENHA ===
-function openSenha(){document.getElementById('modalSenha').style.display='flex';document.getElementById('pwd-atual').value='';document.getElementById('pwd-nova').value='';document.getElementById('pwd-confirma').value='';document.getElementById('pwd-erro').style.display='none';}
+function openSenha(){document.getElementById('modalSenha').style.display='flex';document.getElementById('pwd-user').value='';document.getElementById('pwd-nome').value='';document.getElementById('pwd-atual').value='';document.getElementById('pwd-nova').value='';document.getElementById('pwd-confirma').value='';document.getElementById('pwd-erro').style.display='none';document.getElementById('pwd-user').placeholder=currentUser.username;document.getElementById('pwd-nome').placeholder=currentUser.nome||'';}
 function closeSenha(){document.getElementById('modalSenha').style.display='none';}
 document.getElementById('formAlterarSenha').addEventListener('submit',async function(e){
   e.preventDefault();
   let errEl=document.getElementById('pwd-erro');errEl.style.display='none';
-  let atual=document.getElementById('pwd-atual').value,nova=document.getElementById('pwd-nova').value,confirma=document.getElementById('pwd-confirma').value;
-  if(nova!==confirma){errEl.textContent='As senhas não coincidem';errEl.style.display='block';return;}
-  if(nova.length<3){errEl.textContent='Senha deve ter pelo menos 3 caracteres';errEl.style.display='block';return;}
+  let atual=document.getElementById('pwd-atual').value;
+  let nova=document.getElementById('pwd-nova').value;
+  let confirma=document.getElementById('pwd-confirma').value;
+  let novoUser=document.getElementById('pwd-user').value.trim();
+  let novoNome=document.getElementById('pwd-nome').value.trim();
+  if(!atual){errEl.textContent='A senha atual é obrigatória';errEl.style.display='block';return;}
+  if(nova && nova!==confirma){errEl.textContent='As senhas não coincidem';errEl.style.display='block';return;}
+  if(nova && nova.length<3){errEl.textContent='Senha deve ter pelo menos 3 caracteres';errEl.style.display='block';return;}
+  if(!nova && !novoUser && !novoNome){errEl.textContent='Preencha pelo menos um campo para alterar';errEl.style.display='block';return;}
   try{
-    let resp=await fetch('/api/me/senha',{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify({senhaAtual:atual,senhaNova:nova})});
+    let body={senhaAtual:atual};
+    if(nova) body.senhaNova=nova;
+    if(novoUser) body.novoUsername=novoUser;
+    if(novoNome) body.novoNome=novoNome;
+    let resp=await fetch('/api/me/senha',{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken},body:JSON.stringify(body)});
     let data=await resp.json();
-    if(!resp.ok){errEl.textContent=data.error||'Erro ao alterar senha';errEl.style.display='block';return;}
-    closeSenha();toast('Senha alterada com sucesso!');
+    if(!resp.ok){errEl.textContent=data.error||'Erro ao alterar';errEl.style.display='block';return;}
+    if(data.user){currentUser.username=data.user.username;currentUser.nome=data.user.nome;document.getElementById('userDisplay').textContent=data.user.nome||data.user.username;}
+    closeSenha();toast('Conta atualizada com sucesso!');
   }catch(err){errEl.textContent='Erro de conexão';errEl.style.display='block';}
 });
 // === MOVIMENTAÇÃO ===
