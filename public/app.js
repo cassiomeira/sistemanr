@@ -809,28 +809,39 @@ async function importarPlanilha(input) {
     const rows = XLSX.utils.sheet_to_json(ws);
     for (const row of rows) {
       try {
+        // Função para converter número BR (1.234,56) para float
+        const parseBR = (v) => {
+          if (v === undefined || v === null || v === '') return 0;
+          if (typeof v === 'number') return v;
+          let s = v.toString().trim();
+          // Se tem vírgula, é formato BR
+          if (s.includes(',')) {
+            s = s.replace(/\./g, '').replace(',', '.');
+          }
+          return parseFloat(s) || 0;
+        };
         // Normalizar campos
         if (sheetName === 'Acerto') {
-          row.entrada = parseFloat(row.entrada) || 0;
-          row.saida = parseFloat(row.saida) || 0;
+          row.entrada = parseBR(row.entrada);
+          row.saida = parseBR(row.saida);
           row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
         }
         if (sheetName === 'Contas a Pagar') {
-          row.valor = parseFloat(row.valor) || 0;
+          row.valor = parseBR(row.valor);
           row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
         }
         if (sheetName === 'Cheques') {
-          row.valor = parseFloat(row.valor) || 0;
-          row.taxa = parseFloat(row.taxa) || 5;
+          row.valor = parseBR(row.valor);
+          row.taxa = parseBR(row.taxa) || 5;
           row.juros_antecipado = (row.juros_antecipado || '').toString().toLowerCase() === 'sim' || row.juros_antecipado === '1' || row.juros_antecipado === 1;
         }
         if (sheetName === 'Movimentacao') {
-          row.entrada = parseFloat(row.entrada) || 0;
-          row.saida = parseFloat(row.saida) || 0;
-          row.diferenca = parseFloat(row.diferenca) || 0;
+          row.entrada = parseBR(row.entrada);
+          row.saida = parseBR(row.saida);
+          row.diferenca = parseBR(row.diferenca);
         }
         if (sheetName === 'Conta Celso') {
-          row.valor = parseFloat(row.valor) || 0;
+          row.valor = parseBR(row.valor);
         }
         // Converter datas do Excel (número serial) para string YYYY-MM-DD
         ['data', 'vencimento', 'bom_para'].forEach(campo => {
