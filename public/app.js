@@ -824,24 +824,35 @@ async function importarPlanilha(input) {
         if (sheetName === 'Acerto') {
           row.entrada = parseBR(row.entrada);
           row.saida = parseBR(row.saida);
+          row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
+          row.categoria = (row.categoria || '').toString().trim() || 'Outros';
+          row.fornecedor = (row.fornecedor || '').toString().trim() || '';
+          row.tipo_nota = (row.tipo_nota || '').toString().trim() || '';
           row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
         }
         if (sheetName === 'Contas a Pagar') {
           row.valor = parseBR(row.valor);
+          row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
+          row.categoria = (row.categoria || '').toString().trim() || 'Outros';
+          row.fornecedor = (row.fornecedor || '').toString().trim() || '';
           row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
         }
         if (sheetName === 'Cheques') {
           row.valor = parseBR(row.valor);
           row.taxa = parseBR(row.taxa) || 5;
+          row.cliente = (row.cliente || '').toString().trim() || 'Sem nome';
           row.juros_antecipado = (row.juros_antecipado || '').toString().toLowerCase() === 'sim' || row.juros_antecipado === '1' || row.juros_antecipado === 1;
         }
         if (sheetName === 'Movimentacao') {
           row.entrada = parseBR(row.entrada);
           row.saida = parseBR(row.saida);
           row.diferenca = parseBR(row.diferenca);
+          row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
         }
         if (sheetName === 'Conta Celso') {
           row.valor = parseBR(row.valor);
+          row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
+          row.tipo = (row.tipo || '').toString().trim() || 'debito';
         }
         // Converter datas do Excel (número serial) para string YYYY-MM-DD
         ['data', 'vencimento', 'bom_para'].forEach(campo => {
@@ -849,7 +860,11 @@ async function importarPlanilha(input) {
             const dt = XLSX.SSF.parse_date_code(row[campo]);
             row[campo] = `${dt.y}-${String(dt.m).padStart(2,'0')}-${String(dt.d).padStart(2,'0')}`;
           }
+          if (row[campo] && typeof row[campo] === 'string') {
+            row[campo] = row[campo].trim();
+          }
         });
+        console.log('Importando:', sheetName, JSON.stringify(row));
         await api('POST', endpoint, row);
         total++;
       } catch (e) { erros++; console.error('Erro importando:', sheetName, row, e); }
