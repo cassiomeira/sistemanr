@@ -259,6 +259,9 @@ module.exports = {
   },
   delContaPagar(slug, id) { run(slug, 'DELETE FROM contas_pagar WHERE id=?', [id]); },
   getContaPagarById(slug, id) { const r = query(slug, 'SELECT * FROM contas_pagar WHERE id=?', [id]); return r[0]; },
+  getContasPendentes(slug, hoje) {
+    return query(slug, "SELECT * FROM contas_pagar WHERE vencimento <= ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [hoje]);
+  },
 
   // -- Lancamentos (drogaria) --
   getLancamentos(slug, origem, mes) {

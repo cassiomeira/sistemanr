@@ -288,6 +288,22 @@ app.post('/api/restore', upload.single('dbfile'), (req, res) => {
   res.json({ ok: true });
 });
 
+// === DASHBOARD GERAL (ALERTAS CROSS-EMPRESA) ===
+app.get('/api/alertas-geral', (req, res) => {
+  const empresas = db.getEmpresas();
+  const hoje = new Date().toISOString().split('T')[0];
+  const result = [];
+  for (const emp of empresas) {
+    try {
+      const pendentes = db.getContasPendentes(emp.slug, hoje);
+      if (pendentes.length) {
+        result.push({ empresa: emp.nome, slug: emp.slug, contas: pendentes });
+      }
+    } catch(e) { /* skip if DB error */ }
+  }
+  res.json(result);
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 db.init().then(() => {

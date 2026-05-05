@@ -495,10 +495,42 @@ document.getElementById('btnCsvRel').addEventListener('click',()=>{
   relData.forEach(i=>csv+=i.data+';'+i.descricao+';'+i.entrada+';'+i.saida+';'+i.categoria+';'+(i.recorrente?'S':'N')+';'+i.tipo_nota+'\n');
   let b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='relatorio_'+gM()+'.csv';a.click();toast('CSV exportado!');
 });
+// DASHBOARD GERAL
+async function renderDashboardGeral(){
+  let data=await api('GET','/api/alertas-geral');
+  let container=document.getElementById('alertasContainer');
+  let badge=document.getElementById('badge-alertas');
+  let semAlertas=document.getElementById('panelSemAlertas');
+  let totalAlertas=0;
+  data.forEach(e=>totalAlertas+=e.contas.length);
+  if(!totalAlertas){
+    container.innerHTML='';semAlertas.style.display='block';
+    badge.style.display='none';return;
+  }
+  semAlertas.style.display='none';
+  badge.textContent=totalAlertas;badge.style.display='inline';
+  let hoje=new Date().toISOString().split('T')[0];
+  let html='';
+  data.forEach(emp=>{
+    let atrasadas=emp.contas.filter(c=>c.vencimento<hoje);
+    let dodia=emp.contas.filter(c=>c.vencimento===hoje);
+    if(atrasadas.length){
+      html+='<div class="alerta-empresa atrasado"><div class="alerta-header"><i class="fas fa-exclamation-triangle" style="color:#ef4444"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count">'+atrasadas.length+' atrasada'+(atrasadas.length>1?'s':'')+'</span></div><div class="alerta-lista">';
+      atrasadas.forEach(c=>{let d=Math.floor((new Date(hoje)-new Date(c.vencimento))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias atrasado">'+d+' dia'+(d>1?'s':'')+' atrás</span></div>';});
+      html+='</div></div>';
+    }
+    if(dodia.length){
+      html+='<div class="alerta-empresa hoje"><div class="alerta-header"><i class="fas fa-bell" style="color:#f59e0b"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count hoje">'+dodia.length+' para hoje</span></div><div class="alerta-lista">';
+      dodia.forEach(c=>{html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias hoje">Vence hoje</span></div>';});
+      html+='</div></div>';
+    }
+  });
+  container.innerHTML=html;
+}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{

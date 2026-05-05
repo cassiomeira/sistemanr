@@ -9,6 +9,25 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .alerta-empresa{background:var(--bg2);border-radius:12px;padding:16px 20px;margin-bottom:12px;border-left:4px solid #ef4444}
+    .alerta-empresa.atrasado{border-left-color:#dc2626;background:rgba(220,38,38,.08)}
+    .alerta-empresa.hoje{border-left-color:#f59e0b;background:rgba(245,158,11,.08)}
+    .alerta-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .alerta-header i{font-size:1.3rem}
+    .alerta-header .empresa-nome{font-weight:700;font-size:1rem;color:var(--text1)}
+    .alerta-header .alerta-count{background:#ef4444;color:#fff;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;animation:pulse 1.5s infinite}
+    .alerta-header .alerta-count.hoje{background:#f59e0b;color:#000}
+    .alerta-lista{display:flex;flex-direction:column;gap:6px}
+    .alerta-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bg3);border-radius:8px;font-size:13px}
+    .alerta-item .desc{font-weight:600;color:var(--text1);flex:1}
+    .alerta-item .valor{font-weight:700;color:#ef4444;margin:0 12px}
+    .alerta-item .forn{color:var(--text3);font-size:12px}
+    .alerta-item .dias{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px}
+    .alerta-item .dias.atrasado{background:rgba(220,38,38,.15);color:#ef4444}
+    .alerta-item .dias.hoje{background:rgba(245,158,11,.15);color:#d97706}
+    </style>
 </head>
 <body>
     <!-- LOGIN -->
@@ -26,7 +45,8 @@
     <nav class="sidebar" id="sidebar">
         <div class="sidebar-header"><div class="logo"><i class="fas fa-store"></i><span id="empresaNome">Carregando...</span></div></div>
         <ul class="nav-links">
-            <li><a href="#" class="nav-link active" data-section="dashboard" id="nav-dashboard"><i class="fas fa-chart-pie"></i><span>Painel Geral</span></a></li>
+            <li><a href="#" class="nav-link active" data-section="dashboard-geral" id="nav-dashboard-geral"><i class="fas fa-globe"></i><span>Dashboard Geral</span><span class="badge-count" id="badge-alertas" style="display:none;background:#ef4444;color:#fff;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px;animation:pulse 1.5s infinite"></span></a></li>
+            <li><a href="#" class="nav-link" data-section="dashboard" id="nav-dashboard"><i class="fas fa-chart-pie"></i><span>Painel Geral</span></a></li>
             <li><a href="#" class="nav-link" data-section="acerto" id="nav-acerto"><i class="fas fa-cash-register"></i><span>Acerto Financeiro</span></a></li>
             <li><a href="#" class="nav-link" data-section="fat" id="nav-fat"><i class="fas fa-redo"></i><span>Fat (Recorrentes)</span></a></li>
             <li><a href="#" class="nav-link" data-section="contas-pagar" id="nav-contas-pagar"><i class="fas fa-file-invoice-dollar"></i><span>Contas a Pagar</span></a></li>
@@ -59,8 +79,20 @@
             </div>
         </header>
 
+        <!-- DASHBOARD GERAL -->
+        <section class="content-section active" id="section-dashboard-geral">
+            <div id="alertasContainer"></div>
+            <div class="panel mt-20" id="panelSemAlertas" style="display:none">
+                <div style="text-align:center;padding:40px;color:var(--text3)">
+                    <i class="fas fa-check-circle" style="font-size:3rem;color:var(--green);display:block;margin-bottom:12px"></i>
+                    <h3 style="margin:0;color:var(--text1)">Tudo em dia!</h3>
+                    <p>Nenhuma conta pendente para hoje em nenhuma empresa.</p>
+                </div>
+            </div>
+        </section>
+
         <!-- DASHBOARD -->
-        <section class="content-section active" id="section-dashboard">
+        <section class="content-section" id="section-dashboard">
             <div class="cards-grid">
                 <div class="card card-green"><div class="card-icon"><i class="fas fa-arrow-up"></i></div><div class="card-info"><span class="card-label">Lucro Loja</span><span class="card-value" id="dash-receita-loja">R$ 0,00</span></div></div>
                 <div class="card card-blue"><div class="card-icon"><i class="fas fa-pills"></i></div><div class="card-info"><span class="card-label">Saldo Drogaria</span><span class="card-value" id="dash-receita-drogaria">R$ 0,00</span></div></div>
@@ -519,6 +551,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=28"></script>
+    <script src="app.js?v=29"></script>
 </body>
 </html>
