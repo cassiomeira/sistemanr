@@ -297,16 +297,23 @@ app.get('/api/alertas-geral', (req, res) => {
   limite.setDate(limite.getDate() + dias);
   const limiteStr = limite.toISOString().split('T')[0];
   const hojeStr = hoje.toISOString().split('T')[0];
-  const result = [];
+  const contas = [];
+  const mercadorias = [];
   for (const emp of empresas) {
     try {
       const pendentes = db.getContasPendentesAte(emp.slug, limiteStr);
       if (pendentes.length) {
-        result.push({ empresa: emp.nome, slug: emp.slug, contas: pendentes, hoje: hojeStr });
+        contas.push({ empresa: emp.nome, slug: emp.slug, contas: pendentes, hoje: hojeStr });
       }
-    } catch(e) { /* skip if DB error */ }
+    } catch(e) {}
+    try {
+      const achegar = db.getAChegar(emp.slug);
+      if (achegar.length) {
+        mercadorias.push({ empresa: emp.nome, slug: emp.slug, items: achegar });
+      }
+    } catch(e) {}
   }
-  res.json(result);
+  res.json({ contas, mercadorias });
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

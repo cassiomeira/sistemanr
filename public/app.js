@@ -498,40 +498,27 @@ document.getElementById('btnCsvRel').addEventListener('click',()=>{
 // DASHBOARD GERAL
 async function renderDashboardGeral(){
   let dias=parseInt(document.getElementById('alertaDias').value)||0;
-  let data=await api('GET','/api/alertas-geral?dias='+dias);
+  let resp=await api('GET','/api/alertas-geral?dias='+dias);
+  let data=resp.contas||[];let mercs=resp.mercadorias||[];
   let container=document.getElementById('alertasContainer');
   let badge=document.getElementById('badge-alertas');
   let semAlertas=document.getElementById('panelSemAlertas');
-  let totalAlertas=0;
-  data.forEach(e=>totalAlertas+=e.contas.length);
-  if(!totalAlertas){
-    container.innerHTML='';semAlertas.style.display='block';
-    badge.style.display='none';return;
-  }
-  semAlertas.style.display='none';
-  badge.textContent=totalAlertas;badge.style.display='inline';
+  let totalContas=0;data.forEach(e=>totalContas+=e.contas.length);
+  let totalMercs=0;mercs.forEach(e=>totalMercs+=e.items.length);
+  let totalAlertas=totalContas+totalMercs;
+  if(!totalAlertas){container.innerHTML='';semAlertas.style.display='block';badge.style.display='none';return;}
+  semAlertas.style.display='none';badge.textContent=totalAlertas;badge.style.display='inline';
   let html='';
-  data.forEach(emp=>{
-    let hoje=emp.hoje;
-    let atrasadas=emp.contas.filter(c=>c.vencimento<hoje);
-    let dodia=emp.contas.filter(c=>c.vencimento===hoje);
-    let proximas=emp.contas.filter(c=>c.vencimento>hoje);
-    if(atrasadas.length){
-      html+='<div class="alerta-empresa atrasado"><div class="alerta-header"><i class="fas fa-exclamation-triangle" style="color:#ef4444"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count">'+atrasadas.length+' atrasada'+(atrasadas.length>1?'s':'')+'</span></div><div class="alerta-lista">';
-      atrasadas.forEach(c=>{let d=Math.floor((new Date(hoje)-new Date(c.vencimento))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias atrasado">'+d+' dia'+(d>1?'s':'')+' atrás</span></div>';});
-      html+='</div></div>';
-    }
-    if(dodia.length){
-      html+='<div class="alerta-empresa hoje"><div class="alerta-header"><i class="fas fa-bell" style="color:#f59e0b"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count hoje">'+dodia.length+' para hoje</span></div><div class="alerta-lista">';
-      dodia.forEach(c=>{html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias hoje">Vence hoje</span></div>';});
-      html+='</div></div>';
-    }
-    if(proximas.length){
-      html+='<div class="alerta-empresa" style="border-left-color:#3b82f6;background:rgba(59,130,246,.06)"><div class="alerta-header"><i class="fas fa-calendar-day" style="color:#3b82f6"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count" style="background:#3b82f6;animation:none">'+proximas.length+' próxima'+(proximas.length>1?'s':'')+'</span></div><div class="alerta-lista">';
-      proximas.forEach(c=>{let d=Math.floor((new Date(c.vencimento)-new Date(hoje))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias" style="background:rgba(59,130,246,.15);color:#3b82f6">em '+d+' dia'+(d>1?'s':'')+'</span></div>';});
-      html+='</div></div>';
-    }
+  data.forEach(emp=>{let hoje=emp.hoje;let atrasadas=emp.contas.filter(c=>c.vencimento<hoje);let dodia=emp.contas.filter(c=>c.vencimento===hoje);let proximas=emp.contas.filter(c=>c.vencimento>hoje);
+    if(atrasadas.length){html+='<div class="alerta-empresa atrasado"><div class="alerta-header"><i class="fas fa-exclamation-triangle" style="color:#ef4444"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count">'+atrasadas.length+' atrasada'+(atrasadas.length>1?'s':'')+'</span></div><div class="alerta-lista">';atrasadas.forEach(c=>{let d=Math.floor((new Date(hoje)-new Date(c.vencimento))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias atrasado">'+d+' dia'+(d>1?'s':'')+' atrás</span></div>';});html+='</div></div>';}
+    if(dodia.length){html+='<div class="alerta-empresa hoje"><div class="alerta-header"><i class="fas fa-bell" style="color:#f59e0b"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count hoje">'+dodia.length+' para hoje</span></div><div class="alerta-lista">';dodia.forEach(c=>{html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias hoje">Vence hoje</span></div>';});html+='</div></div>';}
+    if(proximas.length){html+='<div class="alerta-empresa" style="border-left-color:#3b82f6;background:rgba(59,130,246,.06)"><div class="alerta-header"><i class="fas fa-calendar-day" style="color:#3b82f6"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count" style="background:#3b82f6;animation:none">'+proximas.length+' próxima'+(proximas.length>1?'s':'')+'</span></div><div class="alerta-lista">';proximas.forEach(c=>{let d=Math.floor((new Date(c.vencimento)-new Date(hoje))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias" style="background:rgba(59,130,246,.15);color:#3b82f6">em '+d+' dia'+(d>1?'s':'')+'</span></div>';});html+='</div></div>';}
   });
+  if(mercs.length){html+='<h3 style="margin:20px 0 10px;color:var(--text1)"><i class="fas fa-truck-loading" style="color:var(--amber)"></i> Mercadorias a Chegar</h3>';
+    mercs.forEach(emp=>{html+='<div class="alerta-empresa" style="border-left-color:var(--amber);background:rgba(245,158,11,.06)"><div class="alerta-header"><i class="fas fa-truck-loading" style="color:var(--amber)"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count" style="background:var(--amber);color:#000;animation:none">'+emp.items.length+' produto'+(emp.items.length>1?'s':'')+'</span></div><div class="alerta-lista">';
+      emp.items.forEach(m=>{html+='<div class="alerta-item"><span class="desc">'+m.descricao+'</span><span class="valor">'+fmt(m.valor)+'</span><span class="forn">'+(m.fornecedor||'')+'</span><span class="dias" style="background:rgba(245,158,11,.15);color:#d97706">Aguardando</span></div>';});
+      html+='</div></div>';});
+  }
   container.innerHTML=html;
 }
 function renderDashGeral(){renderDashboardGeral();}
