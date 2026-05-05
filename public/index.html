@@ -81,6 +81,19 @@
 
         <!-- DASHBOARD GERAL -->
         <section class="content-section active" id="section-dashboard-geral">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+                <span style="font-weight:600;color:var(--text2)"><i class="fas fa-calendar-alt"></i> Alertar contas dos próximos</span>
+                <select id="alertaDias" class="inline-select" style="width:auto;min-width:80px" onchange="NR.renderDashGeral()">
+                    <option value="0">Hoje</option>
+                    <option value="1">1 dia</option>
+                    <option value="2">2 dias</option>
+                    <option value="3" selected>3 dias</option>
+                    <option value="5">5 dias</option>
+                    <option value="7">7 dias</option>
+                    <option value="15">15 dias</option>
+                    <option value="30">30 dias</option>
+                </select>
+            </div>
             <div id="alertasContainer"></div>
             <div class="panel mt-20" id="panelSemAlertas" style="display:none">
                 <div style="text-align:center;padding:40px;color:var(--text3)">
@@ -97,8 +110,7 @@
                 <div class="card card-green"><div class="card-icon"><i class="fas fa-arrow-up"></i></div><div class="card-info"><span class="card-label">Lucro Loja</span><span class="card-value" id="dash-receita-loja">R$ 0,00</span></div></div>
                 <div class="card card-blue"><div class="card-icon"><i class="fas fa-pills"></i></div><div class="card-info"><span class="card-label">Saldo Drogaria</span><span class="card-value" id="dash-receita-drogaria">R$ 0,00</span></div></div>
                 <div class="card card-purple"><div class="card-icon"><i class="fas fa-money-check-alt"></i></div><div class="card-info"><span class="card-label">Lucro Cheques</span><span class="card-value" id="dash-lucro-cheques">R$ 0,00</span></div></div>
-                <div class="card" style="background:linear-gradient(135deg,#dc2626,#b91c1c)"><div class="card-icon"><i class="fas fa-file-invoice-dollar"></i></div><div class="card-info"><span class="card-label">Contas Pagas</span><span class="card-value" id="dash-cp-pago">R$ 0,00</span><small class="card-sub" id="dash-cp-pend" style="opacity:.7"></small></div></div>
-                <div class="card" style="background:linear-gradient(135deg,#4f46e5,#3730a3)"><div class="card-icon"><i class="fas fa-exchange-alt"></i></div><div class="card-info"><span class="card-label">Movimentação</span><span class="card-value" id="dash-mov-saldo">R$ 0,00</span></div></div>
+
                 <div class="card card-orange"><div class="card-icon"><i class="fas fa-wallet"></i></div><div class="card-info"><span class="card-label">Lucro Total</span><span class="card-value" id="dash-lucro-total">R$ 0,00</span></div></div>
             </div>
             <div class="cards-grid mt-20">
@@ -551,6 +563,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=29"></script>
+    <script src="app.js?v=30"></script>
 </body>
 </html>

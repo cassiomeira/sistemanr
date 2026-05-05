@@ -436,7 +436,7 @@ async function renderColaboradores(){COLABS=await api('GET','/api/colaboradores'
 // DISTRIBUIÇÃO
 async function renderDistribuicao(){let d=await api('GET','/api/dashboard?mes='+gM()),s=d.summary,c=d.config,co=d.colaboradores;let ll=s.lojaEnt-s.lojaSai,ld=s.drogEnt-s.drogSai,lm=s.movEnt-s.movSai,lt=ll+ld+s.chqLucro-s.cpPago+lm;let vA=ll*c.pctAdmin/100,vD=ll*c.pctDono/100,vR=ll*c.pctReserva/100,tc=0;co.forEach(x=>tc+=ll*x.percentual/100);document.getElementById('distribGrid').innerHTML='<div class="distrib-item"><div class="distrib-bar" style="--pct:'+c.pctAdmin+'%;--clr:#00d4aa"><span>'+c.pctAdmin+'%</span></div><p>Cássio</p><h2>'+fmt(vA)+'</h2></div><div class="distrib-item"><div class="distrib-bar" style="--pct:'+c.pctDono+'%;--clr:#f59e0b"><span>'+c.pctDono+'%</span></div><p>Celso</p><h2>'+fmt(vD)+'</h2></div><div class="distrib-item"><div class="distrib-bar" style="--pct:'+c.pctReserva+'%;--clr:#6366f1"><span>'+c.pctReserva+'%</span></div><p>Reserva</p><h2>'+fmt(vR)+'</h2></div><div class="distrib-item" style="border-color:var(--pink)"><p>Comissões</p><h2 style="color:var(--pink)">'+fmt(tc)+'</h2><small style="color:var(--text3)">Base: Lucro Loja</small></div>';let h='<div class="line"><span>Receita Loja</span><b>'+fmt(s.lojaEnt)+'</b></div><div class="line"><span>(-) Despesas Loja</span><b>'+fmt(s.lojaSai)+'</b></div><div class="line"><span>= Lucro Loja</span><b>'+fmt(ll)+'</b></div><div class="line"><span>Lucro Drogaria</span><b>'+fmt(ld)+'</b></div><div class="line"><span>Lucro Cheques</span><b>'+fmt(s.chqLucro)+'</b></div><div class="line"><span>(-) Contas Pagas</span><b style="color:var(--red)">-'+fmt(s.cpPago)+'</b></div><div class="line"><span>Movimentação</span><b>'+fmt(lm)+'</b></div><div class="line total"><span>LUCRO TOTAL</span><b>'+fmt(lt)+'</b></div>';co.forEach(x=>h+='<div class="line comissao"><span>→ '+x.nome+' ('+x.percentual+'%)</span><b>'+fmt(ll*x.percentual/100)+'</b></div>');document.getElementById('calcSummary').innerHTML=h;}
 // DASHBOARD
-async function renderDashboard(){let d=await api('GET','/api/dashboard?mes='+gM()),s=d.summary,c=d.config,co=d.colaboradores,caixas=d.caixas||[];let ll=s.lojaEnt-s.lojaSai,ld=s.drogEnt-s.drogSai,lm=s.movEnt-s.movSai,lt=ll+ld+s.chqLucro-s.cpPago+lm,tc=0;co.forEach(x=>tc+=ll*x.percentual/100);document.getElementById('dash-receita-loja').textContent=fmt(ll);document.getElementById('dash-receita-drogaria').textContent=fmt(ld);document.getElementById('dash-lucro-cheques').textContent=fmt(s.chqLucro);document.getElementById('dash-cp-pago').textContent='-'+fmt(s.cpPago);document.getElementById('dash-cp-pend').textContent='Pendente: '+fmt(s.cpPend);document.getElementById('dash-mov-saldo').textContent=fmt(lm);document.getElementById('dash-lucro-total').textContent=fmt(lt);document.getElementById('dash-parte-admin').textContent=fmt(ll*c.pctAdmin/100);document.getElementById('dash-parte-dono').textContent=fmt(ll*c.pctDono/100);document.getElementById('dash-parte-colab').textContent=fmt(tc);document.getElementById('dash-reserva').textContent=fmt(ll*c.pctReserva/100);document.getElementById('dash-label-admin').textContent='Parte Cássio ('+c.pctAdmin+'%)';document.getElementById('dash-label-dono').textContent='Parte Celso ('+c.pctDono+'%)';let sd=s.donoDeb-s.donoCred,el=document.getElementById('dash-saldo-dono');el.textContent=fmt(Math.abs(sd))+(sd>0?' (Celso deve)':sd<0?' (Empresa deve)':' (Zerado)');el.style.color=sd>0?'var(--red)':'var(--green)';
+async function renderDashboard(){let d=await api('GET','/api/dashboard?mes='+gM()),s=d.summary,c=d.config,co=d.colaboradores,caixas=d.caixas||[];let ll=s.lojaEnt-s.lojaSai,ld=s.drogEnt-s.drogSai,lm=s.movEnt-s.movSai,lt=ll+ld+s.chqLucro-s.cpPago+lm,tc=0;co.forEach(x=>tc+=ll*x.percentual/100);document.getElementById('dash-receita-loja').textContent=fmt(ll);document.getElementById('dash-receita-drogaria').textContent=fmt(ld);document.getElementById('dash-lucro-cheques').textContent=fmt(s.chqLucro);document.getElementById('dash-lucro-total').textContent=fmt(lt);document.getElementById('dash-parte-admin').textContent=fmt(ll*c.pctAdmin/100);document.getElementById('dash-parte-dono').textContent=fmt(ll*c.pctDono/100);document.getElementById('dash-parte-colab').textContent=fmt(tc);document.getElementById('dash-reserva').textContent=fmt(ll*c.pctReserva/100);document.getElementById('dash-label-admin').textContent='Parte Cássio ('+c.pctAdmin+'%)';document.getElementById('dash-label-dono').textContent='Parte Celso ('+c.pctDono+'%)';let sd=s.donoDeb-s.donoCred,el=document.getElementById('dash-saldo-dono');el.textContent=fmt(Math.abs(sd))+(sd>0?' (Celso deve)':sd<0?' (Empresa deve)':' (Zerado)');el.style.color=sd>0?'var(--red)':'var(--green)';
   // Caixas no dashboard
   let dc=document.getElementById('dashCaixasCards');
   if(!caixas.length){dc.innerHTML='<p style="color:var(--text3)">Nenhum caixa cadastrado</p>';return;}
@@ -497,7 +497,8 @@ document.getElementById('btnCsvRel').addEventListener('click',()=>{
 });
 // DASHBOARD GERAL
 async function renderDashboardGeral(){
-  let data=await api('GET','/api/alertas-geral');
+  let dias=parseInt(document.getElementById('alertaDias').value)||0;
+  let data=await api('GET','/api/alertas-geral?dias='+dias);
   let container=document.getElementById('alertasContainer');
   let badge=document.getElementById('badge-alertas');
   let semAlertas=document.getElementById('panelSemAlertas');
@@ -509,11 +510,12 @@ async function renderDashboardGeral(){
   }
   semAlertas.style.display='none';
   badge.textContent=totalAlertas;badge.style.display='inline';
-  let hoje=new Date().toISOString().split('T')[0];
   let html='';
   data.forEach(emp=>{
+    let hoje=emp.hoje;
     let atrasadas=emp.contas.filter(c=>c.vencimento<hoje);
     let dodia=emp.contas.filter(c=>c.vencimento===hoje);
+    let proximas=emp.contas.filter(c=>c.vencimento>hoje);
     if(atrasadas.length){
       html+='<div class="alerta-empresa atrasado"><div class="alerta-header"><i class="fas fa-exclamation-triangle" style="color:#ef4444"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count">'+atrasadas.length+' atrasada'+(atrasadas.length>1?'s':'')+'</span></div><div class="alerta-lista">';
       atrasadas.forEach(c=>{let d=Math.floor((new Date(hoje)-new Date(c.vencimento))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias atrasado">'+d+' dia'+(d>1?'s':'')+' atrás</span></div>';});
@@ -524,9 +526,15 @@ async function renderDashboardGeral(){
       dodia.forEach(c=>{html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias hoje">Vence hoje</span></div>';});
       html+='</div></div>';
     }
+    if(proximas.length){
+      html+='<div class="alerta-empresa" style="border-left-color:#3b82f6;background:rgba(59,130,246,.06)"><div class="alerta-header"><i class="fas fa-calendar-day" style="color:#3b82f6"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count" style="background:#3b82f6;animation:none">'+proximas.length+' próxima'+(proximas.length>1?'s':'')+'</span></div><div class="alerta-lista">';
+      proximas.forEach(c=>{let d=Math.floor((new Date(c.vencimento)-new Date(hoje))/(86400000));html+='<div class="alerta-item"><span class="desc">'+c.descricao+'</span><span class="valor">'+fmt(c.valor)+'</span><span class="forn">'+(c.fornecedor||'')+'</span><span class="dias" style="background:rgba(59,130,246,.15);color:#3b82f6">em '+d+' dia'+(d>1?'s':'')+'</span></div>';});
+      html+='</div></div>';
+    }
   });
   container.innerHTML=html;
 }
+function renderDashGeral(){renderDashboardGeral();}
 // REFRESH
 async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
 // === USUÁRIOS ===
@@ -999,6 +1007,6 @@ async function salvarParcelas(){
   refreshAll();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral};
 checkAuth();
 })();

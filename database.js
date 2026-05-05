@@ -262,6 +262,9 @@ module.exports = {
   getContasPendentes(slug, hoje) {
     return query(slug, "SELECT * FROM contas_pagar WHERE vencimento <= ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [hoje]);
   },
+  getContasPendentesAte(slug, limite) {
+    return query(slug, "SELECT * FROM contas_pagar WHERE vencimento <= ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [limite]);
+  },
 
   // -- Lancamentos (drogaria) --
   getLancamentos(slug, origem, mes) {
