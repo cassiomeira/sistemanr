@@ -122,6 +122,13 @@ app.put('/api/contas-pagar/:id', (req, res) => {
   const b = req.body;
   console.log(`PUT /contas-pagar/${req.params.id}`, b);
   db.updateContaPagar(req.emp, req.params.id, b);
+  // Se marcou boleto_chegou e pertence a um grupo, propagar para todas do grupo
+  if (b.boleto_chegou !== undefined) {
+    const conta = db.getContaPagarById(req.emp, req.params.id);
+    if (conta && conta.grupo_parcela) {
+      db.run_raw(req.emp, 'UPDATE contas_pagar SET boleto_chegou=? WHERE grupo_parcela=?', [b.boleto_chegou ? 1 : 0, conta.grupo_parcela]);
+    }
+  }
   // Se marcou "pago_por" com um colaborador → gera saída no acerto
   if (b.pago_por && b.pago_por !== '' && b.pago_por !== 'A Pagar') {
     const conta = db.getContaPagarById(req.emp, req.params.id);

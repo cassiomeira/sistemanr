@@ -162,6 +162,7 @@ function replaceDB(slug, buffer) {
 module.exports = {
   getDbPath,
   replaceDB,
+  run_raw: run,
   async init() {
     SQL = await initSqlJs();
     initUsersDB();
