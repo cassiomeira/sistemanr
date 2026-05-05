@@ -344,7 +344,11 @@ module.exports = {
     const chqLucro = scalar(slug, "SELECT COALESCE(SUM(lucro),0) FROM cheques WHERE data LIKE ?", [mp]);
     const donoDeb = scalar(slug, "SELECT COALESCE(SUM(valor),0) FROM conta_dono WHERE data LIKE ? AND tipo='debito'", [mp]);
     const donoCred = scalar(slug, "SELECT COALESCE(SUM(valor),0) FROM conta_dono WHERE data LIKE ? AND tipo='credito'", [mp]);
-    return { lojaEnt: acerto.entrada, lojaSai: acerto.saida, drogEnt, drogSai, chqLucro, donoDeb, donoCred };
+    const cpPago = scalar(slug, "SELECT COALESCE(SUM(valor),0) FROM contas_pagar WHERE vencimento LIKE ? AND pago_por != '' AND pago_por != 'A Pagar'", [mp]);
+    const cpPend = scalar(slug, "SELECT COALESCE(SUM(valor),0) FROM contas_pagar WHERE vencimento LIKE ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL)", [mp]);
+    const movEnt = scalar(slug, "SELECT COALESCE(SUM(entrada),0) FROM movimentacao WHERE data LIKE ?", [mp]);
+    const movSai = scalar(slug, "SELECT COALESCE(SUM(saida),0) FROM movimentacao WHERE data LIKE ?", [mp]);
+    return { lojaEnt: acerto.entrada, lojaSai: acerto.saida, drogEnt, drogSai, chqLucro, donoDeb, donoCred, cpPago, cpPend, movEnt, movSai };
   },
 
   // -- Usuários --
