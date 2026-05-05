@@ -498,7 +498,7 @@ document.getElementById('btnCsvRel').addEventListener('click',()=>{
 // REFRESH
 async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard','acerto','fat','contas-pagar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
+const ALL_PERMS=['dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
