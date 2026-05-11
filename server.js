@@ -93,6 +93,10 @@ app.delete('/api/empresas/:slug', (req, res) => {
   const ok = db.delEmpresa(req.params.slug);
   res.json({ ok });
 });
+app.put('/api/empresas/:slug/cor', (req, res) => {
+  const ok = db.updateEmpresaCor(req.params.slug, req.body.cor);
+  res.json({ ok });
+});
 
 // === ACERTO FINANCEIRO ===
 app.get('/api/acerto', (req, res) => res.json(db.getAcerto(req.emp, req.query.mes)));

@@ -63,6 +63,18 @@ async function checkAuth(){
   catch(e){showLogin();}
 }
 // === EMPRESA SELECTOR ===
+const THEME_COLORS=[
+  {nome:'Verde',cor:'#00d4aa'},{nome:'Azul',cor:'#3b82f6'},{nome:'Roxo',cor:'#8b5cf6'},
+  {nome:'Laranja',cor:'#f59e0b'},{nome:'Rosa',cor:'#ec4899'},{nome:'Vermelho',cor:'#ef4444'},
+  {nome:'Ciano',cor:'#06b6d4'},{nome:'Teal',cor:'#14b8a6'},{nome:'Índigo',cor:'#6366f1'},
+  {nome:'Lime',cor:'#84cc16'},{nome:'Âmbar',cor:'#d97706'},{nome:'Fúcsia',cor:'#d946ef'},
+  {nome:'Esmeralda',cor:'#10b981'},{nome:'Céu',cor:'#0ea5e9'},{nome:'Coral',cor:'#f97316'}
+];
+function applyThemeColor(cor){
+  if(!cor)cor='#00d4aa';
+  document.documentElement.style.setProperty('--green',cor);
+  document.documentElement.style.setProperty('--green-bg',cor+'1f');
+}
 async function loadEmpresas(){
   empresasList=await api('GET','/api/empresas');
   let sel=document.getElementById('empresaSelector');
@@ -70,12 +82,30 @@ async function loadEmpresas(){
   let emp=empresasList.find(e=>e.slug===currentEmpresa);
   document.getElementById('empresaNome').textContent=emp?emp.nome:'Sistema';
   document.title=(emp?emp.nome:'Sistema')+' — Controle Financeiro';
+  applyThemeColor(emp?emp.cor:null);
+  renderCorPicker();
+}
+function renderCorPicker(){
+  let box=document.getElementById('corPickerBox');
+  if(!box||!currentUser||currentUser.role!=='admin')return;
+  let emp=empresasList.find(e=>e.slug===currentEmpresa);
+  let corAtual=emp?emp.cor:'#00d4aa';
+  box.innerHTML='<label style="font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;display:block;margin-bottom:8px">Cor do Tema</label><div style="display:flex;flex-wrap:wrap;gap:6px">'+THEME_COLORS.map(c=>'<button onclick="NR.setCor(\''+c.cor+'\')" title="'+c.nome+'" style="width:28px;height:28px;border-radius:50%;border:2px solid '+(c.cor===corAtual?'#fff':'transparent')+';background:'+c.cor+';cursor:pointer;transition:all .2s;box-shadow:'+(c.cor===corAtual?'0 0 8px '+c.cor:'none')+'"></button>').join('')+'</div>';
+}
+async function setCor(cor){
+  await api('PUT','/api/empresas/'+currentEmpresa+'/cor',{cor});
+  applyThemeColor(cor);
+  let emp=empresasList.find(e=>e.slug===currentEmpresa);
+  if(emp)emp.cor=cor;
+  renderCorPicker();
+  toast('Cor do tema alterada!');
 }
 document.getElementById('empresaSelector').addEventListener('change',function(){
   currentEmpresa=this.value;
   let emp=empresasList.find(e=>e.slug===currentEmpresa);
   document.getElementById('empresaNome').textContent=emp?emp.nome:'Sistema';
   document.title=(emp?emp.nome:'Sistema')+' — Controle Financeiro';
+  applyThemeColor(emp?emp.cor:null);
   toast('Empresa: '+(emp?emp.nome:currentEmpresa),'info');
   refreshAll();
 });
@@ -994,6 +1024,6 @@ async function salvarParcelas(){
   refreshAll();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor};
 checkAuth();
 })();

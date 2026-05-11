@@ -190,6 +190,14 @@ module.exports = {
     delete dbs[slug];
     return true;
   },
+  updateEmpresaCor(slug, cor) {
+    const list = loadEmpresas();
+    const emp = list.find(e => e.slug === slug);
+    if (!emp) return false;
+    emp.cor = cor;
+    saveEmpresas(list);
+    return true;
+  },
 
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
