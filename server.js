@@ -94,8 +94,14 @@ app.delete('/api/empresas/:slug', (req, res) => {
   res.json({ ok });
 });
 app.put('/api/empresas/:slug/cor', (req, res) => {
-  const ok = db.updateEmpresaCor(req.params.slug, req.body.cor);
-  res.json({ ok });
+  const { cor, fundo } = req.body;
+  const list = db.getEmpresas();
+  const emp = list.find(e => e.slug === req.params.slug);
+  if (!emp) return res.json({ ok: false });
+  if (cor) emp.cor = cor;
+  if (fundo) emp.fundo = fundo;
+  db.saveEmpresasList(list);
+  res.json({ ok: true });
 });
 
 // === ACERTO FINANCEIRO ===

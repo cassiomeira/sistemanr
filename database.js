@@ -173,6 +173,7 @@ module.exports = {
 
   // -- Empresas --
   getEmpresas() { return loadEmpresas(); },
+  saveEmpresasList(list) { saveEmpresas(list); },
   addEmpresa(slug, nome) {
     const list = loadEmpresas();
     if (list.find(e => e.slug === slug)) return false;
