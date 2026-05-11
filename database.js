@@ -201,6 +201,9 @@ module.exports = {
       [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '']);
   },
   delAcerto(slug, id) { run(slug, 'DELETE FROM acerto WHERE id=?', [id]); },
+  acertoJaExiste(slug, contaId) {
+    return scalar(slug, "SELECT COUNT(*) FROM acerto WHERE origem_conta_pagar=?", [contaId]) > 0;
+  },
   updateAcerto(slug, id, fields) {
     const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar'];
     const sets = [], vals = [];

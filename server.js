@@ -129,19 +129,23 @@ app.put('/api/contas-pagar/:id', (req, res) => {
       db.run_raw(req.emp, 'UPDATE contas_pagar SET boleto_chegou=? WHERE grupo_parcela=?', [b.boleto_chegou ? 1 : 0, conta.grupo_parcela]);
     }
   }
-  // Se marcou "pago_por" com um colaborador → gera saída no acerto
+  // Se marcou "pago_por" com um colaborador → gera saída no acerto (se ainda não existe)
   if (b.pago_por && b.pago_por !== '' && b.pago_por !== 'A Pagar') {
     const conta = db.getContaPagarById(req.emp, req.params.id);
     if (conta) {
-      db.addAcerto(req.emp, {
-        id: uid(), data: new Date().toISOString().split('T')[0],
-        descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + b.pago_por + ')',
-        entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
-        fornecedor: conta.fornecedor || '',
-        recorrente: conta.recorrente ? 1 : 0,
-        tipo_nota: conta.tipo_nota || '',
-        origem_conta_pagar: conta.id
-      });
+      // Verificar se já existe acerto para essa conta
+      const jaExiste = db.acertoJaExiste(req.emp, conta.id);
+      if (!jaExiste) {
+        db.addAcerto(req.emp, {
+          id: uid(), data: new Date().toISOString().split('T')[0],
+          descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + b.pago_por + ')',
+          entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
+          fornecedor: conta.fornecedor || '',
+          recorrente: conta.recorrente ? 1 : 0,
+          tipo_nota: conta.tipo_nota || '',
+          origem_conta_pagar: conta.id
+        });
+      }
     }
   }
   // Se indicou caixa, debitar valor
