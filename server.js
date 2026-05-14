@@ -141,22 +141,26 @@ app.put('/api/contas-pagar/:id', (req, res) => {
   }
   // Se marcou "pago_por" com um colaborador → gera saída no acerto (se ainda não existe)
   if (b.pago_por && b.pago_por !== '' && b.pago_por !== 'A Pagar') {
-    const conta = db.getContaPagarById(req.emp, req.params.id);
-    if (conta) {
-      // Verificar se já existe acerto para essa conta
-      const jaExiste = db.acertoJaExiste(req.emp, conta.id);
-      if (!jaExiste) {
-        db.addAcerto(req.emp, {
-          id: uid(), data: new Date().toISOString().split('T')[0],
-          descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + b.pago_por + ')',
-          entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
-          fornecedor: conta.fornecedor || '',
-          recorrente: conta.recorrente ? 1 : 0,
-          tipo_nota: conta.tipo_nota || '',
-          origem_conta_pagar: conta.id
-        });
+    try {
+      const conta = db.getContaPagarById(req.emp, req.params.id);
+      console.log('Conta para acerto:', conta ? conta.id : 'NÃO ENCONTRADA');
+      if (conta) {
+        const jaExiste = db.acertoJaExiste(req.emp, conta.id);
+        console.log('Acerto já existe?', jaExiste);
+        if (!jaExiste) {
+          db.addAcerto(req.emp, {
+            id: uid(), data: new Date().toISOString().split('T')[0],
+            descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + b.pago_por + ')',
+            entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
+            fornecedor: conta.fornecedor || '',
+            recorrente: conta.recorrente ? 1 : 0,
+            tipo_nota: conta.tipo_nota || '',
+            origem_conta_pagar: conta.id
+          });
+          console.log('✅ Acerto criado para conta', conta.id);
+        }
       }
-    }
+    } catch(err) { console.error('❌ Erro ao criar acerto:', err.message); }
   }
   // Se indicou caixa, debitar valor
   if (b.caixa_id && parseInt(b.caixa_id) > 0) {
@@ -170,6 +174,26 @@ app.put('/api/contas-pagar/:id', (req, res) => {
   res.json({ ok: true });
 });
 app.delete('/api/contas-pagar/:id', (req, res) => { db.delContaPagar(req.emp, req.params.id); res.json({ ok: true }); });
+// Enviar conta existente para o acerto (forçar criação)
+app.post('/api/contas-pagar/:id/enviar-acerto', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  if (!conta) return res.json({ ok: false, error: 'Conta não encontrada' });
+  if (!conta.pago_por || conta.pago_por === '' || conta.pago_por === 'A Pagar') {
+    return res.json({ ok: false, error: 'Conta não está marcada como paga' });
+  }
+  const jaExiste = db.acertoJaExiste(req.emp, conta.id);
+  if (jaExiste) return res.json({ ok: false, error: 'Já existe no acerto' });
+  db.addAcerto(req.emp, {
+    id: uid(), data: new Date().toISOString().split('T')[0],
+    descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + conta.pago_por + ')',
+    entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
+    fornecedor: conta.fornecedor || '',
+    recorrente: conta.recorrente ? 1 : 0,
+    tipo_nota: conta.tipo_nota || '',
+    origem_conta_pagar: conta.id
+  });
+  res.json({ ok: true });
+});
 app.get('/api/a-chegar', (req, res) => res.json(db.getAChegar(req.emp)));
 app.put('/api/contas-pagar/:id/chegou', (req, res) => {
   const conta = db.getContaPagarById(req.emp, req.params.id);
