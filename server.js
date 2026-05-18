@@ -104,6 +104,16 @@ app.put('/api/empresas/:slug/cor', (req, res) => {
   res.json({ ok: true });
 });
 
+// === CONTROLE FISCAL ===
+app.get('/api/fiscal', (req, res) => res.json(db.getFiscal(req.emp, req.query.mes)));
+app.post('/api/fiscal', (req, res) => {
+  const item = { id: uid(), ...req.body };
+  db.addFiscal(req.emp, item);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/fiscal/:id', (req, res) => { db.updateFiscal(req.emp, req.params.id, req.body); res.json({ ok: true }); });
+app.delete('/api/fiscal/:id', (req, res) => { db.delFiscal(req.emp, req.params.id); res.json({ ok: true }); });
+
 // === ACERTO FINANCEIRO ===
 app.get('/api/acerto', (req, res) => res.json(db.getAcerto(req.emp, req.query.mes)));
 app.post('/api/acerto', (req, res) => {

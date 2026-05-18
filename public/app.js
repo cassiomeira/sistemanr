@@ -589,10 +589,52 @@ async function renderDashboardGeral(){
   container.innerHTML=html;
 }
 function renderDashGeral(){renderDashboardGeral();}
+// === CONTROLE FISCAL ===
+document.getElementById('formFiscal').addEventListener('submit',async function(e){
+  e.preventDefault();
+  await api('POST','/api/fiscal',{
+    data:document.getElementById('fisc-data').value,
+    nota_entrada:parseFloat(document.getElementById('fisc-entrada').value)||0,
+    nota_saida:parseFloat(document.getElementById('fisc-saida').value)||0,
+    banco_entrada:parseFloat(document.getElementById('fisc-banco').value)||0,
+    observacao:document.getElementById('fisc-obs').value
+  });
+  this.reset();setToday('fisc-data');document.getElementById('fisc-entrada').value='0';document.getElementById('fisc-saida').value='0';document.getElementById('fisc-banco').value='0';
+  toast('Lançamento fiscal salvo!');renderFiscal();
+});
+async function renderFiscal(){
+  let items=await api('GET','/api/fiscal?mes='+gM());
+  let tEnt=0,tSai=0,tBanco=0;
+  document.querySelector('#tabelaFiscal tbody').innerHTML=items.map(i=>{
+    let saldo=(i.nota_saida||0)-(i.nota_entrada||0);
+    let aEmitir=(i.banco_entrada||0)-(i.nota_saida||0);
+    tEnt+=i.nota_entrada||0;tSai+=i.nota_saida||0;tBanco+=i.banco_entrada||0;
+    let saldoCls=saldo>=0?'tipo-entrada':'tipo-saida';
+    let emitCls=aEmitir>0?'tipo-saida':'tipo-entrada';
+    return '<tr><td>'+fD(i.data)+'</td><td class="tipo-saida">'+fmt(i.nota_entrada)+'</td><td class="tipo-entrada">'+fmt(i.nota_saida)+'</td><td>'+fmt(i.banco_entrada)+'</td><td class="'+saldoCls+'">'+fmt(saldo)+'</td><td class="'+emitCls+'">'+(aEmitir>0?fmt(aEmitir):'✅ OK')+'</td><td style="font-size:.8rem;color:var(--text3)">'+((i.observacao||''))+'</td><td><button class="btn btn-danger btn-sm" onclick="NR.delFisc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  }).join('');
+  let saldoTotal=tSai-tEnt;
+  let aEmitirTotal=tBanco-tSai;
+  let saldoColor=saldoTotal>=0?'green':'red';
+  let emitColor=aEmitirTotal>0?'red':'green';
+  document.getElementById('fiscalCards').innerHTML=
+    '<div class="card card-blue"><div class="card-icon"><i class="fas fa-file-import"></i></div><div><span class="card-label">Total Notas Entrada</span><span class="card-value">'+fmt(tEnt)+'</span></div></div>'+
+    '<div class="card card-green"><div class="card-icon"><i class="fas fa-file-export"></i></div><div><span class="card-label">Total Notas Saída</span><span class="card-value">'+fmt(tSai)+'</span></div></div>'+
+    '<div class="card card-purple"><div class="card-icon"><i class="fas fa-university"></i></div><div><span class="card-label">Total Banco Real</span><span class="card-value">'+fmt(tBanco)+'</span></div></div>'+
+    '<div class="card card-'+saldoColor+'"><div class="card-icon"><i class="fas fa-balance-scale"></i></div><div><span class="card-label">Saldo Fiscal</span><span class="card-value">'+fmt(saldoTotal)+'</span></div></div>'+
+    '<div class="card card-'+(aEmitirTotal>0?'red':'green')+'"><div class="card-icon"><i class="fas fa-'+(aEmitirTotal>0?'exclamation-triangle':'check-circle')+'"></i></div><div><span class="card-label">Ainda Precisa Emitir</span><span class="card-value">'+(aEmitirTotal>0?fmt(aEmitirTotal):'✅ OK')+'</span></div></div>';
+  document.getElementById('fiscalResumo').innerHTML=
+    '<span class="badge badge-blue">Entradas: '+fmt(tEnt)+'</span>'+
+    '<span class="badge badge-green">Saídas: '+fmt(tSai)+'</span>'+
+    '<span class="badge badge-purple">Banco: '+fmt(tBanco)+'</span>'+
+    '<span class="badge badge-'+(saldoTotal>=0?'green':'red')+'">Saldo: '+fmt(saldoTotal)+'</span>'+
+    '<span class="badge badge-'+(aEmitirTotal>0?'red':'green')+'">A Emitir: '+(aEmitirTotal>0?fmt(aEmitirTotal):'OK')+'</span>';
+}
+async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -1061,6 +1103,6 @@ async function salvarParcelas(){
   refreshAll();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc};
 checkAuth();
 })();

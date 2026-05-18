@@ -60,6 +60,7 @@
             <li><a href="#" class="nav-link" data-section="relatorios" id="nav-relatorios"><i class="fas fa-file-alt"></i><span>Relatórios</span></a></li>
             <li><a href="#" class="nav-link" data-section="configuracoes" id="nav-configuracoes"><i class="fas fa-cog"></i><span>Configurações</span></a></li>
             <li><a href="#" class="nav-link" data-section="caixas" id="nav-caixas"><i class="fas fa-cash-register"></i><span>Caixas</span></a></li>
+            <li><a href="#" class="nav-link" data-section="fiscal" id="nav-fiscal"><i class="fas fa-balance-scale"></i><span>Controle Fiscal</span></a></li>
             <li><a href="#" class="nav-link" data-section="usuarios" id="nav-usuarios"><i class="fas fa-users-cog"></i><span>Usuários</span></a></li>
         </ul>
         <div class="sidebar-footer"><div class="month-selector"><label>Mês/Ano</label><input type="month" id="monthSelector"></div></div>
@@ -466,6 +467,33 @@
             </div>
         </section>
 
+
+        <!-- CONTROLE FISCAL -->
+        <section class="content-section" id="section-fiscal">
+            <div class="cards-grid" id="fiscalCards"></div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-balance-scale"></i> Lançamento Diário</h3></div>
+                <form id="formFiscal" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="fisc-data" required></div>
+                    <div class="form-group"><label>Nota Entrada (R$)</label><input type="number" id="fisc-entrada" step="0.01" min="0" value="0"></div>
+                    <div class="form-group"><label>Nota Saída (R$)</label><input type="number" id="fisc-saida" step="0.01" min="0" value="0"></div>
+                    <div class="form-group"><label>Banco - Entrada Real (R$)</label><input type="number" id="fisc-banco" step="0.01" min="0" value="0"></div>
+                    <div class="form-group"><label>Observação</label><input type="text" id="fisc-obs"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Lançar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-table"></i> Lançamentos do Mês</h3></div>
+                <div class="table-wrap">
+                    <table class="data-table" id="tabelaFiscal">
+                        <thead><tr><th>Data</th><th>Nota Entrada</th><th>Nota Saída</th><th>Banco Real</th><th>Saldo Fiscal</th><th>A Emitir</th><th>Obs</th><th></th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="summary-badges mt-20" id="fiscalResumo"></div>
+            </div>
+        </section>
+
         <!-- USUÁRIOS -->
         <section class="content-section" id="section-usuarios">
             <div class="panel">
@@ -564,6 +592,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=37"></script>
+    <script src="app.js?v=38"></script>
 </body>
 </html>

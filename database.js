@@ -132,6 +132,12 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN caixa_id INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN a_chegar INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN grupo_parcela TEXT DEFAULT ""'); } catch(e) {}
+  // Controle Fiscal
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS controle_fiscal (
+    id TEXT PRIMARY KEY, data TEXT NOT NULL,
+    nota_entrada REAL DEFAULT 0, nota_saida REAL DEFAULT 0,
+    banco_entrada REAL DEFAULT 0, observacao TEXT DEFAULT ''
+  )`);
 }
 
 function getDB(slug) {
@@ -199,6 +205,21 @@ module.exports = {
     saveEmpresas(list);
     return true;
   },
+
+  // -- Controle Fiscal --
+  getFiscal(slug, mes) {
+    if (mes) return query(slug, 'SELECT * FROM controle_fiscal WHERE data LIKE ? ORDER BY data DESC', [mes + '%']);
+    return query(slug, 'SELECT * FROM controle_fiscal ORDER BY data DESC');
+  },
+  addFiscal(slug, item) {
+    run(slug, 'INSERT INTO controle_fiscal (id,data,nota_entrada,nota_saida,banco_entrada,observacao) VALUES (?,?,?,?,?,?)',
+      [item.id, item.data, item.nota_entrada || 0, item.nota_saida || 0, item.banco_entrada || 0, item.observacao || '']);
+  },
+  updateFiscal(slug, id, data) {
+    const fields = Object.keys(data).map(k => k + '=?').join(',');
+    run(slug, 'UPDATE controle_fiscal SET ' + fields + ' WHERE id=?', [...Object.values(data), id]);
+  },
+  delFiscal(slug, id) { run(slug, 'DELETE FROM controle_fiscal WHERE id=?', [id]); },
 
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
