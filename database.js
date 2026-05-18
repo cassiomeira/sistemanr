@@ -139,6 +139,12 @@ function initDB(dbInstance) {
     banco_boleto REAL DEFAULT 0, banco_deposito REAL DEFAULT 0, banco_cartao REAL DEFAULT 0,
     observacao TEXT DEFAULT ''
   )`);
+  // Migração: separar banco_entrada em 3 colunas
+  try { dbInstance.run('ALTER TABLE controle_fiscal ADD COLUMN banco_boleto REAL DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE controle_fiscal ADD COLUMN banco_deposito REAL DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE controle_fiscal ADD COLUMN banco_cartao REAL DEFAULT 0'); } catch(e) {}
+  // Migrar dados antigos: banco_entrada → banco_deposito
+  try { dbInstance.run('UPDATE controle_fiscal SET banco_deposito = banco_entrada WHERE banco_entrada > 0 AND banco_deposito = 0 AND banco_boleto = 0 AND banco_cartao = 0'); } catch(e) {}
 }
 
 function getDB(slug) {
