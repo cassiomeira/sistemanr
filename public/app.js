@@ -596,37 +596,44 @@ document.getElementById('formFiscal').addEventListener('submit',async function(e
     data:document.getElementById('fisc-data').value,
     nota_entrada:parseFloat(document.getElementById('fisc-entrada').value)||0,
     nota_saida:parseFloat(document.getElementById('fisc-saida').value)||0,
-    banco_entrada:parseFloat(document.getElementById('fisc-banco').value)||0,
+    banco_boleto:parseFloat(document.getElementById('fisc-boleto').value)||0,
+    banco_deposito:parseFloat(document.getElementById('fisc-deposito').value)||0,
+    banco_cartao:parseFloat(document.getElementById('fisc-cartao').value)||0,
     observacao:document.getElementById('fisc-obs').value
   });
-  this.reset();setToday('fisc-data');document.getElementById('fisc-entrada').value='0';document.getElementById('fisc-saida').value='0';document.getElementById('fisc-banco').value='0';
+  this.reset();setToday('fisc-data');['fisc-entrada','fisc-saida','fisc-boleto','fisc-deposito','fisc-cartao'].forEach(id=>document.getElementById(id).value='0');
   toast('Lançamento fiscal salvo!');renderFiscal();
 });
 async function renderFiscal(){
   let items=await api('GET','/api/fiscal?mes='+gM());
-  let tEnt=0,tSai=0,tBanco=0;
+  let tEnt=0,tSai=0,tBol=0,tDep=0,tCar=0;
   document.querySelector('#tabelaFiscal tbody').innerHTML=items.map(i=>{
+    let bol=i.banco_boleto||0,dep=i.banco_deposito||0,car=i.banco_cartao||0;
+    let bancoTotal=bol+dep+car;
     let saldo=(i.nota_saida||0)-(i.nota_entrada||0);
-    let aEmitir=(i.banco_entrada||0)-(i.nota_saida||0);
-    tEnt+=i.nota_entrada||0;tSai+=i.nota_saida||0;tBanco+=i.banco_entrada||0;
+    let aEmitir=bancoTotal-(i.nota_saida||0);
+    tEnt+=i.nota_entrada||0;tSai+=i.nota_saida||0;tBol+=bol;tDep+=dep;tCar+=car;
     let saldoCls=saldo>=0?'tipo-entrada':'tipo-saida';
     let emitCls=aEmitir>0?'tipo-saida':'tipo-entrada';
-    return '<tr><td>'+fD(i.data)+'</td><td class="tipo-saida">'+fmt(i.nota_entrada)+'</td><td class="tipo-entrada">'+fmt(i.nota_saida)+'</td><td>'+fmt(i.banco_entrada)+'</td><td class="'+saldoCls+'">'+fmt(saldo)+'</td><td class="'+emitCls+'">'+(aEmitir>0?fmt(aEmitir):'✅ OK')+'</td><td style="font-size:.8rem;color:var(--text3)">'+((i.observacao||''))+'</td><td><button class="btn btn-danger btn-sm" onclick="NR.delFisc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    return '<tr><td>'+fD(i.data)+'</td><td class="tipo-saida">'+fmt(i.nota_entrada)+'</td><td class="tipo-entrada">'+fmt(i.nota_saida)+'</td><td>'+fmt(bol)+'</td><td>'+fmt(dep)+'</td><td>'+fmt(car)+'</td><td style="font-weight:600">'+fmt(bancoTotal)+'</td><td class="'+saldoCls+'">'+fmt(saldo)+'</td><td class="'+emitCls+'">'+(aEmitir>0?fmt(aEmitir):'✅ OK')+'</td><td style="font-size:.8rem;color:var(--text3)">'+((i.observacao||''))+'</td><td><button class="btn btn-danger btn-sm" onclick="NR.delFisc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
+  let tBanco=tBol+tDep+tCar;
   let saldoTotal=tSai-tEnt;
   let aEmitirTotal=tBanco-tSai;
-  let saldoColor=saldoTotal>=0?'green':'red';
-  let emitColor=aEmitirTotal>0?'red':'green';
   document.getElementById('fiscalCards').innerHTML=
-    '<div class="card card-blue"><div class="card-icon"><i class="fas fa-file-import"></i></div><div><span class="card-label">Total Notas Entrada</span><span class="card-value">'+fmt(tEnt)+'</span></div></div>'+
-    '<div class="card card-green"><div class="card-icon"><i class="fas fa-file-export"></i></div><div><span class="card-label">Total Notas Saída</span><span class="card-value">'+fmt(tSai)+'</span></div></div>'+
-    '<div class="card card-purple"><div class="card-icon"><i class="fas fa-university"></i></div><div><span class="card-label">Total Banco Real</span><span class="card-value">'+fmt(tBanco)+'</span></div></div>'+
-    '<div class="card card-'+saldoColor+'"><div class="card-icon"><i class="fas fa-balance-scale"></i></div><div><span class="card-label">Saldo Fiscal</span><span class="card-value">'+fmt(saldoTotal)+'</span></div></div>'+
-    '<div class="card card-'+(aEmitirTotal>0?'red':'green')+'"><div class="card-icon"><i class="fas fa-'+(aEmitirTotal>0?'exclamation-triangle':'check-circle')+'"></i></div><div><span class="card-label">Ainda Precisa Emitir</span><span class="card-value">'+(aEmitirTotal>0?fmt(aEmitirTotal):'✅ OK')+'</span></div></div>';
+    '<div class="card card-blue"><div class="card-icon"><i class="fas fa-file-import"></i></div><div><span class="card-label">Notas Entrada</span><span class="card-value">'+fmt(tEnt)+'</span></div></div>'+
+    '<div class="card card-green"><div class="card-icon"><i class="fas fa-file-export"></i></div><div><span class="card-label">Notas Saída</span><span class="card-value">'+fmt(tSai)+'</span></div></div>'+
+    '<div class="card card-blue"><div class="card-icon"><i class="fas fa-barcode"></i></div><div><span class="card-label">Boletos</span><span class="card-value">'+fmt(tBol)+'</span></div></div>'+
+    '<div class="card card-purple"><div class="card-icon"><i class="fas fa-piggy-bank"></i></div><div><span class="card-label">Depósitos</span><span class="card-value">'+fmt(tDep)+'</span></div></div>'+
+    '<div class="card card-orange"><div class="card-icon"><i class="fas fa-credit-card"></i></div><div><span class="card-label">Cartões</span><span class="card-value">'+fmt(tCar)+'</span></div></div>'+
+    '<div class="card card-'+(saldoTotal>=0?'green':'red')+'"><div class="card-icon"><i class="fas fa-balance-scale"></i></div><div><span class="card-label">Saldo Fiscal</span><span class="card-value">'+fmt(saldoTotal)+'</span></div></div>'+
+    '<div class="card card-'+(aEmitirTotal>0?'red':'green')+'"><div class="card-icon"><i class="fas fa-'+(aEmitirTotal>0?'exclamation-triangle':'check-circle')+'"></i></div><div><span class="card-label">A Emitir</span><span class="card-value">'+(aEmitirTotal>0?fmt(aEmitirTotal):'✅ OK')+'</span></div></div>';
   document.getElementById('fiscalResumo').innerHTML=
     '<span class="badge badge-blue">Entradas: '+fmt(tEnt)+'</span>'+
     '<span class="badge badge-green">Saídas: '+fmt(tSai)+'</span>'+
-    '<span class="badge badge-purple">Banco: '+fmt(tBanco)+'</span>'+
+    '<span class="badge badge-blue">Boletos: '+fmt(tBol)+'</span>'+
+    '<span class="badge badge-purple">Depósitos: '+fmt(tDep)+'</span>'+
+    '<span class="badge badge-orange">Cartões: '+fmt(tCar)+'</span>'+
     '<span class="badge badge-'+(saldoTotal>=0?'green':'red')+'">Saldo: '+fmt(saldoTotal)+'</span>'+
     '<span class="badge badge-'+(aEmitirTotal>0?'red':'green')+'">A Emitir: '+(aEmitirTotal>0?fmt(aEmitirTotal):'OK')+'</span>';
 }
