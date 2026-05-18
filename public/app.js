@@ -620,6 +620,10 @@ async function renderFiscal(){
   let tBanco=tBol+tDep+tCar;
   let saldoTotal=tSai-tEnt;
   let aEmitirTotal=tBanco-tSai;
+  let meta30=tEnt*1.30;
+  let faltaMeta=meta30-tSai;
+  let metaOk=faltaMeta<=0;
+  let pctAtual=tEnt>0?((tSai/tEnt-1)*100):0;
   document.getElementById('fiscalCards').innerHTML=
     '<div class="card card-blue"><div class="card-icon"><i class="fas fa-file-import"></i></div><div><span class="card-label">Notas Entrada</span><span class="card-value">'+fmt(tEnt)+'</span></div></div>'+
     '<div class="card card-green"><div class="card-icon"><i class="fas fa-file-export"></i></div><div><span class="card-label">Notas Saída</span><span class="card-value">'+fmt(tSai)+'</span></div></div>'+
@@ -627,7 +631,8 @@ async function renderFiscal(){
     '<div class="card card-purple"><div class="card-icon"><i class="fas fa-piggy-bank"></i></div><div><span class="card-label">Depósitos</span><span class="card-value">'+fmt(tDep)+'</span></div></div>'+
     '<div class="card card-orange"><div class="card-icon"><i class="fas fa-credit-card"></i></div><div><span class="card-label">Cartões</span><span class="card-value">'+fmt(tCar)+'</span></div></div>'+
     '<div class="card card-'+(saldoTotal>=0?'green':'red')+'"><div class="card-icon"><i class="fas fa-balance-scale"></i></div><div><span class="card-label">Saldo Fiscal</span><span class="card-value">'+fmt(saldoTotal)+'</span></div></div>'+
-    '<div class="card card-'+(aEmitirTotal>0?'red':'green')+'" style="'+(aEmitirTotal>0?'animation:pulse 1.5s infinite;border:2px solid #ef4444;box-shadow:0 0 20px rgba(239,68,68,0.4)':'border:2px solid #22c55e;box-shadow:0 0 15px rgba(34,197,94,0.3)')+'"><div class="card-icon" style="font-size:1.6rem"><i class="fas fa-'+(aEmitirTotal>0?'exclamation-triangle':'check-circle')+'"></i></div><div><span class="card-label" style="font-size:.95rem;font-weight:700">⚠️ A EMITIR</span><span class="card-value" style="font-size:1.4rem">'+(aEmitirTotal>0?fmt(aEmitirTotal):'✅ OK')+'</span></div></div>';
+    '<div class="card card-'+(aEmitirTotal>0?'red':'green')+'" style="'+(aEmitirTotal>0?'animation:pulse 1.5s infinite;border:2px solid #ef4444;box-shadow:0 0 20px rgba(239,68,68,0.4)':'border:2px solid #22c55e;box-shadow:0 0 15px rgba(34,197,94,0.3)')+'"><div class="card-icon" style="font-size:1.6rem"><i class="fas fa-'+(aEmitirTotal>0?'exclamation-triangle':'check-circle')+'"></i></div><div><span class="card-label" style="font-size:.95rem;font-weight:700">⚠️ A EMITIR</span><span class="card-value" style="font-size:1.4rem">'+(aEmitirTotal>0?fmt(aEmitirTotal):'✅ OK')+'</span></div></div>'+
+    '<div class="card card-'+(metaOk?'green':'red')+'" style="'+(metaOk?'border:2px solid #22c55e;box-shadow:0 0 15px rgba(34,197,94,0.3)':'animation:pulse 1.5s infinite;border:2px solid #f59e0b;box-shadow:0 0 20px rgba(245,158,11,0.4)')+'"><div class="card-icon" style="font-size:1.6rem"><i class="fas fa-'+(metaOk?'trophy':'bullseye')+'"></i></div><div><span class="card-label" style="font-size:.95rem;font-weight:700">🎯 META 30%</span><span class="card-value" style="font-size:1.4rem">'+(metaOk?'✅ '+pctAtual.toFixed(0)+'%':'Falta '+fmt(faltaMeta))+'</span><span style="font-size:.75rem;color:var(--text3)">Meta: '+fmt(meta30)+' | Atual: '+pctAtual.toFixed(1)+'%</span></div></div>';
   document.getElementById('fiscalResumo').innerHTML=
     '<span class="badge badge-blue">Entradas: '+fmt(tEnt)+'</span>'+
     '<span class="badge badge-green">Saídas: '+fmt(tSai)+'</span>'+
@@ -635,7 +640,8 @@ async function renderFiscal(){
     '<span class="badge badge-purple">Depósitos: '+fmt(tDep)+'</span>'+
     '<span class="badge badge-orange">Cartões: '+fmt(tCar)+'</span>'+
     '<span class="badge badge-'+(saldoTotal>=0?'green':'red')+'">Saldo: '+fmt(saldoTotal)+'</span>'+
-    '<span class="badge badge-'+(aEmitirTotal>0?'red':'green')+'">A Emitir: '+(aEmitirTotal>0?fmt(aEmitirTotal):'OK')+'</span>';
+    '<span class="badge badge-'+(aEmitirTotal>0?'red':'green')+'">A Emitir: '+(aEmitirTotal>0?fmt(aEmitirTotal):'OK')+'</span>'+
+    '<span class="badge badge-'+(metaOk?'green':'red')+'">Meta 30%: '+(metaOk?'✅ '+pctAtual.toFixed(0)+'%':'Falta '+fmt(faltaMeta))+'</span>';
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
