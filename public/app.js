@@ -814,10 +814,13 @@ async function updateCxSaldo(id){
 }
 async function delCaixa(id){if(!confirm('Remover este caixa?'))return;await api('DELETE','/api/caixas/'+id);toast('Caixa removido!','info');refreshAll();}
 async function setCaixaPago(contaId,caixaId){
-  if(parseInt(caixaId)===0)return;
-  if(!confirm('Debitar o valor desta conta do caixa selecionado?'))return;
+  const cxId = parseInt(caixaId) || 0;
+  if(cxId > 0 && !confirm('Debitar o valor desta conta do caixa selecionado?')){refreshAll();return;}
+  if(cxId === 0) {
+    // Verificar se tinha caixa antes - precisa enviar para reverter o débito
+  }
   await api('PUT','/api/contas-pagar/'+contaId,{caixa_id:caixaId});
-  toast('Valor debitado do caixa!');refreshAll();
+  toast(cxId > 0 ? 'Valor debitado do caixa!' : 'Caixa removido');refreshAll();
 }
 // === PRINT RECIBO CHEQUE ===
 let chequesCache=[];
@@ -944,7 +947,7 @@ async function importarPlanilha(input) {
   toast('Lendo planilha...', 'info');
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
-  let total = 0, erros = 0;
+  let total = 0, erros = 0, pulados = 0;
   const sheetMap = {
     'Acerto': '/api/acerto',
     'Contas a Pagar': '/api/contas-pagar',
@@ -952,10 +955,48 @@ async function importarPlanilha(input) {
     'Movimentacao': '/api/movimentacao',
     'Conta Celso': '/api/conta-dono'
   };
+  // Mapear nomes de abas flexíveis (caso o usuário nomeie diferente)
+  const sheetAliases = {
+    'conta celso': 'Conta Celso',
+    'conta do celso': 'Conta Celso',
+    'contacelso': 'Conta Celso',
+    'celso': 'Conta Celso',
+    'conta dono': 'Conta Celso',
+    'acerto': 'Acerto',
+    'acerto financeiro': 'Acerto',
+    'contas a pagar': 'Contas a Pagar',
+    'contaspagar': 'Contas a Pagar',
+    'cheques': 'Cheques',
+    'movimentacao': 'Movimentacao',
+    'movimentação': 'Movimentacao'
+  };
+  // Resolver nomes de abas reais para os nomes do mapa
+  const resolvedSheets = {};
+  console.log('📋 Abas encontradas na planilha:', wb.SheetNames.join(', '));
+  for (const realName of wb.SheetNames) {
+    const normalized = realName.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // Tentar match exato primeiro
+    let mapped = sheetAliases[normalized] || Object.keys(sheetMap).find(k => k.toLowerCase() === normalized);
+    // Se não achou, tentar match parcial (contém palavra-chave)
+    if (!mapped) {
+      if (normalized.includes('celso') || normalized.includes('dono')) mapped = 'Conta Celso';
+      else if (normalized.includes('acerto')) mapped = 'Acerto';
+      else if (normalized.includes('contas') || normalized.includes('pagar')) mapped = 'Contas a Pagar';
+      else if (normalized.includes('cheque')) mapped = 'Cheques';
+      else if (normalized.includes('moviment')) mapped = 'Movimentacao';
+    }
+    if (mapped && sheetMap[mapped]) {
+      resolvedSheets[mapped] = wb.Sheets[realName];
+      console.log(`✅ Aba "${realName}" mapeada para "${mapped}"`);
+    } else {
+      console.log(`⚠️ Aba "${realName}" não reconhecida (normalizado: "${normalized}")`);
+    }
+  }
   for (const [sheetName, endpoint] of Object.entries(sheetMap)) {
-    const ws = wb.Sheets[sheetName];
+    const ws = resolvedSheets[sheetName];
     if (!ws) continue;
     const rows = XLSX.utils.sheet_to_json(ws);
+    console.log(`📋 Processando aba "${sheetName}": ${rows.length} linhas`);
     for (const row of rows) {
       try {
         // Função para converter número BR (1.234,56) para float
@@ -973,6 +1014,7 @@ async function importarPlanilha(input) {
         if (sheetName === 'Acerto') {
           row.entrada = parseBR(row.entrada);
           row.saida = parseBR(row.saida);
+          if (row.entrada === 0 && row.saida === 0) { pulados++; continue; }
           row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
           row.categoria = (row.categoria || '').toString().trim() || 'Outros';
           row.fornecedor = (row.fornecedor || '').toString().trim() || '';
@@ -981,6 +1023,7 @@ async function importarPlanilha(input) {
         }
         if (sheetName === 'Contas a Pagar') {
           row.valor = parseBR(row.valor);
+          if (row.valor === 0) { pulados++; continue; }
           row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
           row.categoria = (row.categoria || '').toString().trim() || 'Outros';
           row.fornecedor = (row.fornecedor || '').toString().trim() || '';
@@ -988,6 +1031,7 @@ async function importarPlanilha(input) {
         }
         if (sheetName === 'Cheques') {
           row.valor = parseBR(row.valor);
+          if (row.valor === 0) { pulados++; continue; }
           row.taxa = parseBR(row.taxa) || 5;
           row.cliente = (row.cliente || '').toString().trim() || 'Sem nome';
           row.juros_antecipado = (row.juros_antecipado || '').toString().toLowerCase() === 'sim' || row.juros_antecipado === '1' || row.juros_antecipado === 1;
@@ -996,18 +1040,30 @@ async function importarPlanilha(input) {
           row.entrada = parseBR(row.entrada);
           row.saida = parseBR(row.saida);
           row.diferenca = parseBR(row.diferenca);
+          if (row.entrada === 0 && row.saida === 0) { pulados++; continue; }
           row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
         }
         if (sheetName === 'Conta Celso') {
           row.valor = parseBR(row.valor);
+          if (row.valor === 0) { pulados++; continue; }
           row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
-          row.tipo = (row.tipo || '').toString().trim() || 'debito';
+          row.tipo = (row.tipo || '').toString().trim().toLowerCase() || 'debito';
+          // Aceitar variações: "crédito" → "credito", "débito" → "debito"
+          row.tipo = row.tipo.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          if (row.tipo !== 'credito' && row.tipo !== 'debito') row.tipo = 'debito';
         }
-        // Converter datas do Excel (número serial) para string YYYY-MM-DD
+        // Converter datas do Excel (número serial) ou dia simples para string YYYY-MM-DD
+        const mesSelecionado = gM(); // ex: "2026-05"
         ['data', 'vencimento', 'bom_para'].forEach(campo => {
           if (row[campo] && typeof row[campo] === 'number') {
-            const dt = XLSX.SSF.parse_date_code(row[campo]);
-            row[campo] = `${dt.y}-${String(dt.m).padStart(2,'0')}-${String(dt.d).padStart(2,'0')}`;
+            if (row[campo] >= 1 && row[campo] <= 31) {
+              // Número pequeno = dia do mês selecionado
+              row[campo] = mesSelecionado + '-' + String(Math.floor(row[campo])).padStart(2,'0');
+            } else {
+              // Número grande = data serial do Excel
+              const dt = XLSX.SSF.parse_date_code(row[campo]);
+              row[campo] = `${dt.y}-${String(dt.m).padStart(2,'0')}-${String(dt.d).padStart(2,'0')}`;
+            }
           }
           if (row[campo] && typeof row[campo] === 'string') {
             row[campo] = row[campo].trim();
@@ -1019,7 +1075,10 @@ async function importarPlanilha(input) {
       } catch (e) { erros++; console.error('Erro importando:', sheetName, row, e); }
     }
   }
-  toast(`Importação concluída! ${total} registros adicionados` + (erros ? `, ${erros} erros` : ''));
+  let msg = `Importação concluída! ${total} registros adicionados`;
+  if (pulados) msg += `, ${pulados} linhas vazias puladas`;
+  if (erros) msg += `, ${erros} erros`;
+  toast(msg);
   input.value = '';
   refreshAll();
 }

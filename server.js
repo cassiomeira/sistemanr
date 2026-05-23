@@ -141,6 +141,12 @@ app.post('/api/contas-pagar', (req, res) => {
 app.put('/api/contas-pagar/:id', (req, res) => {
   const b = req.body;
   console.log(`PUT /contas-pagar/${req.params.id}`, b);
+  // Ler estado ANTERIOR antes de atualizar (importante para lógica de caixa)
+  let contaAnterior = null;
+  if (b.caixa_id !== undefined || b.pago_por !== undefined) {
+    contaAnterior = db.getContaPagarById(req.emp, req.params.id);
+  }
+  // Atualizar o registro
   db.updateContaPagar(req.emp, req.params.id, b);
   // Se marcou boleto_chegou e pertence a um grupo, propagar para todas do grupo
   if (b.boleto_chegou !== undefined) {
@@ -152,7 +158,7 @@ app.put('/api/contas-pagar/:id', (req, res) => {
   // Se marcou "pago_por" com um colaborador → gera saída no acerto (se ainda não existe)
   if (b.pago_por && b.pago_por !== '' && b.pago_por !== 'A Pagar') {
     try {
-      const conta = db.getContaPagarById(req.emp, req.params.id);
+      const conta = contaAnterior || db.getContaPagarById(req.emp, req.params.id);
       console.log('Conta para acerto:', conta ? conta.id : 'NÃO ENCONTRADA');
       if (conta) {
         const jaExiste = db.acertoJaExiste(req.emp, conta.id);
@@ -172,13 +178,20 @@ app.put('/api/contas-pagar/:id', (req, res) => {
       }
     } catch(err) { console.error('❌ Erro ao criar acerto:', err.message); }
   }
-  // Se indicou caixa, debitar valor
-  if (b.caixa_id && parseInt(b.caixa_id) > 0) {
-    const conta = db.getContaPagarById(req.emp, req.params.id);
-    console.log(`Conta fetched for caixa debit:`, conta);
-    if (conta) {
-      db.debitCaixa(req.emp, parseInt(b.caixa_id), conta.valor);
-      console.log(`Debited ${conta.valor} from caixa ${b.caixa_id}`);
+  // Lógica de débito/crédito do caixa
+  if (b.caixa_id !== undefined && contaAnterior) {
+    const novoCaixa = parseInt(b.caixa_id) || 0;
+    const antigoCaixa = contaAnterior.caixa_id || 0;
+    console.log(`Caixa: antigo=${antigoCaixa}, novo=${novoCaixa}, valor=${contaAnterior.valor}`);
+    // Se tinha um caixa anterior diferente do novo, creditar de volta
+    if (antigoCaixa > 0 && antigoCaixa !== novoCaixa) {
+      db.run_raw(req.emp, 'UPDATE caixas SET saldo=saldo+? WHERE id=?', [contaAnterior.valor, antigoCaixa]);
+      console.log(`✅ Creditado ${contaAnterior.valor} de volta ao caixa antigo ${antigoCaixa}`);
+    }
+    // Se o novo caixa é válido e diferente do antigo, debitar
+    if (novoCaixa > 0 && novoCaixa !== antigoCaixa) {
+      db.debitCaixa(req.emp, novoCaixa, contaAnterior.valor);
+      console.log(`✅ Debitado ${contaAnterior.valor} do caixa ${novoCaixa}`);
     }
   }
   res.json({ ok: true });
@@ -260,7 +273,7 @@ app.put('/api/cheques/:id/destino', (req, res) => { db.updateChequeDestino(req.e
 
 // === CONTA DONO ===
 app.get('/api/conta-dono', (req, res) => res.json(db.getContaDono(req.emp, req.query.mes)));
-app.post('/api/conta-dono', (req, res) => { const item = { id: uid(), ...req.body }; db.addContaDono(req.emp, item); res.json({ ok: true, id: item.id }); });
+app.post('/api/conta-dono', (req, res) => { console.log('📥 POST /api/conta-dono:', JSON.stringify(req.body)); const item = { id: uid(), ...req.body }; db.addContaDono(req.emp, item); res.json({ ok: true, id: item.id }); });
 app.delete('/api/conta-dono/:id', (req, res) => { db.delContaDono(req.emp, req.params.id); res.json({ ok: true }); });
 
 // === COLABORADORES ===
