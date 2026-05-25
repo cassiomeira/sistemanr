@@ -8,7 +8,7 @@ const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'F
 const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function fD(d){if(!d)return'-';let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
 function gM(){return document.getElementById('monthSelector').value;}
 function toast(m,t){t=t||'success';let c=document.getElementById('toastContainer'),e=document.createElement('div');e.className='toast toast-'+t;e.textContent=m;c.appendChild(e);setTimeout(()=>e.remove(),3000);}
 async function api(method,path,body){
@@ -1096,7 +1096,12 @@ async function importarPlanilha(input) {
             }
           }
           if (row[campo] && typeof row[campo] === 'string') {
-            row[campo] = row[campo].trim();
+            // Limpar datas ISO (ex: 2026-06-01T03:00:00.000Z → 2026-06-01)
+            row[campo] = row[campo].trim().split('T')[0];
+          }
+          // Se for objeto Date do JS
+          if (row[campo] instanceof Date) {
+            row[campo] = row[campo].toISOString().split('T')[0];
           }
         });
         console.log('Importando:', sheetName, JSON.stringify(row));
