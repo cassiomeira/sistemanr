@@ -929,7 +929,7 @@ async function restoreDB(input) {
 function baixarModelo() {
   const wb = XLSX.utils.book_new();
   const acertoEx = [{ data: '2026-05-01', descricao: 'Exemplo Café', entrada: 0, saida: 150.00, categoria: 'Fornecedor', fornecedor: 'Betano', recorrente: 'Sim', tipo_nota: 'D' }];
-  const cpEx = [{ vencimento: '2026-05-10', descricao: 'Exemplo Conta Luz', valor: 350.00, categoria: 'Energia', fornecedor: 'CEMIG', recorrente: 'Não' }];
+  const cpEx = [{ vencimento: '2026-05-10', descricao: 'Exemplo Conta Luz', valor: 350.00, categoria: 'Energia', fornecedor: 'CEMIG', recorrente: 'Não', boleto_chegou: 'Sim' }];
   const chqEx = [{ data: '2026-05-01', cliente: 'João Silva', valor: 1000, taxa: 5, vencimento: '2026-06-01', bom_para: '2026-06-01', origem_dinheiro: 'caixa-empresa', dono_cheque: '', juros_antecipado: 'Não' }];
   const movEx = [{ data: '2026-05-01', descricao: 'Venda do dia', entrada: 500, saida: 0, diferenca: 0 }];
   const donoEx = [{ data: '2026-05-01', tipo: 'debito', descricao: 'Retirada pessoal', valor: 200 }];
@@ -946,7 +946,7 @@ async function importarPlanilha(input) {
   const file = input.files[0];
   toast('Lendo planilha...', 'info');
   const data = await file.arrayBuffer();
-  const wb = XLSX.read(data);
+  const wb = XLSX.read(data, {cellStyles: true});
   let total = 0, erros = 0, pulados = 0;
   const sheetMap = {
     'Acerto': '/api/acerto',
@@ -997,6 +997,28 @@ async function importarPlanilha(input) {
     if (!ws) continue;
     const rows = XLSX.utils.sheet_to_json(ws);
     console.log(`📋 Processando aba "${sheetName}": ${rows.length} linhas`);
+    // Detectar células amarelas na coluna A (vencimento) para Contas a Pagar
+    let yellowRows = new Set();
+    if (sheetName === 'Contas a Pagar') {
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      for (let r = range.s.r + 1; r <= range.e.r; r++) {
+        const cellAddr = XLSX.utils.encode_cell({r, c: 0}); // coluna A
+        const cell = ws[cellAddr];
+        if (cell && cell.s) {
+          const s = cell.s;
+          const isYellow = (s.patternType === 'solid' && s.fgColor && (
+            (s.fgColor.rgb && (s.fgColor.rgb.toUpperCase().includes('FFFF00') || s.fgColor.rgb.toUpperCase().includes('FFC000') || s.fgColor.rgb.toUpperCase() === 'FFFFFF00')) ||
+            (s.fgColor.theme !== undefined && s.fgColor.tint !== undefined)
+          )) || (s.bgColor && s.bgColor.rgb && (s.bgColor.rgb.toUpperCase().includes('FFFF00') || s.bgColor.rgb.toUpperCase().includes('FFC000')));
+          if (isYellow) {
+            yellowRows.add(r - range.s.r - 1); // índice da linha de dados (0-based)
+            console.log(`🟡 Linha ${r} tem fundo amarelo → boleto não chegou`);
+          }
+        }
+      }
+      console.log(`🟡 Total de linhas amarelas detectadas: ${yellowRows.size}`);
+    }
+    let rowIdx = 0;
     for (const row of rows) {
       try {
         // Função para converter número BR (1.234,56) para float
@@ -1023,11 +1045,19 @@ async function importarPlanilha(input) {
         }
         if (sheetName === 'Contas a Pagar') {
           row.valor = parseBR(row.valor);
-          if (row.valor === 0) { pulados++; continue; }
+          if (row.valor === 0) { pulados++; rowIdx++; continue; }
           row.descricao = (row.descricao || '').toString().trim() || 'Sem descrição';
           row.categoria = (row.categoria || '').toString().trim() || 'Outros';
           row.fornecedor = (row.fornecedor || '').toString().trim() || '';
           row.recorrente = (row.recorrente || '').toString().toLowerCase() === 'sim' || row.recorrente === '1' || row.recorrente === 1;
+          // Detectar boleto_chegou: pela cor amarela OU pela coluna boleto_chegou
+          if (row.boleto_chegou !== undefined) {
+            const bc = (row.boleto_chegou || '').toString().trim().toLowerCase();
+            row.boleto_chegou = (bc === 'sim' || bc === '1' || bc === 'true' || bc === 's') ? 1 : 0;
+          } else {
+            // Se a linha tem fundo amarelo → boleto NÃO chegou
+            row.boleto_chegou = yellowRows.has(rowIdx) ? 0 : 1;
+          }
         }
         if (sheetName === 'Cheques') {
           row.valor = parseBR(row.valor);
@@ -1072,6 +1102,7 @@ async function importarPlanilha(input) {
         console.log('Importando:', sheetName, JSON.stringify(row));
         await api('POST', endpoint, row);
         total++;
+        rowIdx++;
       } catch (e) { erros++; console.error('Erro importando:', sheetName, row, e); }
     }
   }
