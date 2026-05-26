@@ -166,7 +166,23 @@ document.querySelectorAll('.nav-link').forEach(l=>{l.addEventListener('click',e=
 document.getElementById('menuToggle').addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
 let now=new Date(),ms=document.getElementById('monthSelector');
 ms.value=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
-ms.addEventListener('change',()=>refreshAll());
+ms.addEventListener('change',()=>{updateMonthDisplay();refreshAll();});
+// Month display bar
+const MONTH_NAMES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function updateMonthDisplay(){
+  let v=ms.value;if(!v)return;
+  let [y,m]=v.split('-').map(Number);
+  document.getElementById('monthDisplayText').textContent=MONTH_NAMES[m-1]+' '+y;
+}
+updateMonthDisplay();
+document.getElementById('monthPrev').addEventListener('click',()=>{
+  let [y,m]=ms.value.split('-').map(Number);m--;if(m<1){m=12;y--;}
+  ms.value=y+'-'+String(m).padStart(2,'0');updateMonthDisplay();refreshAll();
+});
+document.getElementById('monthNext').addEventListener('click',()=>{
+  let [y,m]=ms.value.split('-').map(Number);m++;if(m>12){m=1;y++;}
+  ms.value=y+'-'+String(m).padStart(2,'0');updateMonthDisplay();refreshAll();
+});
 function setToday(id){let e=document.getElementById(id);if(e)e.value=now.toISOString().split('T')[0];}
 ['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc','mov-data'].forEach(setToday);
 function populateCats(){
