@@ -240,6 +240,7 @@ app.put('/api/contas-pagar/:id/a-chegar', (req, res) => {
 app.get('/api/drogaria', (req, res) => res.json(db.getLancamentos(req.emp, 'drogaria', req.query.mes)));
 app.post('/api/drogaria', (req, res) => { const item = { id: uid(), origem: 'drogaria', ...req.body }; db.addLancamento(req.emp, item); res.json({ ok: true, id: item.id }); });
 app.delete('/api/drogaria/:id', (req, res) => { db.delLancamento(req.emp, req.params.id); res.json({ ok: true }); });
+app.put('/api/drogaria/:id', (req, res) => { db.updateLancamento(req.emp, req.params.id, req.body); res.json({ ok: true }); });
 
 // === CHEQUES ===
 app.get('/api/cheques', (req, res) => res.json(db.getCheques(req.emp, req.query.mes)));
@@ -270,11 +271,13 @@ app.put('/api/cheques/:id/compensar', (req, res) => {
   res.json({ ok: true });
 });
 app.put('/api/cheques/:id/destino', (req, res) => { db.updateChequeDestino(req.emp, req.params.id, req.body.destino || ''); res.json({ ok: true }); });
+app.put('/api/cheques/:id', (req, res) => { db.updateCheque(req.emp, req.params.id, req.body); res.json({ ok: true }); });
 
 // === CONTA DONO ===
 app.get('/api/conta-dono', (req, res) => res.json(db.getContaDono(req.emp, req.query.mes)));
 app.post('/api/conta-dono', (req, res) => { console.log('📥 POST /api/conta-dono:', JSON.stringify(req.body)); const item = { id: uid(), ...req.body }; db.addContaDono(req.emp, item); res.json({ ok: true, id: item.id }); });
 app.delete('/api/conta-dono/:id', (req, res) => { db.delContaDono(req.emp, req.params.id); res.json({ ok: true }); });
+app.put('/api/conta-dono/:id', (req, res) => { db.updateContaDono(req.emp, req.params.id, req.body); res.json({ ok: true }); });
 
 // === COLABORADORES ===
 app.get('/api/colaboradores', (req, res) => res.json(db.getColaboradores(req.emp)));
@@ -321,6 +324,7 @@ app.put('/api/movimentacao/:id/diferenca', (req, res) => {
   db.updateMovimentacaoDiferenca(req.emp, req.params.id, parseFloat(req.body.diferenca) || 0);
   res.json({ ok: true });
 });
+app.put('/api/movimentacao/:id', (req, res) => { db.updateMovimentacao(req.emp, req.params.id, req.body); res.json({ ok: true }); });
 app.delete('/api/movimentacao/:id', (req, res) => { db.delMovimentacao(req.emp, req.params.id); res.json({ ok: true }); });
 app.delete('/api/clear/movimentacao', adminOnly, (req, res) => { db.clearMovimentacao(req.emp); res.json({ ok: true }); });
 app.get('/api/movimentacao/config', (req, res) => res.json(db.getMovConfig(req.emp, req.query.mes)));

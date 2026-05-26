@@ -242,7 +242,7 @@ module.exports = {
     return scalar(slug, "SELECT COUNT(*) FROM acerto WHERE origem_conta_pagar=?", [contaId]) > 0;
   },
   updateAcerto(slug, id, fields) {
-    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar'];
+    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar','data','descricao'];
     const sets = [], vals = [];
     allowed.forEach(k => {
       if (fields[k] !== undefined) {
@@ -286,6 +286,13 @@ module.exports = {
     if (fields.pago_por !== undefined) { sets.push('pago_por=?'); vals.push(fields.pago_por); }
     if (fields.caixa_id !== undefined) { sets.push('caixa_id=?'); vals.push(parseInt(fields.caixa_id)); }
     if (fields.a_chegar !== undefined) { sets.push('a_chegar=?'); vals.push(fields.a_chegar ? 1 : 0); }
+    if (fields.vencimento !== undefined) { sets.push('vencimento=?'); vals.push(fields.vencimento); }
+    if (fields.descricao !== undefined) { sets.push('descricao=?'); vals.push(fields.descricao); }
+    if (fields.valor !== undefined) { sets.push('valor=?'); vals.push(parseFloat(fields.valor)); }
+    if (fields.categoria !== undefined) { sets.push('categoria=?'); vals.push(fields.categoria); }
+    if (fields.fornecedor !== undefined) { sets.push('fornecedor=?'); vals.push(fields.fornecedor); }
+    if (fields.recorrente !== undefined) { sets.push('recorrente=?'); vals.push(fields.recorrente ? 1 : 0); }
+    if (fields.tipo_nota !== undefined) { sets.push('tipo_nota=?'); vals.push(fields.tipo_nota); }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE contas_pagar SET ' + sets.join(',') + ' WHERE id=?', vals); }
   },
   marcarChegou(slug, grupoParcela) {
@@ -313,6 +320,14 @@ module.exports = {
   },
   addLancamento(slug, item) { run(slug, 'INSERT INTO lancamentos (id,origem,data,tipo,descricao,valor,categoria) VALUES (?,?,?,?,?,?,?)', [item.id, item.origem, item.data, item.tipo, item.descricao, item.valor, item.categoria]); },
   delLancamento(slug, id) { run(slug, 'DELETE FROM lancamentos WHERE id=?', [id]); },
+  updateLancamento(slug, id, fields) {
+    const allowed = ['data','tipo','descricao','valor','categoria'];
+    const sets = [], vals = [];
+    allowed.forEach(k => {
+      if (fields[k] !== undefined) { sets.push(k+'=?'); vals.push(fields[k]); }
+    });
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE lancamentos SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
 
   // -- Cheques --
   getCheques(slug, mes) { if (mes) return query(slug, 'SELECT * FROM cheques WHERE data LIKE ? ORDER BY data', [mes + '%']); return query(slug, 'SELECT * FROM cheques ORDER BY data'); },
@@ -321,12 +336,51 @@ module.exports = {
   compensarCheque(slug, id) { run(slug, "UPDATE cheques SET status='compensado' WHERE id=?", [id]); return query(slug, 'SELECT * FROM cheques WHERE id=?', [id])[0]; },
   updateChequeDestino(slug, id, destino) { if(destino) run(slug, "UPDATE cheques SET destino=?, status='retirado' WHERE id=?", [destino, id]); else run(slug, 'UPDATE cheques SET destino=? WHERE id=?', [destino, id]); },
   searchCheques(slug, termo) { const t='%'+termo+'%'; return query(slug, 'SELECT * FROM cheques WHERE numero LIKE ? OR cliente LIKE ? OR dono_cheque LIKE ? OR destino LIKE ? OR CAST(valor AS TEXT) LIKE ? ORDER BY data DESC', [t,t,t,t,t]); },
+  updateCheque(slug, id, fields) {
+    const allowed = ['numero','data','cliente','dono_cheque','valor','taxa','dias','bom_para','vencimento','origem_dinheiro','status','juros_antecipado','taxa_extra'];
+    const sets = [], vals = [];
+    allowed.forEach(k => {
+      if (fields[k] !== undefined) {
+        sets.push(k+'=?');
+        if (k === 'juros_antecipado') vals.push(fields[k] ? 1 : 0);
+        else if (['valor','taxa','taxa_extra'].includes(k)) vals.push(parseFloat(fields[k]));
+        else if (k === 'dias') vals.push(parseInt(fields[k]));
+        else vals.push(fields[k]);
+      }
+    });
+    // Recalculate lucro if valor, taxa, dias or taxa_extra changed
+    const v = fields.valor !== undefined ? parseFloat(fields.valor) : null;
+    const t = fields.taxa !== undefined ? parseFloat(fields.taxa) : null;
+    const d = fields.dias !== undefined ? parseInt(fields.dias) : null;
+    const te = fields.taxa_extra !== undefined ? parseFloat(fields.taxa_extra) : null;
+    if (v !== null || t !== null || d !== null || te !== null) {
+      // Get current values for fields not being updated
+      const current = query(slug, 'SELECT valor,taxa,dias,taxa_extra FROM cheques WHERE id=?', [id])[0];
+      if (current) {
+        const finalV = v !== null ? v : current.valor;
+        const finalT = t !== null ? t : current.taxa;
+        const finalD = d !== null ? d : current.dias;
+        const finalTE = te !== null ? te : (current.taxa_extra || 0);
+        const lucro = finalV * finalT / 100 * finalD / 30 + finalTE;
+        sets.push('lucro=?'); vals.push(lucro);
+      }
+    }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE cheques SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
 
   // -- Conta Dono --
   getContaDono(slug, mes) { if (mes) return query(slug, 'SELECT * FROM conta_dono WHERE data LIKE ? ORDER BY data', [mes + '%']); return query(slug, 'SELECT * FROM conta_dono ORDER BY data'); },
   addContaDono(slug, item) { run(slug, 'INSERT INTO conta_dono (id,data,tipo,descricao,valor,origem_cheque) VALUES (?,?,?,?,?,?)', [item.id, item.data, item.tipo, item.descricao, item.valor, item.origem_cheque || '']); },
   delContaDono(slug, id) { run(slug, 'DELETE FROM conta_dono WHERE id=?', [id]); },
   delContaDonoByCheque(slug, chequeId) { run(slug, 'DELETE FROM conta_dono WHERE origem_cheque=?', [chequeId]); },
+  updateContaDono(slug, id, fields) {
+    const allowed = ['data','tipo','descricao','valor'];
+    const sets = [], vals = [];
+    allowed.forEach(k => {
+      if (fields[k] !== undefined) { sets.push(k+'=?'); vals.push(fields[k]); }
+    });
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE conta_dono SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
 
   // -- Colaboradores --
   getColaboradores(slug) { return query(slug, 'SELECT * FROM colaboradores ORDER BY id'); },
@@ -360,6 +414,18 @@ module.exports = {
   },
   updateMovimentacaoDiferenca(slug, id, diferenca) {
     run(slug, 'UPDATE movimentacao SET diferenca=? WHERE id=?', [diferenca, id]);
+  },
+  updateMovimentacao(slug, id, fields) {
+    const allowed = ['data','descricao','entrada','saida','diferenca'];
+    const sets = [], vals = [];
+    allowed.forEach(k => {
+      if (fields[k] !== undefined) {
+        sets.push(k+'=?');
+        if (['entrada','saida','diferenca'].includes(k)) vals.push(parseFloat(fields[k]));
+        else vals.push(fields[k]);
+      }
+    });
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE movimentacao SET ' + sets.join(',') + ' WHERE id=?', vals); }
   },
   delMovimentacao(slug, id) { run(slug, 'DELETE FROM movimentacao WHERE id=?', [id]); },
   clearMovimentacao(slug) { run(slug, 'DELETE FROM movimentacao'); run(slug, 'DELETE FROM mov_config'); },

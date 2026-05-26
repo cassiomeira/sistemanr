@@ -225,7 +225,7 @@ async function renderAcerto(){
     let fornSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'fornecedor\',this.value)"><option value=""'+((!i.fornecedor||i.fornecedor==='')?' selected':'')+'>—</option>'+(CFG.fornecedores||[]).map(f=>'<option'+(f===i.fornecedor?' selected':'')+'>'+f+'</option>').join('')+'</select>';
     let recSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'recorrente\',this.value)"><option value="0"'+(i.recorrente?'':' selected')+'>Não</option><option value="1"'+(i.recorrente?' selected':'')+'>Sim</option></select>';
     let dfSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'tipo_nota\',this.value)"><option value=""'+(!i.tipo_nota?' selected':'')+'>—</option><option value="D"'+(i.tipo_nota==='D'?' selected':'')+'>D</option><option value="F"'+(i.tipo_nota==='F'?' selected':'')+'>F</option></select>';
-    return'<tr><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+chqBtn+'<button class="btn-edit" onclick="NR.editRow(\'acerto\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
   document.getElementById('ac-total-ent').textContent=fmt(te);
   document.getElementById('ac-total-sai').textContent=fmt(ts);
   document.getElementById('ac-saldo').textContent=fmt(te-ts);
@@ -242,17 +242,11 @@ async function renderAcerto(){
 }
 async function renderFat(){
   let items=await api('GET','/api/fat?mes='+gM()),total=0;
-  let agrupados = {};
-  items.forEach(i => {
-    let cat = i.categoria || 'Outros';
-    if(!agrupados[cat]) agrupados[cat] = { data: i.data, descricao: i.descricao, saida: 0, categoria: cat };
-    agrupados[cat].saida += (i.saida || 0);
-  });
-  let itemsAgrupados = Object.values(agrupados);
-  document.querySelector('#tabelaFat tbody').innerHTML=itemsAgrupados.map(i=>{total+=i.saida||0;return'<tr><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td></tr>';}).join('');
+  document.querySelector('#tabelaFat tbody').innerHTML=items.map(i=>{total+=i.saida||0;return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td><td><button class="btn-edit" onclick="NR.editRow(\'fat\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');
   document.getElementById('fat-total').textContent=fmt(total);
   // Chart por categoria
-  let cats=itemsAgrupados.map(i=>({categoria:i.categoria,total:i.saida})).sort((a,b)=>b.total-a.total);
+  let agr={};items.forEach(i=>{let c=i.categoria||'Outros';agr[c]=(agr[c]||0)+(i.saida||0);});
+  let cats=Object.entries(agr).map(([categoria,total])=>({categoria,total})).sort((a,b)=>b.total-a.total);
   let ch=document.getElementById('chartFat');
   if(!cats.length){ch.innerHTML='<p style="color:var(--text3)">Sem dados recorrentes</p>';return;}
   let max=Math.max(...cats.map(c=>c.total));
@@ -276,7 +270,7 @@ async function renderContasPagar(){
     let cxSel='<select class="inline-select" onchange="NR.setCaixaPago(\''+i.id+'\',this.value)">'+caixaOpts.replace('value="'+(i.caixa_id||0)+'"','value="'+(i.caixa_id||0)+'" selected')+'</select>';
     let achegar=i.a_chegar?'<span style="background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px"><i class="fas fa-truck-loading"></i> A CHEGAR</span>':'';
     let chegarBtn=i.a_chegar?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px" onclick="NR.marcarChegou(\''+i.id+'\')" title="Marcar como chegou"><i class="fas fa-check"></i> Chegou</button> ':'<button class="btn btn-sm" style="background:var(--bg3);color:var(--amber);font-size:10px;border:1px solid var(--amber)" onclick="NR.toggleAChegar(\''+i.id+'\')" title="Marcar como produto a chegar"><i class="fas fa-truck-loading"></i></button> ';
-    return'<tr class="'+cls+'"><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(!i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chegarBtn+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'" class="'+cls+'"><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(!i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chegarBtn+'<button class="btn-edit" onclick="NR.editRow(\'contas-pagar\',\''+i.id+'\')"><i class="fas fa-edit"></i></button> '+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
   document.getElementById('cp-total-pend').textContent=fmt(tp);
   document.getElementById('cp-total-pago').textContent=fmt(tpg);
@@ -378,7 +372,7 @@ async function renderDrogaria(){
     if(i.tipo==='entrada'){te+=i.valor;saldo+=i.valor;}else{ts+=i.valor;saldo-=i.valor;}
     let tipoLabel=i.tipo==='entrada'?'Crédito':'Débito';
     let tipoClass=i.tipo==='entrada'?'tipo-entrada':'tipo-saida';
-    return'<tr><td>'+fD(i.data)+'</td><td class="'+tipoClass+'">'+(i.tipo==='entrada'?'↑ ':'↓ ')+tipoLabel+'</td><td>'+i.descricao+'</td><td class="'+tipoClass+'">'+fmt(i.valor)+'</td><td style="color:'+(saldo>=0?'var(--green)':'var(--red)')+'">'+fmt(saldo)+'</td><td><button class="btn btn-sm btn-danger" onclick="NR.del(\'drogaria\',\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td class="'+tipoClass+'">'+(i.tipo==='entrada'?'↑ ':'↓ ')+tipoLabel+'</td><td>'+i.descricao+'</td><td class="'+tipoClass+'">'+fmt(i.valor)+'</td><td style="color:'+(saldo>=0?'var(--green)':'var(--red)')+'">'+fmt(saldo)+'</td><td><button class="btn-edit" onclick="NR.editRow(\'drogaria\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.del(\'drogaria\',\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
   document.getElementById('drog-total-ent').textContent=fmt(te);
   document.getElementById('drog-total-sai').textContent=fmt(ts);
@@ -411,7 +405,7 @@ function renderChequesRow(i){
   let sl=i.status||'pendente';
   let jaLabel=i.juros_antecipado?'<span style="font-size:.6rem;background:var(--amber);color:#000;padding:1px 5px;border-radius:4px;margin-left:4px">JA</span>':'';
   let extraLabel=(i.taxa_extra&&i.taxa_extra>0)?'<span style="font-size:.6rem;background:var(--purple);color:#fff;padding:1px 5px;border-radius:4px;margin-left:4px">+'+fmt(i.taxa_extra)+'</span>':'';
-  return'<tr><td><input type="checkbox" class="chq-sel" data-id="'+i.id+'" onchange="NR.updateChqSelCount()" style="accent-color:var(--green);width:16px;height:16px;cursor:pointer"></td><td><b>'+(i.numero||'\u2014')+'</b></td><td>'+fD(i.data)+'</td><td>'+i.cliente+'</td><td>'+(i.dono_cheque||'—')+'</td><td>'+fmt(i.valor)+jaLabel+'</td><td>'+destCell+'</td><td'+bpClass+'>'+bp+'</td><td>'+dias+'d</td><td>'+i.taxa+'%/m'+extraLabel+'</td><td class="tipo-entrada">'+fmt(i.lucro)+'</td><td>'+(i.origem_dinheiro==='caixa-empresa'?'Caixa':'Celso')+'</td><td>'+fD(i.vencimento)+'</td><td class="status-'+sl+'">'+(statusLabel[sl]||sl)+'</td><td>'+'<button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.printRecibo(\''+i.id+'\')" title="Imprimir recibo"><i class="fas fa-print"></i></button>'+(sl==='pendente'?'<button class="btn btn-sm btn-primary" onclick="NR.comp(\''+i.id+'\')">'+'<i class="fas fa-check"></i></button>':'')+'<button class="btn btn-sm btn-danger" onclick="NR.del(\'cheques\',\''+i.id+'\')">'+'<i class="fas fa-trash"></i></button></td></tr>';
+  return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td><input type="checkbox" class="chq-sel" data-id="'+i.id+'" onchange="NR.updateChqSelCount()" style="accent-color:var(--green);width:16px;height:16px;cursor:pointer"></td><td><b>'+(i.numero||'\u2014')+'</b></td><td>'+fD(i.data)+'</td><td>'+i.cliente+'</td><td>'+(i.dono_cheque||'—')+'</td><td>'+fmt(i.valor)+jaLabel+'</td><td>'+destCell+'</td><td'+bpClass+'>'+bp+'</td><td>'+dias+'d</td><td>'+i.taxa+'%/m'+extraLabel+'</td><td class="tipo-entrada">'+fmt(i.lucro)+'</td><td>'+(i.origem_dinheiro==='caixa-empresa'?'Caixa':'Celso')+'</td><td>'+fD(i.vencimento)+'</td><td class="status-'+sl+'">'+(statusLabel[sl]||sl)+'</td><td>'+'<button class="btn-edit" onclick="NR.editRow(\'cheques\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.printRecibo(\''+i.id+'\')" title="Imprimir recibo"><i class="fas fa-print"></i></button>'+(sl==='pendente'?'<button class="btn btn-sm btn-primary" onclick="NR.comp(\''+i.id+'\')">'+'<i class="fas fa-check"></i></button>':'')+'<button class="btn btn-sm btn-danger" onclick="NR.del(\'cheques\',\''+i.id+'\')">'+'<i class="fas fa-trash"></i></button></td></tr>';
 }
 async function renderCheques(){
   let items=await api('GET','/api/cheques?mes='+gM());chequesCache=items;let tt=0,tl=0,pn=0;
@@ -512,7 +506,7 @@ function printSelecionados(){
 }
 // CONTA DONO
 document.getElementById('formDono').addEventListener('submit',async function(e){e.preventDefault();await api('POST','/api/conta-dono',{data:document.getElementById('dono-data').value,tipo:document.getElementById('dono-tipo').value,descricao:document.getElementById('dono-desc').value,valor:parseFloat(document.getElementById('dono-valor').value)});this.reset();setToday('dono-data');toast('Salvo!');refreshAll();});
-async function renderContaDono(){let items=await api('GET','/api/conta-dono?mes='+gM()),td=0,tc=0,sa=0;document.querySelector('#tabelaDono tbody').innerHTML=items.map(i=>{if(i.tipo==='debito'){td+=i.valor;sa+=i.valor;}else{tc+=i.valor;sa-=i.valor;}return'<tr><td>'+fD(i.data)+'</td><td class="tipo-'+i.tipo+'">'+(i.tipo==='debito'?'↑ Débito':'↓ Crédito')+'</td><td>'+i.descricao+'</td><td class="tipo-'+i.tipo+'">'+fmt(i.valor)+'</td><td>'+fmt(Math.abs(sa))+'</td><td><button class="btn btn-sm btn-danger" onclick="NR.del(\'conta-dono\',\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');document.getElementById('dono-total-deb').textContent=fmt(td);document.getElementById('dono-total-cred').textContent=fmt(tc);let s=td-tc;document.getElementById('dono-saldo').textContent=fmt(Math.abs(s))+(s>0?' (Deve)':s<0?' (A receber)':' (Zerado)');}
+async function renderContaDono(){let items=await api('GET','/api/conta-dono?mes='+gM()),td=0,tc=0,sa=0;document.querySelector('#tabelaDono tbody').innerHTML=items.map(i=>{if(i.tipo==='debito'){td+=i.valor;sa+=i.valor;}else{tc+=i.valor;sa-=i.valor;}return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td class="tipo-'+i.tipo+'">'+(i.tipo==='debito'?'↑ Débito':'↓ Crédito')+'</td><td>'+i.descricao+'</td><td class="tipo-'+i.tipo+'">'+fmt(i.valor)+'</td><td>'+fmt(Math.abs(sa))+'</td><td><button class="btn-edit" onclick="NR.editRow(\'conta-dono\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.del(\'conta-dono\',\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');document.getElementById('dono-total-deb').textContent=fmt(td);document.getElementById('dono-total-cred').textContent=fmt(tc);let s=td-tc;document.getElementById('dono-saldo').textContent=fmt(Math.abs(s))+(s>0?' (Deve)':s<0?' (A receber)':' (Zerado)');}
 // COLABORADORES
 document.getElementById('formColab').addEventListener('submit',async function(e){e.preventDefault();await api('POST','/api/colaboradores',{nome:document.getElementById('colab-nome').value.trim(),percentual:parseFloat(document.getElementById('colab-pct').value)});this.reset();toast('Adicionado!');refreshAll();});
 async function renderColaboradores(){COLABS=await api('GET','/api/colaboradores');let d=await api('GET','/api/dashboard?mes='+gM()),l=d.summary.lojaEnt-d.summary.lojaSai,tp=0;COLABS.forEach(c=>tp+=c.percentual);document.getElementById('colabList').innerHTML=COLABS.map(c=>{let v=l*c.percentual/100,ini=c.nome.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();return'<div class="colab-card"><div class="avatar">'+ini+'</div><div class="colab-info"><div class="name">'+c.nome+'</div><div class="pct">'+c.percentual+'%</div><div class="commission">'+fmt(v)+'</div></div><button class="btn-remove" onclick="NR.delC('+c.id+')"><i class="fas fa-times"></i></button></div>';}).join('');document.getElementById('colab-total-pct').textContent=tp.toFixed(1)+'%';document.getElementById('colab-base-valor').textContent=fmt(l);}
@@ -526,7 +520,7 @@ async function renderDashboard(){let d=await api('GET','/api/dashboard?mes='+gM(
   dc.innerHTML=caixas.map(cx=>{let cor=cx.saldo>=0?'card-green':'card-red';return'<div class="card '+cor+'"><div class="card-icon"><i class="fas fa-cash-register"></i></div><div class="card-info"><span class="card-label">'+cx.nome+'</span><span class="card-value">'+fmt(cx.saldo)+'</span></div></div>';}).join('');
 }
 // CONFIG
-async function renderConfig(){CFG=await api('GET','/api/config');document.getElementById('cfg-pct-admin').value=CFG.pctAdmin;document.getElementById('cfg-pct-dono').value=CFG.pctDono;document.getElementById('cfg-pct-reserva').value=CFG.pctReserva;let t=CFG.pctAdmin+CFG.pctDono+CFG.pctReserva;document.getElementById('cfg-pct-total').value=t.toFixed(1)+'%'+(t===100?' ✓':t<100?' (falta '+(100-t).toFixed(1)+'%)':' (excede)');document.getElementById('catLojaList').innerHTML=CFG.categoriasLoja.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCL('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('catDrogList').innerHTML=CFG.categoriasDrog.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCD('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('fornList').innerHTML=(CFG.fornecedores||[]).map((f,i)=>'<div class="tag-item"><span>'+f+'</span><button class="tag-remove" onclick="NR.delForn('+i+')"><i class="fas fa-times"></i></button></div>').join('');populateCats();}
+async function renderConfig(){CFG=await api('GET','/api/config');if(CFG.categoriasLoja)CFG.categoriasLoja.sort((a,b)=>a.localeCompare(b));if(CFG.categoriasDrog)CFG.categoriasDrog.sort((a,b)=>a.localeCompare(b));if(CFG.fornecedores)CFG.fornecedores.sort((a,b)=>a.localeCompare(b));document.getElementById('cfg-pct-admin').value=CFG.pctAdmin;document.getElementById('cfg-pct-dono').value=CFG.pctDono;document.getElementById('cfg-pct-reserva').value=CFG.pctReserva;let t=CFG.pctAdmin+CFG.pctDono+CFG.pctReserva;document.getElementById('cfg-pct-total').value=t.toFixed(1)+'%'+(t===100?' ✓':t<100?' (falta '+(100-t).toFixed(1)+'%)':' (excede)');document.getElementById('catLojaList').innerHTML=CFG.categoriasLoja.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCL('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('catDrogList').innerHTML=CFG.categoriasDrog.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCD('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('fornList').innerHTML=(CFG.fornecedores||[]).map((f,i)=>'<div class="tag-item"><span>'+f+'</span><button class="tag-remove" onclick="NR.delForn('+i+')"><i class="fas fa-times"></i></button></div>').join('');populateCats();}
 document.getElementById('formPercentuais').addEventListener('submit',async function(e){e.preventDefault();await api('PUT','/api/config',{pctAdmin:parseFloat(document.getElementById('cfg-pct-admin').value),pctDono:parseFloat(document.getElementById('cfg-pct-dono').value),pctReserva:parseFloat(document.getElementById('cfg-pct-reserva').value)});toast('Salvo!');refreshAll();});
 document.getElementById('formCatLoja').addEventListener('submit',async function(e){e.preventDefault();let v=document.getElementById('cfg-cat-loja').value.trim();if(!v)return;CFG.categoriasLoja.push(v);await api('PUT','/api/config',{categoriasLoja:CFG.categoriasLoja});document.getElementById('cfg-cat-loja').value='';toast('Adicionada!');refreshAll();});
 document.getElementById('formCatDrog').addEventListener('submit',async function(e){e.preventDefault();let v=document.getElementById('cfg-cat-drog').value.trim();if(!v)return;CFG.categoriasDrog.push(v);await api('PUT','/api/config',{categoriasDrog:CFG.categoriasDrog});document.getElementById('cfg-cat-drog').value='';toast('Adicionada!');refreshAll();});
@@ -576,8 +570,7 @@ document.getElementById('btnPrintRel').addEventListener('click',()=>{
 document.getElementById('btnCsvRel').addEventListener('click',()=>{
   let csv='Data;Descrição;Entrada;Saída;Categoria;Recorrente;D/F\n';
   relData.forEach(i=>csv+=i.data+';'+i.descricao+';'+i.entrada+';'+i.saida+';'+i.categoria+';'+(i.recorrente?'S':'N')+';'+i.tipo_nota+'\n');
-  let b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='relatorio_'+gM()+'.csv';a.click();toast('CSV exportado!');
-});
+  let b=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='relatorio_'+gM()+'.csv';a.click();toast('CSV exportado!');});
 // DASHBOARD GERAL
 async function renderDashboardGeral(){
   let dias=parseInt(document.getElementById('alertaDias').value)||0;
@@ -631,7 +624,7 @@ async function renderFiscal(){
     tEnt+=i.nota_entrada||0;tSai+=i.nota_saida||0;tBol+=bol;tDep+=dep;tCar+=car;
     let saldoCls=saldo>=0?'tipo-entrada':'tipo-saida';
     let emitCls=aEmitir>0?'tipo-saida':'tipo-entrada';
-    return '<tr><td>'+fD(i.data)+'</td><td class="tipo-saida">'+fmt(i.nota_entrada)+'</td><td class="tipo-entrada">'+fmt(i.nota_saida)+'</td><td>'+fmt(bol)+'</td><td>'+fmt(dep)+'</td><td>'+fmt(car)+'</td><td style="font-weight:600">'+fmt(bancoTotal)+'</td><td class="'+saldoCls+'">'+fmt(saldo)+'</td><td class="'+emitCls+'">'+(aEmitir>0?fmt(aEmitir):'✅ OK')+'</td><td style="font-size:.8rem;color:var(--text3)">'+((i.observacao||''))+'</td><td><button class="btn btn-danger btn-sm" onclick="NR.delFisc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    return '<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td class="tipo-saida">'+fmt(i.nota_entrada)+'</td><td class="tipo-entrada">'+fmt(i.nota_saida)+'</td><td>'+fmt(bol)+'</td><td>'+fmt(dep)+'</td><td>'+fmt(car)+'</td><td style="font-weight:600">'+fmt(bancoTotal)+'</td><td class="'+saldoCls+'">'+fmt(saldo)+'</td><td class="'+emitCls+'">'+(aEmitir>0?fmt(aEmitir):'✅ OK')+'</td><td style="font-size:.8rem;color:var(--text3)">'+((i.observacao||''))+'</td><td><button class="btn-edit" onclick="NR.editRow(\'fiscal\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-danger btn-sm" onclick="NR.delFisc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
   let tBanco=tBol+tDep+tCar;
   let saldoTotal=tSai-tEnt;
@@ -776,12 +769,12 @@ async function renderMovimentacao(){
     let rDif = i.diferenca||0;
     running+=i.entrada-i.saida+rDif;
     let dia=i.data.split('-')[2];
-    rows+='<tr><td>'+parseInt(dia)+'</td><td>'+i.descricao+'</td>'
+    rows+='<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+parseInt(dia)+'</td><td>'+i.descricao+'</td>'
       +'<td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td>'
       +'<td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td>'
       +'<td><input type="number" class="inline-input" value="'+rDif+'" step="0.01" style="width:80px" onchange="NR.updateMovDif(\''+i.id+'\',this.value)"></td>'
       +'<td style="font-weight:bold">'+fmt(running)+'</td>'
-      +'<td><button class="btn btn-sm btn-danger" onclick="NR.delMov(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+      +'<td><button class="btn-edit" onclick="NR.editRow(\'movimentacao\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delMov(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   });
   if(dif!==0){
     rows+='<tr style="background:rgba(245,158,11,0.1);font-weight:bold"><td>—</td><td>Diferença do caixa</td><td class="'+(dif>0?'tipo-entrada':'tipo-saida')+'">'+fmt(Math.abs(dif))+'</td><td></td><td></td><td style="font-weight:bold;color:var(--amber)">'+fmt(running+dif)+'</td><td></td></tr>';
@@ -1227,6 +1220,132 @@ async function salvarParcelas(){
   refreshAll();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc};
+// === INLINE EDITING ===
+let editCache={};
+function editRow(section,id){
+  const tableMap = {'acerto':'#tabelaAcerto','fat':'#tabelaFat','contas-pagar':'#tabelaContasPagar','drogaria':'#tabelaDrogaria','conta-dono':'#tabelaDono','movimentacao':'#tabelaMov','cheques':'#tabelaCheques','fiscal':'#tabelaFiscal'};
+  const sel = tableMap[section] || '';
+  const tr=document.querySelector(sel+' tr[data-id="'+id+'"]');
+  if(!tr)return;
+  let data;
+  try{data=JSON.parse(decodeURIComponent(tr.dataset.row));}catch(e){toast('Erro ao editar','error');return;}
+  editCache={section,id,data};
+  tr.classList.add('row-editing');
+  const fields=getEditFields(section,data);
+  let cells=tr.querySelectorAll('td');
+  fields.forEach((f,idx)=>{
+    if(f.skip)return;
+    let cell=cells[f.cellIndex!==undefined?f.cellIndex:idx];
+    if(!cell)return;
+    if(f.type==='select'){
+      cell.innerHTML='<select class="edit-input" data-field="'+f.field+'">'+f.options.map(o=>'<option value="'+o.v+'"'+(o.v==f.value?' selected':'')+'>'+o.l+'</option>').join('')+'</select>';
+    } else {
+      cell.innerHTML='<input class="edit-input" type="'+f.type+'" data-field="'+f.field+'" value="'+(f.value||'')+'" '+(f.step?'step="'+f.step+'"':'')+'>';
+    }
+  });
+  let lastCell=cells[cells.length-1];
+  lastCell.innerHTML='<div style="display:flex;gap:4px"><button class="btn-save" onclick="NR.saveRow(\''+section+'\',\''+id+'\')" title="Salvar"><i class="fas fa-check"></i></button><button class="btn-cancel" onclick="NR.cancelEdit(\''+section+'\')" title="Cancelar"><i class="fas fa-times"></i></button></div>';
+}
+function getEditFields(section,d){
+  const catOpts=CFG.categoriasLoja.map(c=>({v:c,l:c}));
+  const fornOpts=[{v:'',l:'\u2014'}].concat((CFG.fornecedores||[]).map(f=>({v:f,l:f})));
+  const dfOpts=[{v:'',l:'\u2014'},{v:'D',l:'D'},{v:'F',l:'F'}];
+  const recOpts=[{v:'0',l:'N\u00e3o'},{v:'1',l:'Sim'}];
+  const tipoOpts=[{v:'entrada',l:'Cr\u00e9dito'},{v:'saida',l:'D\u00e9bito'}];
+  const tipoDOpts=[{v:'debito',l:'D\u00e9bito'},{v:'credito',l:'Cr\u00e9dito'}];
+  const origemOpts=[{v:'caixa-empresa',l:'Caixa'},{v:'dinheiro-dono',l:'Celso'}];
+  switch(section){
+    case 'acerto':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:''},
+      {field:'descricao',type:'text',value:d.descricao},
+      {field:'entrada',type:'number',value:d.entrada||0,step:'0.01'},
+      {field:'saida',type:'number',value:d.saida||0,step:'0.01'},
+      {skip:true},{skip:true},{skip:true},{skip:true}
+    ];
+    case 'fat':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:''},
+      {field:'descricao',type:'text',value:d.descricao},
+      {field:'saida',type:'number',value:d.saida||0,step:'0.01'},
+      {field:'categoria',type:'select',value:d.categoria,options:catOpts},
+      {skip:true}
+    ];
+    case 'contas-pagar':return[
+      {field:'vencimento',type:'date',value:d.vencimento?d.vencimento.split('T')[0]:''},
+      {field:'descricao',type:'text',value:d.descricao},
+      {field:'valor',type:'number',value:d.valor||0,step:'0.01'},
+      {field:'categoria',type:'select',value:d.categoria,options:catOpts},
+      {field:'fornecedor',type:'select',value:d.fornecedor||'',options:fornOpts},
+      {field:'recorrente',type:'select',value:d.recorrente?'1':'0',options:recOpts},
+      {field:'tipo_nota',type:'select',value:d.tipo_nota||'',options:dfOpts},
+      {skip:true},{skip:true},{skip:true}
+    ];
+    case 'drogaria':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:''},
+      {field:'tipo',type:'select',value:d.tipo,options:tipoOpts},
+      {field:'descricao',type:'text',value:d.descricao},
+      {field:'valor',type:'number',value:d.valor||0,step:'0.01'},
+      {skip:true}
+    ];
+    case 'conta-dono':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:''},
+      {field:'tipo',type:'select',value:d.tipo,options:tipoDOpts},
+      {field:'descricao',type:'text',value:d.descricao},
+      {field:'valor',type:'number',value:d.valor||0,step:'0.01'},
+      {skip:true}
+    ];
+    case 'movimentacao':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:'',cellIndex:0},
+      {field:'descricao',type:'text',value:d.descricao,cellIndex:1},
+      {field:'entrada',type:'number',value:d.entrada||0,step:'0.01',cellIndex:2},
+      {field:'saida',type:'number',value:d.saida||0,step:'0.01',cellIndex:3},
+      {field:'diferenca',type:'number',value:d.diferenca||0,step:'0.01',cellIndex:4},
+    ];
+    case 'cheques':return[
+      {skip:true},
+      {field:'numero',type:'text',value:d.numero||'',cellIndex:1},
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:'',cellIndex:2},
+      {field:'cliente',type:'text',value:d.cliente,cellIndex:3},
+      {field:'dono_cheque',type:'text',value:d.dono_cheque||'',cellIndex:4},
+      {field:'valor',type:'number',value:d.valor||0,step:'0.01',cellIndex:5},
+      {skip:true},
+      {field:'bom_para',type:'date',value:d.bom_para?d.bom_para.split('T')[0]:'',cellIndex:7},
+      {skip:true},
+      {field:'taxa',type:'number',value:d.taxa||5,step:'0.1',cellIndex:9},
+      {skip:true},
+      {field:'origem_dinheiro',type:'select',value:d.origem_dinheiro||'caixa-empresa',options:origemOpts,cellIndex:11},
+      {field:'vencimento',type:'date',value:d.vencimento?d.vencimento.split('T')[0]:'',cellIndex:12},
+    ];
+    default:return[];
+  }
+}
+async function saveRow(section,id){
+  const tableMap = {'acerto':'#tabelaAcerto','fat':'#tabelaFat','contas-pagar':'#tabelaContasPagar','drogaria':'#tabelaDrogaria','conta-dono':'#tabelaDono','movimentacao':'#tabelaMov','cheques':'#tabelaCheques','fiscal':'#tabelaFiscal'};
+  const sel = tableMap[section] || '';
+  const tr=document.querySelector(sel+' tr[data-id="'+id+'"]');
+  if(!tr)return;
+  const inputs=tr.querySelectorAll('.edit-input');
+  const updates={};
+  inputs.forEach(inp=>{
+    const field=inp.dataset.field;
+    let val=inp.value;
+    if(inp.type==='number')val=parseFloat(val)||0;
+    updates[field]=val;
+  });
+  if(section==='cheques'&&(updates.data||updates.vencimento)){
+    const d1=updates.data||editCache.data.data;
+    const d2=updates.vencimento||editCache.data.vencimento;
+    if(d1&&d2)updates.dias=Math.max(Math.round((new Date(d2)-new Date(d1))/86400000),1);
+  }
+  const apiMap={'acerto':'acerto','fat':'acerto','contas-pagar':'contas-pagar','drogaria':'drogaria','conta-dono':'conta-dono','movimentacao':'movimentacao','cheques':'cheques','fiscal':'fiscal'};
+  const endpoint=apiMap[section];
+  if(!endpoint)return;
+  try{
+    await api('PUT','/api/'+endpoint+'/'+id,updates);
+    toast('Registro atualizado!');
+    refreshAll();
+  }catch(e){toast('Erro ao atualizar','error');}
+}
+function cancelEdit(section){refreshAll();}
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit};
 checkAuth();
 })();

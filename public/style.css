@@ -404,6 +404,35 @@ input, select, button { font-family:inherit; font-size:.9rem; }
 }
 .btn-cheque-pay:hover { background:var(--purple); color:#fff; }
 
+/* ===== INLINE EDITING ===== */
+.row-editing { background:rgba(0,212,170,.06) !important; }
+.row-editing td { border-bottom-color:var(--green) !important; }
+.edit-input {
+    width:100%; padding:4px 8px; background:var(--bg3); border:1px solid var(--green);
+    border-radius:4px; color:var(--text); font-size:.82rem; outline:none;
+}
+.edit-input:focus { box-shadow:0 0 0 2px rgba(0,212,170,.2); }
+.edit-input[type="number"] { width:90px; }
+.edit-input[type="date"] { width:130px; }
+.btn-edit {
+    padding:4px 8px; font-size:.75rem; background:var(--blue-bg); color:var(--blue);
+    border:1px solid var(--blue); border-radius:var(--radius-sm); cursor:pointer;
+    transition:all var(--transition); display:inline-flex; align-items:center; gap:4px;
+}
+.btn-edit:hover { background:var(--blue); color:#fff; }
+.btn-save {
+    padding:4px 8px; font-size:.75rem; background:var(--green-bg); color:var(--green);
+    border:1px solid var(--green); border-radius:var(--radius-sm); cursor:pointer;
+    transition:all var(--transition); display:inline-flex; align-items:center; gap:4px;
+}
+.btn-save:hover { background:var(--green); color:#0f1117; }
+.btn-cancel {
+    padding:4px 8px; font-size:.75rem; background:var(--bg3); color:var(--text3);
+    border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer;
+    transition:all var(--transition); display:inline-flex; align-items:center; gap:4px;
+}
+.btn-cancel:hover { border-color:var(--red); color:var(--red); }
+
 /* ===== RESPONSIVE ===== */
 @media(max-width:768px){
     .sidebar { transform:translateX(-100%); }
