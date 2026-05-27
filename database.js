@@ -465,7 +465,7 @@ module.exports = {
   getConfig(slug) {
     const rows = query(slug, 'SELECT * FROM configuracoes'); const cfg = {};
     rows.forEach(r => { cfg[r.chave] = r.valor; });
-    return { pctAdmin: parseFloat(cfg.pctAdmin || 23), pctDono: parseFloat(cfg.pctDono || 36), pctReserva: parseFloat(cfg.pctReserva || 30), categoriasLoja: JSON.parse(cfg.categoriasLoja || '[]'), categoriasDrog: JSON.parse(cfg.categoriasDrog || '[]'), fornecedores: JSON.parse(cfg.fornecedores || '[]') };
+    return { ...cfg, pctAdmin: parseFloat(cfg.pctAdmin || 23), pctDono: parseFloat(cfg.pctDono || 36), pctReserva: parseFloat(cfg.pctReserva || 30), categoriasLoja: JSON.parse(cfg.categoriasLoja || '[]'), categoriasDrog: JSON.parse(cfg.categoriasDrog || '[]'), fornecedores: JSON.parse(cfg.fornecedores || '[]') };
   },
   updateConfig(slug, key, value) { run(slug, 'INSERT OR REPLACE INTO configuracoes (chave,valor) VALUES (?,?)', [key, typeof value === 'string' ? value : JSON.stringify(value)]); },
 
