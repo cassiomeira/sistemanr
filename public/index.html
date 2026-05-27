@@ -445,6 +445,32 @@
                     <input type="file" id="uploadXlsx" accept=".xlsx,.xls" style="display:none" onchange="NR.importarPlanilha(this)">
                 </div>
             </div>
+
+            <div class="panel mt-20">
+                <h3><i class="fas fa-cloud-upload-alt"></i> Backup Automático</h3>
+                <p class="config-desc">Configure o backup automático diário (7h, 12h, 16h e 20h). Os backups são enviados para FTP e/ou Google Drive.</p>
+                <div id="backupStatusBox" style="margin:12px 0;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:13px;color:var(--text2)">
+                    <i class="fas fa-info-circle"></i> Carregando status...
+                </div>
+                <h4 style="margin:16px 0 8px;color:var(--text)"><i class="fas fa-server"></i> FTP</h4>
+                <form id="formBackupFTP" class="form-grid">
+                    <div class="form-group"><label>Host/IP</label><input type="text" id="cfg-ftp-host" placeholder="217.216.86.231"></div>
+                    <div class="form-group"><label>Usuário</label><input type="text" id="cfg-ftp-user" placeholder="matrix"></div>
+                    <div class="form-group"><label>Senha</label><input type="password" id="cfg-ftp-pass" placeholder="••••••"></div>
+                    <div class="form-group"><label>Pasta Remota</label><input type="text" id="cfg-ftp-path" placeholder="/backups"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Salvar FTP</button></div>
+                </form>
+                <h4 style="margin:16px 0 8px;color:var(--text)"><i class="fab fa-google-drive"></i> Google Drive</h4>
+                <form id="formBackupGDrive" class="form-grid">
+                    <div class="form-group" style="grid-column:span 2"><label>Credenciais (JSON da Service Account)</label><textarea id="cfg-google-credentials" rows="3" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px;font-size:12px;font-family:monospace" placeholder='{"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}'></textarea></div>
+                    <div class="form-group"><label>ID da Pasta Compartilhada</label><input type="text" id="cfg-google-folder" placeholder="1AbCd_xYz..."></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Salvar Google Drive</button></div>
+                </form>
+                <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:15px">
+                    <button class="btn btn-primary" onclick="NR.backupManual()"><i class="fas fa-play"></i> Backup Agora</button>
+                    <button class="btn btn-outline" onclick="NR.loadBackupStatus()"><i class="fas fa-sync-alt"></i> Atualizar Status</button>
+                </div>
+            </div>
         </section>
 
         <!-- RELATÓRIOS -->

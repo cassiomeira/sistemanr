@@ -4,6 +4,8 @@ const path = require('path');
 const db = require('./database');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+const cron = require('node-cron');
+const backup = require('./backup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -398,8 +400,36 @@ app.get('/api/alertas-geral', (req, res) => {
   res.json({ contas, mercadorias });
 });
 
+// === BACKUP ===
+function getBackupConfig() {
+  try {
+    const cfg = db.getConfig('nunesrocha');
+    return {
+      ftp_host: cfg.ftp_host || '',
+      ftp_user: cfg.ftp_user || '',
+      ftp_pass: cfg.ftp_pass || '',
+      ftp_path: cfg.ftp_path || '/backups',
+      google_credentials: cfg.google_credentials || '',
+      google_folder_id: cfg.google_folder_id || ''
+    };
+  } catch(e) { return {}; }
+}
+app.get('/api/backup/status', adminOnly, (req, res) => res.json(backup.getBackupStatus()));
+app.post('/api/backup/manual', adminOnly, async (req, res) => {
+  try {
+    const status = await backup.runBackup(getBackupConfig);
+    res.json({ ok: true, status });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 db.init().then(() => {
   app.listen(PORT, '0.0.0.0', () => console.log(`✅ Sistema rodando em http://0.0.0.0:${PORT}`));
+  // Backup automático: 7h, 12h, 16h e 20h (horário do servidor)
+  cron.schedule('0 7,12,16,20 * * *', () => {
+    console.log('⏰ Backup agendado iniciando...');
+    backup.runBackup(getBackupConfig);
+  });
+  console.log('⏰ Backup agendado: 07:00, 12:00, 16:00, 20:00');
 }).catch(err => { console.error('Erro ao iniciar banco:', err); process.exit(1); });
