@@ -314,13 +314,11 @@ app.delete('/api/clear/conta-dono', adminOnly, (req, res) => { db.clearContaDono
 // === CONFIG ===
 app.get('/api/config', (req, res) => res.json(db.getConfig(req.emp)));
 app.put('/api/config', (req, res) => {
-  const b = req.body;
-  if (b.pctAdmin !== undefined) db.updateConfig(req.emp, 'pctAdmin', String(b.pctAdmin));
-  if (b.pctDono !== undefined) db.updateConfig(req.emp, 'pctDono', String(b.pctDono));
-  if (b.pctReserva !== undefined) db.updateConfig(req.emp, 'pctReserva', String(b.pctReserva));
-  if (b.categoriasLoja !== undefined) db.updateConfig(req.emp, 'categoriasLoja', b.categoriasLoja);
-  if (b.categoriasDrog !== undefined) db.updateConfig(req.emp, 'categoriasDrog', b.categoriasDrog);
-  if (b.fornecedores !== undefined) db.updateConfig(req.emp, 'fornecedores', b.fornecedores);
+  for(let k in req.body){
+    if(req.body[k] !== undefined) {
+      db.updateConfig(req.emp, k, req.body[k]);
+    }
+  }
   res.json({ ok: true });
 });
 
