@@ -654,7 +654,65 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+
+// === LEMBRETES ===
+async function renderLembretes(){
+    if(!currentUser)return;
+    const hideKey = 'hideLembretes_' + currentUser.username;
+    if(localStorage.getItem(hideKey) === 'true'){
+        document.getElementById('lembretesWrapper').style.display='none';
+    }else{
+        document.getElementById('lembretesWrapper').style.display='block';
+    }
+    const items = await api('GET','/api/lembretes');
+    const container = document.getElementById('lembretesContainer');
+    if(!items.length){
+        container.innerHTML='<div style="padding:10px;color:var(--text3);font-size:13px;width:100%">Nenhum lembrete pendente.</div>';
+        return;
+    }
+    container.innerHTML = items.map(i=>`
+        <div class="lembrete-card ${i.concluido?'concluido':''}">
+            <div class="lembrete-texto">${i.texto}</div>
+            <div class="lembrete-actions">
+                <button class="${i.concluido?'btn-desmarcar':'btn-concluir'}" onclick="NR.toggleStatusLembrete('${i.id}', ${i.concluido?0:1})" title="${i.concluido?'Desmarcar':'Concluir'}">
+                    <i class="fas ${i.concluido?'fa-undo':'fa-check'}"></i>
+                </button>
+                <button class="btn-excluir" onclick="NR.delLembrete('${i.id}')" title="Excluir"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+function toggleLembretes(){
+    if(!currentUser)return;
+    const hideKey = 'hideLembretes_' + currentUser.username;
+    const wrapper = document.getElementById('lembretesWrapper');
+    if(wrapper.style.display === 'none'){
+        wrapper.style.display = 'block';
+        localStorage.setItem(hideKey, 'false');
+    }else{
+        wrapper.style.display = 'none';
+        localStorage.setItem(hideKey, 'true');
+    }
+}
+async function toggleStatusLembrete(id, concluido){
+    await api('PUT','/api/lembretes/'+id+'/toggle',{concluido});
+    renderLembretes();
+}
+async function delLembrete(id){
+    if(!confirm('Excluir este lembrete?'))return;
+    await api('DELETE','/api/lembretes/'+id);
+    renderLembretes();
+}
+document.getElementById('formLembrete').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const texto = document.getElementById('novoLembreteText').value.trim();
+    if(!texto)return;
+    await api('POST','/api/lembretes',{texto});
+    document.getElementById('novoLembreteText').value = '';
+    renderLembretes();
+});
+
 // === USUÁRIOS ===
 const ALL_PERMS=['dashboard-geral','dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal'];
 let newUserPerms=[...ALL_PERMS];
@@ -1346,6 +1404,6 @@ async function saveRow(section,id){
   }catch(e){toast('Erro ao atualizar','error');}
 }
 function cancelEdit(section){refreshAll();}
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete};
 checkAuth();
 })();

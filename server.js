@@ -81,6 +81,23 @@ app.post('/api/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// === LEMBRETES ===
+app.get('/api/lembretes', (req, res) => res.json(db.getLembretes(req.emp, req.user.username)));
+app.post('/api/lembretes', (req, res) => {
+  if (!req.body.texto) return res.status(400).json({ error: 'Texto obrigatório' });
+  const item = { id: uid(), username: req.user.username, texto: req.body.texto };
+  db.addLembrete(req.emp, item);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/lembretes/:id/toggle', (req, res) => {
+  db.toggleLembrete(req.emp, req.params.id, req.body.concluido);
+  res.json({ ok: true });
+});
+app.delete('/api/lembretes/:id', (req, res) => {
+  db.delLembrete(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+
 // === EMPRESAS ===
 app.get('/api/empresas', (req, res) => res.json(db.getEmpresas()));
 app.post('/api/empresas', (req, res) => {

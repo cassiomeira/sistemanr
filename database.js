@@ -102,6 +102,13 @@ function initDB(dbInstance) {
     CREATE TABLE IF NOT EXISTS mov_config (
       mes TEXT PRIMARY KEY, saldo_anterior REAL DEFAULT 0, diferenca REAL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS lembretes (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL,
+      texto TEXT NOT NULL,
+      concluido INTEGER DEFAULT 0,
+      data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   // Seed config
   const cfgCount = dbInstance.exec("SELECT COUNT(*) FROM configuracoes")[0]?.values[0][0] || 0;
@@ -227,6 +234,21 @@ module.exports = {
     run(slug, 'UPDATE controle_fiscal SET ' + fields + ' WHERE id=?', [...Object.values(data), id]);
   },
   delFiscal(slug, id) { run(slug, 'DELETE FROM controle_fiscal WHERE id=?', [id]); },
+
+  // -- LEMBRETES --
+  getLembretes(slug, username) {
+    return query(slug, 'SELECT * FROM lembretes WHERE username=? ORDER BY concluido ASC, data_criacao DESC', [username]);
+  },
+  addLembrete(slug, lembrete) {
+    run(slug, 'INSERT INTO lembretes (id,username,texto,concluido) VALUES (?,?,?,?)', 
+      [lembrete.id, lembrete.username, lembrete.texto, 0]);
+  },
+  toggleLembrete(slug, id, concluido) {
+    run(slug, 'UPDATE lembretes SET concluido=? WHERE id=?', [concluido ? 1 : 0, id]);
+  },
+  delLembrete(slug, id) {
+    run(slug, 'DELETE FROM lembretes WHERE id=?', [id]);
+  },
 
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
