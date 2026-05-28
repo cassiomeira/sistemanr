@@ -207,7 +207,8 @@ async function addFornInline(selId){
   populateCats();document.getElementById(selId).value=v;toast('Fornecedor "'+v+'" adicionado!');
 }
 // ACERTO FINANCEIRO
-document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();await api('POST','/api/acerto',{data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value});this.reset();setToday('ac-data');populateCats();toast('Lançamento salvo!');refreshAll();});
+document.getElementById('ac-cat').addEventListener('change',function(){document.getElementById('abastecimentoFields').style.display=this.value==='Abastecimento'?'block':'none';});
+document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();let body={data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value};if(body.categoria==='Abastecimento'){body.veiculo=document.getElementById('ac-veiculo').value.trim();body.placa=document.getElementById('ac-placa').value.trim().toUpperCase();body.km=document.getElementById('ac-km').value.trim();body.localidade=document.getElementById('ac-localidade').value.trim();body.condutor=document.getElementById('ac-condutor').value.trim();}await api('POST','/api/acerto',body);this.reset();setToday('ac-data');populateCats();document.getElementById('abastecimentoFields').style.display='none';toast('Lançamento salvo!');refreshAll();});
 let acFiltro=document.getElementById('ac-filtro');
 acFiltro.addEventListener('change',()=>renderAcerto());
 async function renderAcerto(){
@@ -539,7 +540,7 @@ async function comp(id){await api('PUT','/api/cheques/'+id+'/compensar');toast('
 async function toggleBoleto(id,v){await api('PUT','/api/contas-pagar/'+id,{boleto_chegou:v});refreshAll();}
 async function setPago(id,v){await api('PUT','/api/contas-pagar/'+id,{pago_por:v});toast(v&&v!=='A Pagar'?'Pago por '+v:'Status atualizado');refreshAll();}
 async function setAcField(id,campo,valor){let body={};if(campo==='recorrente')body.recorrente=valor==='1';else body[campo]=valor;await api('PUT','/api/acerto/'+id,body);refreshAll();}
-async function delCL(i){CFG.categoriasLoja.splice(i,1);await api('PUT','/api/config',{categoriasLoja:CFG.categoriasLoja});refreshAll();}
+async function delCL(i){if(CFG.categoriasLoja[i]==='Abastecimento'){toast('A categoria "Abastecimento" não pode ser excluída','error');return;}CFG.categoriasLoja.splice(i,1);await api('PUT','/api/config',{categoriasLoja:CFG.categoriasLoja});refreshAll();}
 async function delCD(i){CFG.categoriasDrog.splice(i,1);await api('PUT','/api/config',{categoriasDrog:CFG.categoriasDrog});refreshAll();}
 async function delForn(i){if(!confirm('Excluir fornecedor "'+CFG.fornecedores[i]+'"?'))return;CFG.fornecedores.splice(i,1);await api('PUT','/api/config',{fornecedores:CFG.fornecedores});refreshAll();}
 // EXPORT
@@ -659,7 +660,25 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderAbastecimentos()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+
+// === ABASTECIMENTOS ===
+async function renderAbastecimentos(){
+    let items=await api('GET','/api/abastecimentos?mes='+gM());
+    let total=0;
+    items.forEach(i=>total+=i.saida||0);
+    document.getElementById('abast-total').textContent=fmt(total);
+    document.getElementById('abast-count').textContent=items.length;
+    let tb=document.querySelector('#tabelaAbastecimentos tbody');
+    if(!items.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--text3)">Nenhum abastecimento no mês</td></tr>';return;}
+    tb.innerHTML=items.map(i=>'<tr data-id="'+i.id+'" data-row="abastecimentos">'+
+        '<td>'+i.data+'</td><td>'+i.descricao+'</td>'+
+        '<td>'+(i.veiculo||'')+'</td><td>'+(i.placa||'')+'</td>'+
+        '<td>'+(i.km||'')+'</td><td>'+(i.localidade||'')+'</td>'+
+        '<td>'+(i.condutor||'')+'</td><td class="text-red">'+fmt(i.saida||0)+'</td>'+
+        '<td><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td>'+
+    '</tr>').join('');
+}
 
 // === LEMBRETES ===
 async function renderLembretes(){

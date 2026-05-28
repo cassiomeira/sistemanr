@@ -152,6 +152,23 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE controle_fiscal ADD COLUMN banco_cartao REAL DEFAULT 0'); } catch(e) {}
   // Migrar dados antigos: banco_entrada → banco_deposito
   try { dbInstance.run('UPDATE controle_fiscal SET banco_deposito = banco_entrada WHERE banco_entrada > 0 AND banco_deposito = 0 AND banco_boleto = 0 AND banco_cartao = 0'); } catch(e) {}
+  // Abastecimento
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN veiculo TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN placa TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN km TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN localidade TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN condutor TEXT DEFAULT ""'); } catch(e) {}
+  // Garantir categoria Abastecimento
+  try {
+    const catRaw = dbInstance.exec("SELECT valor FROM configuracoes WHERE chave='categoriasLoja'")[0]?.values[0][0];
+    if (catRaw) {
+      const cats = JSON.parse(catRaw);
+      if (!cats.includes('Abastecimento')) {
+        cats.push('Abastecimento');
+        dbInstance.run("UPDATE configuracoes SET valor=? WHERE chave='categoriasLoja'", [JSON.stringify(cats)]);
+      }
+    }
+  } catch(e) {}
 }
 
 function getDB(slug) {
@@ -256,15 +273,15 @@ module.exports = {
     return query(slug, 'SELECT * FROM acerto ORDER BY data');
   },
   addAcerto(slug, item) {
-    run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '']);
+    run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '', item.veiculo || '', item.placa || '', item.km || '', item.localidade || '', item.condutor || '']);
   },
   delAcerto(slug, id) { run(slug, 'DELETE FROM acerto WHERE id=?', [id]); },
   acertoJaExiste(slug, contaId) {
     return scalar(slug, "SELECT COUNT(*) FROM acerto WHERE origem_conta_pagar=?", [contaId]) > 0;
   },
   updateAcerto(slug, id, fields) {
-    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar','data','descricao'];
+    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar','data','descricao','veiculo','placa','km','localidade','condutor'];
     const sets = [], vals = [];
     allowed.forEach(k => {
       if (fields[k] !== undefined) {
@@ -273,6 +290,10 @@ module.exports = {
       }
     });
     if (sets.length) { vals.push(id); run(slug, 'UPDATE acerto SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  getAbastecimentos(slug, mes) {
+    if (mes) return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' AND data LIKE ? ORDER BY data", [mes + '%']);
+    return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' ORDER BY data");
   },
   getRecorrentes(slug, mes) {
     if (mes) return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 AND data LIKE ? ORDER BY data', [mes + '%']);

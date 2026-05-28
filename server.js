@@ -146,6 +146,9 @@ app.delete('/api/acerto/:id', (req, res) => { db.delAcerto(req.emp, req.params.i
 // === FAT (RECORRENTES) ===
 app.get('/api/fat', (req, res) => res.json(db.getRecorrentes(req.emp, req.query.mes)));
 
+// === ABASTECIMENTOS ===
+app.get('/api/abastecimentos', (req, res) => res.json(db.getAbastecimentos(req.emp, req.query.mes)));
+
 // === CATEGORIAS GRÁFICO ===
 app.get('/api/categorias-grafico', (req, res) => res.json(db.getCategoriasSummary(req.emp, req.query.mes)));
 app.get('/api/fornecedores-grafico', (req, res) => res.json(db.getFornecedoresSummary(req.emp, req.query.mes)));
