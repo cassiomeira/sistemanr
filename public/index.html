@@ -168,8 +168,12 @@
                             <span style="font-weight:600;color:var(--amber);font-size:13px"><i class="fas fa-gas-pump"></i> Dados do Abastecimento</span>
                         </div>
                         <div class="form-grid">
-                            <div class="form-group"><label>Veículo</label><input type="text" id="ac-veiculo" placeholder="Ex: HILLUX"></div>
-                            <div class="form-group"><label>Placa</label><input type="text" id="ac-placa" placeholder="Ex: SH05C65" style="text-transform:uppercase"></div>
+                            <div class="form-group"><label>Veículo</label>
+                                <select id="ac-veiculo" onchange="document.getElementById('ac-placa').value=this.options[this.selectedIndex].dataset.placa||''">
+                                    <option value="">— Selecione —</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Placa</label><input type="text" id="ac-placa" placeholder="Automático" readonly style="background:var(--bg);cursor:not-allowed"></div>
                             <div class="form-group"><label>KM</label><input type="text" id="ac-km" placeholder="Ex: 278145"></div>
                             <div class="form-group"><label>Localidade</label><input type="text" id="ac-localidade" placeholder="Ex: Cidade"></div>
                             <div class="form-group"><label>Condutor</label><input type="text" id="ac-condutor" placeholder="Ex: José Carlos"></div>
@@ -204,6 +208,23 @@
 
         <!-- ABASTECIMENTOS -->
         <section class="content-section" id="section-abastecimentos">
+            <!-- Frota (Veículos) -->
+            <div class="panel mb-20">
+                <div class="panel-header">
+                    <h3><i class="fas fa-car"></i> Meus Veículos (Frota)</h3>
+                </div>
+                <p class="config-desc">Cadastre os veículos para usar nos abastecimentos e controlar a troca de óleo.</p>
+                <form id="formVeiculo" class="form-grid" style="align-items:end;margin-bottom:15px">
+                    <input type="hidden" id="veiculo-id">
+                    <div class="form-group"><label>Nome do Veículo</label><input type="text" id="v-nome" placeholder="Ex: HILLUX" required></div>
+                    <div class="form-group"><label>Placa</label><input type="text" id="v-placa" placeholder="Ex: SH05C65" style="text-transform:uppercase" required></div>
+                    <div class="form-group"><label>KM Atual</label><input type="number" id="v-kmatual" placeholder="Ex: 278000" required></div>
+                    <div class="form-group"><label>KM Próxima Troca de Óleo</label><input type="number" id="v-kmtroca" placeholder="Ex: 288000" required></div>
+                    <div class="form-group form-actions"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+                <div class="table-wrap"><table class="data-table" id="tabelaVeiculos"><thead><tr><th>Veículo</th><th>Placa</th><th>KM Atual</th><th>Próxima Troca</th><th>Status Óleo</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+
             <div class="panel">
                 <div class="panel-header">
                     <h3><i class="fas fa-gas-pump"></i> Controle de Abastecimentos</h3>

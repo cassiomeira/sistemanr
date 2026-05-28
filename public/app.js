@@ -208,7 +208,7 @@ async function addFornInline(selId){
 }
 // ACERTO FINANCEIRO
 document.getElementById('ac-cat').addEventListener('change',function(){document.getElementById('abastecimentoFields').style.display=this.value==='Abastecimento'?'block':'none';});
-document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();let body={data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value};if(body.categoria==='Abastecimento'){body.veiculo=document.getElementById('ac-veiculo').value.trim();body.placa=document.getElementById('ac-placa').value.trim().toUpperCase();body.km=document.getElementById('ac-km').value.trim();body.localidade=document.getElementById('ac-localidade').value.trim();body.condutor=document.getElementById('ac-condutor').value.trim();}await api('POST','/api/acerto',body);this.reset();setToday('ac-data');populateCats();document.getElementById('abastecimentoFields').style.display='none';toast('Lançamento salvo!');refreshAll();});
+document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();let body={data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value};if(body.categoria==='Abastecimento'){let sel=document.getElementById('ac-veiculo');body.veiculo_id=sel.value;body.veiculo=sel.options[sel.selectedIndex]?.text||'';body.placa=document.getElementById('ac-placa').value.trim().toUpperCase();body.km=document.getElementById('ac-km').value.trim();body.localidade=document.getElementById('ac-localidade').value.trim();body.condutor=document.getElementById('ac-condutor').value.trim();}await api('POST','/api/acerto',body);this.reset();setToday('ac-data');populateCats();document.getElementById('abastecimentoFields').style.display='none';toast('Lançamento salvo!');refreshAll();});
 let acFiltro=document.getElementById('ac-filtro');
 acFiltro.addEventListener('change',()=>renderAcerto());
 async function renderAcerto(){
@@ -587,7 +587,8 @@ async function renderDashboardGeral(){
   let semAlertas=document.getElementById('panelSemAlertas');
   let totalContas=0;data.forEach(e=>totalContas+=e.contas.length);
   let totalMercs=0;mercs.forEach(e=>totalMercs+=e.items.length);
-  let totalAlertas=totalContas+totalMercs;
+  let veiculosAlerta=VEICULOS.filter(v=>(v.km_proxima_troca-v.km_atual)<=100);
+  let totalAlertas=totalContas+totalMercs+veiculosAlerta.length;
   if(!totalAlertas){container.innerHTML='';semAlertas.style.display='block';badge.style.display='none';return;}
   semAlertas.style.display='none';badge.textContent=totalAlertas;badge.style.display='inline';
   let html='';
@@ -600,6 +601,11 @@ async function renderDashboardGeral(){
     mercs.forEach(emp=>{html+='<div class="alerta-empresa" style="border-left-color:var(--amber);background:rgba(245,158,11,.06)"><div class="alerta-header"><i class="fas fa-truck-loading" style="color:var(--amber)"></i><span class="empresa-nome">'+emp.empresa+'</span><span class="alerta-count" style="background:var(--amber);color:#000;animation:none">'+emp.items.length+' produto'+(emp.items.length>1?'s':'')+'</span></div><div class="alerta-lista">';
       emp.items.forEach(m=>{html+='<div class="alerta-item"><span style="background:var(--bg1);color:var(--amber);font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:8px;white-space:nowrap">'+emp.empresa+'</span><span class="desc">'+m.descricao+'</span><span class="valor">'+fmt(m.valor)+'</span><span class="forn">'+(m.fornecedor||'')+'</span><span class="dias" style="background:rgba(245,158,11,.15);color:#d97706">Aguardando</span></div>';});
       html+='</div></div>';});
+  }
+  if(veiculosAlerta.length){html+='<h3 style="margin:20px 0 10px;color:var(--text1)"><i class="fas fa-car" style="color:var(--red)"></i> Troca de Óleo Pendente</h3>';
+    html+='<div class="alerta-empresa atrasado"><div class="alerta-header"><i class="fas fa-oil-can" style="color:#ef4444"></i><span class="empresa-nome">Frota</span><span class="alerta-count">'+veiculosAlerta.length+' veículo'+(veiculosAlerta.length>1?'s':'')+'</span></div><div class="alerta-lista">';
+    veiculosAlerta.forEach(v=>{let diff=v.km_proxima_troca-v.km_atual;let msg=diff<=0?('Atrasado '+(diff*-1)+' km'):('Faltam '+diff+' km');html+='<div class="alerta-item"><span style="background:var(--bg1);color:var(--cyan);font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:8px;white-space:nowrap">'+v.placa+'</span><span class="desc">'+v.nome+'</span><span class="valor" style="font-size:12px;color:var(--text2)">KM: '+v.km_atual+'</span><span class="dias atrasado">'+msg+'</span></div>';});
+    html+='</div></div>';
   }
   container.innerHTML=html;
 }
@@ -660,7 +666,32 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderAbastecimentos()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+
+// === VEICULOS ===
+let VEICULOS=[];
+document.getElementById('formVeiculo').addEventListener('submit',async function(e){e.preventDefault();let id=document.getElementById('veiculo-id').value;let body={nome:document.getElementById('v-nome').value.trim(),placa:document.getElementById('v-placa').value.trim().toUpperCase(),km_atual:parseFloat(document.getElementById('v-kmatual').value)||0,km_proxima_troca:parseFloat(document.getElementById('v-kmtroca').value)||0};if(id){await api('PUT','/api/veiculos/'+id,body);toast('Veículo atualizado!');}else{await api('POST','/api/veiculos',body);toast('Veículo cadastrado!');}this.reset();document.getElementById('veiculo-id').value='';refreshAll();});
+async function renderVeiculos(){
+    VEICULOS=await api('GET','/api/veiculos');
+    let tb=document.querySelector('#tabelaVeiculos tbody');
+    if(!VEICULOS.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3)">Nenhum veículo cadastrado</td></tr>';}else{
+        tb.innerHTML=VEICULOS.map(v=>{
+            let diff=v.km_proxima_troca-v.km_atual;
+            let status='<span class="badge badge-green">OK ('+diff+' km)</span>';
+            if(diff<=100)status='<span class="badge badge-red">Trocar Óleo!</span>';
+            else if(diff<=500)status='<span class="badge badge-orange">Atenção ('+diff+' km)</span>';
+            return '<tr><td>'+v.nome+'</td><td>'+v.placa+'</td><td>'+v.km_atual+'</td><td>'+v.km_proxima_troca+'</td><td>'+status+'</td>'+
+            '<td><button class="btn btn-sm btn-outline" onclick="editVeiculo(\''+v.id+'\')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="delVeiculo(\''+v.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+        }).join('');
+    }
+    // Preencher select do Acerto
+    let sel=document.getElementById('ac-veiculo');
+    let vAtual=sel.value;
+    sel.innerHTML='<option value="">— Selecione —</option>'+VEICULOS.map(v=>'<option value="'+v.id+'" data-placa="'+v.placa+'">'+v.nome+'</option>').join('');
+    if(vAtual)sel.value=vAtual;
+}
+function editVeiculo(id){let v=VEICULOS.find(x=>x.id===id);if(!v)return;document.getElementById('veiculo-id').value=v.id;document.getElementById('v-nome').value=v.nome;document.getElementById('v-placa').value=v.placa;document.getElementById('v-kmatual').value=v.km_atual;document.getElementById('v-kmtroca').value=v.km_proxima_troca;}
+async function delVeiculo(id){if(!confirm('Excluir veículo?'))return;await api('DELETE','/api/veiculos/'+id);toast('Excluído!');refreshAll();}
 
 // === ABASTECIMENTOS ===
 async function renderAbastecimentos(){

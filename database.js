@@ -169,6 +169,14 @@ function initDB(dbInstance) {
       }
     }
   } catch(e) {}
+  // Tabela Veiculos
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS veiculos (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    placa TEXT NOT NULL,
+    km_atual REAL DEFAULT 0,
+    km_proxima_troca REAL DEFAULT 0
+  )`);
 }
 
 function getDB(slug) {
@@ -242,6 +250,26 @@ module.exports = {
     if (mes) return query(slug, 'SELECT * FROM controle_fiscal WHERE data LIKE ? ORDER BY data DESC', [mes + '%']);
     return query(slug, 'SELECT * FROM controle_fiscal ORDER BY data DESC');
   },
+  
+  // -- VEÍCULOS --
+  getVeiculos(slug) {
+    return query(slug, 'SELECT * FROM veiculos ORDER BY nome');
+  },
+  addVeiculo(slug, item) {
+    run(slug, 'INSERT INTO veiculos (id,nome,placa,km_atual,km_proxima_troca) VALUES (?,?,?,?,?)',
+      [item.id, item.nome, item.placa, item.km_atual || 0, item.km_proxima_troca || 0]);
+  },
+  updateVeiculo(slug, id, fields) {
+    const sets = [], vals = [];
+    ['nome','placa','km_atual','km_proxima_troca'].forEach(k => {
+      if (fields[k] !== undefined) { sets.push(k+'=?'); vals.push(fields[k]); }
+    });
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE veiculos SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  delVeiculo(slug, id) {
+    run(slug, 'DELETE FROM veiculos WHERE id=?', [id]);
+  },
+
   addFiscal(slug, item) {
     run(slug, 'INSERT INTO controle_fiscal (id,data,nota_entrada,nota_saida,banco_boleto,banco_deposito,banco_cartao,observacao) VALUES (?,?,?,?,?,?,?,?)',
       [item.id, item.data, item.nota_entrada || 0, item.nota_saida || 0, item.banco_boleto || 0, item.banco_deposito || 0, item.banco_cartao || 0, item.observacao || '']);
@@ -275,6 +303,15 @@ module.exports = {
   addAcerto(slug, item) {
     run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '', item.veiculo || '', item.placa || '', item.km || '', item.localidade || '', item.condutor || '']);
+    
+    // Atualizar KM do veiculo se for abastecimento e se veio o ID (enviado pelo frontend)
+    if (item.categoria === 'Abastecimento' && item.veiculo_id && item.km) {
+      const v = scalar(slug, 'SELECT km_atual FROM veiculos WHERE id=?', [item.veiculo_id]);
+      const novoKm = parseFloat(item.km);
+      if (v !== undefined && !isNaN(novoKm) && novoKm > v) {
+        run(slug, 'UPDATE veiculos SET km_atual=? WHERE id=?', [novoKm, item.veiculo_id]);
+      }
+    }
   },
   delAcerto(slug, id) { run(slug, 'DELETE FROM acerto WHERE id=?', [id]); },
   acertoJaExiste(slug, contaId) {

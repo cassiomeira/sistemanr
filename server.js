@@ -149,6 +149,16 @@ app.get('/api/fat', (req, res) => res.json(db.getRecorrentes(req.emp, req.query.
 // === ABASTECIMENTOS ===
 app.get('/api/abastecimentos', (req, res) => res.json(db.getAbastecimentos(req.emp, req.query.mes)));
 
+// === VEICULOS ===
+app.get('/api/veiculos', (req, res) => res.json(db.getVeiculos(req.emp)));
+app.post('/api/veiculos', (req, res) => {
+  const item = { id: uid(), ...req.body };
+  db.addVeiculo(req.emp, item);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/veiculos/:id', (req, res) => { db.updateVeiculo(req.emp, req.params.id, req.body); res.json({ ok: true }); });
+app.delete('/api/veiculos/:id', (req, res) => { db.delVeiculo(req.emp, req.params.id); res.json({ ok: true }); });
+
 // === CATEGORIAS GRÁFICO ===
 app.get('/api/categorias-grafico', (req, res) => res.json(db.getCategoriasSummary(req.emp, req.query.mes)));
 app.get('/api/fornecedores-grafico', (req, res) => res.json(db.getFornecedoresSummary(req.emp, req.query.mes)));
