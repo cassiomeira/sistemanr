@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[];
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -769,7 +769,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
