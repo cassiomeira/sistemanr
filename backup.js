@@ -95,12 +95,11 @@ async function uploadToGDrive(zipPath, zipName, config) {
   try {
     const credentials = JSON.parse(config.google_credentials);
     const { google } = require('googleapis');
-    const auth = new google.auth.JWT(
-      credentials.client_email,
-      null,
-      credentials.private_key,
-      ['https://www.googleapis.com/auth/drive.file']
-    );
+    const auth = new google.auth.JWT({
+      email: credentials.client_email,
+      key: credentials.private_key,
+      scopes: ['https://www.googleapis.com/auth/drive.file']
+    });
     const drive = google.drive({ version: 'v3', auth });
     
     const fileMetadata = {
