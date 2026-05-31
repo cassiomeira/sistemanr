@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const archiver = require('archiver');
 const ftp = require('basic-ftp');
+const XLSX = require('xlsx');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const BACKUP_DIR = path.join(__dirname, 'data', 'backups_temp');
@@ -10,7 +11,43 @@ let lastBackupStatus = { ftp: null, gdrive: null, time: null, error: null };
 
 function getBackupStatus() { return lastBackupStatus; }
 
-// Cria um ZIP com todos os arquivos .db e .json da pasta data/
+// Gera planilha .xlsx para uma empresa a partir do banco
+function gerarPlanilhaEmpresa(slug) {
+  try {
+    const db = require('./database');
+    const formatData = (data) => data.length ? data.map(({id, ...rest}) => rest) : [{Aviso: 'Sem dados'}];
+    const acerto = db.getAcerto ? db.getAcerto(slug) : [];
+    const fat = db.getRecorrentes ? db.getRecorrentes(slug) : [];
+    const cp = db.getContasPagar ? db.getContasPagar(slug) : [];
+    const cheques = db.getCheques ? db.getCheques(slug) : [];
+    const drog = db.getDrogaria ? db.getDrogaria(slug) : [];
+    const dono = db.getContaDono ? db.getContaDono(slug) : [];
+    const mov = db.getMovimentacao ? db.getMovimentacao(slug) : [];
+    const caixas = db.getCaixas ? db.getCaixas(slug) : [];
+    const abast = db.getAbastecimentos ? db.getAbastecimentos(slug) : [];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(acerto)), "Acerto");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(fat)), "FAT");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(cp)), "Contas a Pagar");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(cheques)), "Cheques");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(drog)), "Drogaria");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(dono)), "Conta Celso");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(mov)), "Movimentacao");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(caixas)), "Caixas");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(formatData(abast)), "Abastecimentos");
+
+    const xlsxPath = path.join(BACKUP_DIR, `Backup_${slug}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, xlsxPath);
+    console.log(`📊 Planilha gerada: ${path.basename(xlsxPath)}`);
+    return xlsxPath;
+  } catch (e) {
+    console.error(`⚠️ Erro ao gerar planilha de ${slug}: ${e.message}`);
+    return null;
+  }
+}
+
+// Cria um ZIP com todos os arquivos .db, .json e planilhas .xlsx
 function createBackupZip() {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -28,7 +65,25 @@ function createBackupZip() {
       (f.endsWith('.db') || f.endsWith('.json')) && f !== 'backups_temp'
     );
     files.forEach(f => archive.file(path.join(DATA_DIR, f), { name: f }));
+
+    // Gerar e incluir planilhas .xlsx para cada empresa
+    const xlsxFiles = [];
+    const dbFiles = files.filter(f => f.endsWith('.db') && f !== 'usuarios.db');
+    dbFiles.forEach(f => {
+      const slug = f.replace('.db', '');
+      const xlsxPath = gerarPlanilhaEmpresa(slug);
+      if (xlsxPath) {
+        archive.file(xlsxPath, { name: path.basename(xlsxPath) });
+        xlsxFiles.push(xlsxPath);
+      }
+    });
+
     archive.finalize();
+
+    // Limpar arquivos xlsx temporários após o zip ser criado
+    output.on('close', () => {
+      xlsxFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e) {} });
+    });
   });
 }
 
