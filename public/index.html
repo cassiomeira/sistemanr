@@ -277,8 +277,24 @@
                         <span class="badge badge-green">Total Pago: <b id="cp-total-pago">R$ 0,00</b></span>
                     </div>
                 </div>
-                <div class="table-wrap"><table class="data-table" id="tabelaContasPagar"><thead><tr><th>Venc.</th><th>Descrição</th><th>Valor</th><th>Cat.</th><th>Forn.</th><th>Rec.</th><th>D/F</th><th>Boleto Chegou</th><th>Pago por</th><th>Saiu do Caixa</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
-            </div>
+                <!-- Barra de seleção em lote -->
+                <div id="cpBatchBar" style="display:none;background:linear-gradient(135deg,var(--surface),var(--bg3));border:1px solid var(--green);border-radius:10px;padding:12px 20px;margin-bottom:15px;display:none;align-items:center;gap:15px;flex-wrap:wrap;animation:fadeIn .3s">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <i class="fas fa-check-double" style="color:var(--green);font-size:16px"></i>
+                        <span style="font-weight:600;color:var(--text1)"><b id="cpBatchCount">0</b> contas selecionadas</span>
+                    </div>
+                    <div style="background:var(--bg1);padding:6px 14px;border-radius:8px">
+                        <span style="color:var(--text3);font-size:12px">Total:</span>
+                        <b id="cpBatchTotal" style="color:var(--red);font-size:15px;margin-left:4px">R$ 0,00</b>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+                        <label style="font-size:12px;color:var(--text3)">Pagar com:</label>
+                        <select id="cpBatchPagador" style="padding:6px 10px;border-radius:6px;background:var(--bg1);color:var(--text1);border:1px solid var(--border);font-size:13px"></select>
+                        <button class="btn btn-primary" onclick="NR.pagarSelecionadas()" style="white-space:nowrap"><i class="fas fa-coins"></i> Pagar Selecionadas</button>
+                        <button class="btn btn-outline" onclick="NR.limparSelecaoCp()" style="font-size:11px"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaContasPagar"><thead><tr><th style="width:30px"><input type="checkbox" id="cpSelectAll" onchange="NR.toggleAllCp(this.checked)" title="Selecionar todas pendentes"></th><th>Venc.</th><th>Descrição</th><th>Valor</th><th>Cat.</th><th>Forn.</th><th>Rec.</th><th>D/F</th><th>Boleto Chegou</th><th>Pago por</th><th>Saiu do Caixa</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
         </section>
 
         <!-- PRODUTOS A CHEGAR -->
