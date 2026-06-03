@@ -371,7 +371,7 @@ module.exports = {
     if (fields.valor !== undefined) { sets.push('valor=?'); vals.push(parseFloat(fields.valor)); }
     if (fields.categoria !== undefined) { sets.push('categoria=?'); vals.push(fields.categoria); }
     if (fields.fornecedor !== undefined) { sets.push('fornecedor=?'); vals.push(fields.fornecedor); }
-    if (fields.recorrente !== undefined) { sets.push('recorrente=?'); vals.push(fields.recorrente ? 1 : 0); }
+    if (fields.recorrente !== undefined) { sets.push('recorrente=?'); vals.push(parseInt(fields.recorrente) ? 1 : 0); }
     if (fields.tipo_nota !== undefined) { sets.push('tipo_nota=?'); vals.push(fields.tipo_nota); }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE contas_pagar SET ' + sets.join(',') + ' WHERE id=?', vals); }
   },
