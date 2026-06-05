@@ -136,12 +136,18 @@ app.delete('/api/fiscal/:id', (req, res) => { db.delFiscal(req.emp, req.params.i
 // === ACERTO FINANCEIRO ===
 app.get('/api/acerto', (req, res) => res.json(db.getAcerto(req.emp, req.query.mes)));
 app.post('/api/acerto', (req, res) => {
-  const item = { id: uid(), ...req.body };
+  const b = req.body;
+  const item = { id: uid(), ...b };
   db.addAcerto(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Acerto', b.descricao + ' - Entrada: ' + (b.entrada||0) + ' Saída: ' + (b.saida||0));
   res.json({ ok: true, id: item.id });
 });
 app.put('/api/acerto/:id', (req, res) => { db.updateAcerto(req.emp, req.params.id, req.body); res.json({ ok: true }); });
-app.delete('/api/acerto/:id', (req, res) => { db.delAcerto(req.emp, req.params.id); res.json({ ok: true }); });
+app.delete('/api/acerto/:id', (req, res) => {
+  db.delAcerto(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Acerto', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
 
 // === FAT (RECORRENTES) ===
 app.get('/api/fat', (req, res) => res.json(db.getRecorrentes(req.emp, req.query.mes)));
@@ -166,8 +172,10 @@ app.get('/api/fornecedores-grafico', (req, res) => res.json(db.getFornecedoresSu
 // === CONTAS A PAGAR ===
 app.get('/api/contas-pagar', (req, res) => res.json(db.getContasPagar(req.emp, req.query.mes)));
 app.post('/api/contas-pagar', (req, res) => {
-  const item = { id: uid(), ...req.body };
+  const b = req.body;
+  const item = { id: uid(), ...b };
   db.addContaPagar(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', b.descricao + ' - R$ ' + b.valor);
   res.json({ ok: true, id: item.id });
 });
 app.put('/api/contas-pagar/:id', (req, res) => {
@@ -226,9 +234,14 @@ app.put('/api/contas-pagar/:id', (req, res) => {
       console.log(`✅ Debitado ${contaAnterior.valor} do caixa ${novoCaixa}`);
     }
   }
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Contas a Pagar', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
   res.json({ ok: true });
 });
-app.delete('/api/contas-pagar/:id', (req, res) => { db.delContaPagar(req.emp, req.params.id); res.json({ ok: true }); });
+app.delete('/api/contas-pagar/:id', (req, res) => {
+  db.delContaPagar(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Contas a Pagar', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
 // Enviar conta existente para o acerto (forçar criação)
 app.post('/api/contas-pagar/:id/enviar-acerto', (req, res) => {
   const conta = db.getContaPagarById(req.emp, req.params.id);
@@ -287,11 +300,13 @@ app.post('/api/cheques', (req, res) => {
     const valorDebito = item.juros_antecipado ? (item.valor - item.lucro) : item.valor;
     db.addContaDono(req.emp, { id: uid(), data: item.data, tipo: 'debito', descricao: 'Troca de cheque (caixa empresa) - ' + item.cliente, valor: valorDebito, origem_cheque: item.id });
   }
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Cheques', b.cliente + ' - R$ ' + b.valor);
   res.json({ ok: true, id: item.id });
 });
 app.delete('/api/cheques/:id', (req, res) => {
   db.delContaDonoByCheque(req.emp, req.params.id);
   db.delCheque(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Cheques', 'ID: ' + req.params.id);
   res.json({ ok: true });
 });
 app.put('/api/cheques/:id/compensar', (req, res) => {
@@ -303,12 +318,27 @@ app.put('/api/cheques/:id/compensar', (req, res) => {
   res.json({ ok: true });
 });
 app.put('/api/cheques/:id/destino', (req, res) => { db.updateChequeDestino(req.emp, req.params.id, req.body.destino || ''); res.json({ ok: true }); });
-app.put('/api/cheques/:id', (req, res) => { db.updateCheque(req.emp, req.params.id, req.body); res.json({ ok: true }); });
+app.put('/api/cheques/:id', (req, res) => {
+  db.updateCheque(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Cheques', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
 
 // === CONTA DONO ===
 app.get('/api/conta-dono', (req, res) => res.json(db.getContaDono(req.emp, req.query.mes)));
-app.post('/api/conta-dono', (req, res) => { console.log('📥 POST /api/conta-dono:', JSON.stringify(req.body)); const item = { id: uid(), ...req.body }; db.addContaDono(req.emp, item); res.json({ ok: true, id: item.id }); });
-app.delete('/api/conta-dono/:id', (req, res) => { db.delContaDono(req.emp, req.params.id); res.json({ ok: true }); });
+app.post('/api/conta-dono', (req, res) => {
+  console.log('📥 POST /api/conta-dono:', JSON.stringify(req.body));
+  const b = req.body;
+  const item = { id: uid(), ...b };
+  db.addContaDono(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Conta Dono', b.descricao + ' - R$ ' + b.valor);
+  res.json({ ok: true, id: item.id });
+});
+app.delete('/api/conta-dono/:id', (req, res) => {
+  db.delContaDono(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Conta Dono', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
 app.put('/api/conta-dono/:id', (req, res) => { db.updateContaDono(req.emp, req.params.id, req.body); res.json({ ok: true }); });
 
 // === COLABORADORES ===
@@ -317,12 +347,12 @@ app.post('/api/colaboradores', (req, res) => { db.addColaborador(req.emp, req.bo
 app.delete('/api/colaboradores/:id', (req, res) => { db.delColaborador(req.emp, parseInt(req.params.id)); res.json({ ok: true }); });
 
 // === CLEAR ALL (admin only) ===
-app.delete('/api/clear/acerto', adminOnly, (req, res) => { db.clearAcerto(req.emp); res.json({ ok: true }); });
-app.delete('/api/clear/fat', adminOnly, (req, res) => { db.clearFat(req.emp); res.json({ ok: true }); });
-app.delete('/api/clear/contas-pagar', adminOnly, (req, res) => { db.clearContasPagar(req.emp); res.json({ ok: true }); });
-app.delete('/api/clear/drogaria', adminOnly, (req, res) => { db.clearDrogaria(req.emp); res.json({ ok: true }); });
-app.delete('/api/clear/cheques', adminOnly, (req, res) => { db.clearCheques(req.emp); res.json({ ok: true }); });
-app.delete('/api/clear/conta-dono', adminOnly, (req, res) => { db.clearContaDono(req.emp); res.json({ ok: true }); });
+app.delete('/api/clear/acerto', adminOnly, (req, res) => { db.clearAcerto(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Acerto', ''); res.json({ ok: true }); });
+app.delete('/api/clear/fat', adminOnly, (req, res) => { db.clearFat(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'FAT', ''); res.json({ ok: true }); });
+app.delete('/api/clear/contas-pagar', adminOnly, (req, res) => { db.clearContasPagar(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Contas a Pagar', ''); res.json({ ok: true }); });
+app.delete('/api/clear/drogaria', adminOnly, (req, res) => { db.clearDrogaria(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Drogaria', ''); res.json({ ok: true }); });
+app.delete('/api/clear/cheques', adminOnly, (req, res) => { db.clearCheques(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Cheques', ''); res.json({ ok: true }); });
+app.delete('/api/clear/conta-dono', adminOnly, (req, res) => { db.clearContaDono(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Conta Dono', ''); res.json({ ok: true }); });
 
 // === CONFIG ===
 app.get('/api/config', (req, res) => res.json(db.getConfig(req.emp)));
@@ -338,16 +368,21 @@ app.put('/api/config', (req, res) => {
 // === DASHBOARD ===
 // === CAIXAS ===
 app.get('/api/caixas', (req, res) => res.json(db.getCaixas(req.emp)));
-app.post('/api/caixas', (req, res) => { db.addCaixa(req.emp, req.body.nome, req.body.saldo || 0); res.json({ ok: true }); });
+app.post('/api/caixas', (req, res) => {
+  db.addCaixa(req.emp, req.body.nome, req.body.saldo || 0);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Caixas', req.body.nome);
+  res.json({ ok: true });
+});
 app.put('/api/caixas/:id', (req, res) => { db.updateCaixaSaldo(req.emp, parseInt(req.params.id), req.body.saldo); res.json({ ok: true }); });
 app.delete('/api/caixas/:id', (req, res) => { db.delCaixa(req.emp, parseInt(req.params.id)); res.json({ ok: true }); });
-app.delete('/api/clear/caixas', adminOnly, (req, res) => { db.clearCaixas(req.emp); res.json({ ok: true }); });
+app.delete('/api/clear/caixas', adminOnly, (req, res) => { db.clearCaixas(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Caixas', ''); res.json({ ok: true }); });
 
 // === MOVIMENTAÇÃO ===
 app.get('/api/movimentacao', (req, res) => res.json(db.getMovimentacao(req.emp, req.query.mes)));
 app.post('/api/movimentacao', (req, res) => {
   const b = req.body;
   db.addMovimentacao(req.emp, { id: uid(), data: b.data, descricao: b.descricao, entrada: b.entrada || 0, saida: b.saida || 0, diferenca: b.diferenca || 0 });
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Movimentação', b.descricao);
   res.json({ ok: true });
 });
 app.put('/api/movimentacao/:id/diferenca', (req, res) => {
@@ -356,7 +391,7 @@ app.put('/api/movimentacao/:id/diferenca', (req, res) => {
 });
 app.put('/api/movimentacao/:id', (req, res) => { db.updateMovimentacao(req.emp, req.params.id, req.body); res.json({ ok: true }); });
 app.delete('/api/movimentacao/:id', (req, res) => { db.delMovimentacao(req.emp, req.params.id); res.json({ ok: true }); });
-app.delete('/api/clear/movimentacao', adminOnly, (req, res) => { db.clearMovimentacao(req.emp); res.json({ ok: true }); });
+app.delete('/api/clear/movimentacao', adminOnly, (req, res) => { db.clearMovimentacao(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Movimentação', ''); res.json({ ok: true }); });
 app.get('/api/movimentacao/config', (req, res) => res.json(db.getMovConfig(req.emp, req.query.mes)));
 app.put('/api/movimentacao/config', (req, res) => {
   const b = req.body;
@@ -431,6 +466,12 @@ app.post('/api/backup/manual', adminOnly, async (req, res) => {
     const status = await backup.runBackup(getBackupConfig);
     res.json({ ok: true, status });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// === AUDITORIA ===
+app.get('/api/auditoria', adminOnly, (req, res) => {
+  const filtros = { usuario: req.query.usuario, secao: req.query.secao, dataInicio: req.query.dataInicio, dataFim: req.query.dataFim };
+  res.json(db.getAuditLogs(req.emp, filtros));
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

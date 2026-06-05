@@ -177,6 +177,16 @@ function initDB(dbInstance) {
     km_atual REAL DEFAULT 0,
     km_proxima_troca REAL DEFAULT 0
   )`);
+  // Tabela Auditoria
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    data TEXT NOT NULL,
+    usuario TEXT NOT NULL,
+    acao TEXT NOT NULL,
+    secao TEXT NOT NULL,
+    detalhes TEXT,
+    empresa TEXT
+  )`);
 }
 
 function getDB(slug) {
@@ -569,5 +579,21 @@ module.exports = {
     const u = users[0];
     if (u.senha_hash !== hashSenha(senha)) return null;
     return { id: u.id, username: u.username, nome: u.nome, role: u.role, permissoes: JSON.parse(u.permissoes || '[]') };
+  },
+
+  // -- Auditoria --
+  addAuditLog(slug, usuario, acao, secao, detalhes) {
+    const data = new Date().toISOString();
+    run(slug, 'INSERT INTO auditoria (data, usuario, acao, secao, detalhes, empresa) VALUES (?,?,?,?,?,?)', [data, usuario, acao, secao, detalhes || '', slug]);
+  },
+  getAuditLogs(slug, filtros) {
+    let sql = 'SELECT * FROM auditoria WHERE 1=1';
+    const params = [];
+    if (filtros && filtros.usuario) { sql += ' AND usuario=?'; params.push(filtros.usuario); }
+    if (filtros && filtros.secao) { sql += ' AND secao=?'; params.push(filtros.secao); }
+    if (filtros && filtros.dataInicio) { sql += ' AND data>=?'; params.push(filtros.dataInicio); }
+    if (filtros && filtros.dataFim) { sql += ' AND data<=?'; params.push(filtros.dataFim + 'T23:59:59'); }
+    sql += ' ORDER BY data DESC LIMIT 500';
+    return query(slug, sql, params);
   }
 };

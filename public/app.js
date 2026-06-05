@@ -701,7 +701,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin')renderUsuarios();}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -1494,6 +1494,35 @@ async function saveRow(section,id){
   }catch(e){toast('Erro ao atualizar','error');}
 }
 function cancelEdit(section){refreshAll();}
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas};
+// === AUDITORIA ===
+async function buscarAuditoria(){
+  let params=new URLSearchParams();
+  let u=document.getElementById('audit-usuario').value;if(u)params.set('usuario',u);
+  let s=document.getElementById('audit-secao').value;if(s)params.set('secao',s);
+  let di=document.getElementById('audit-inicio').value;if(di)params.set('dataInicio',di);
+  let df=document.getElementById('audit-fim').value;if(df)params.set('dataFim',df);
+  let logs=await api('GET','/api/auditoria?'+params.toString());
+  document.getElementById('audit-total').textContent=logs.length;
+  let tb=document.querySelector('#tabelaAuditoria tbody');
+  if(!logs.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-clipboard-check" style="font-size:2rem;display:block;margin-bottom:8px;color:var(--green)"></i>Nenhum registro encontrado</td></tr>';return;}
+  const acaoIcons={'criou':'<span style="color:var(--green)"><i class="fas fa-plus-circle"></i> Criou</span>','alterou':'<span style="color:var(--amber)"><i class="fas fa-edit"></i> Alterou</span>','excluiu':'<span style="color:var(--red)"><i class="fas fa-trash"></i> Excluiu</span>','limpou tudo':'<span style="color:var(--red);font-weight:700"><i class="fas fa-eraser"></i> Limpou Tudo</span>'};
+  tb.innerHTML=logs.map(l=>{
+    let dt=new Date(l.data);
+    let dataStr=dt.toLocaleDateString('pt-BR')+' '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    let acaoHtml=acaoIcons[l.acao]||('<span>'+l.acao+'</span>');
+    let det=l.detalhes||'';if(det.length>80)det=det.substring(0,80)+'...';
+    return'<tr><td style="white-space:nowrap">'+dataStr+'</td><td><b>'+l.usuario+'</b></td><td>'+acaoHtml+'</td><td>'+l.secao+'</td><td style="font-size:12px;color:var(--text3);max-width:300px;overflow:hidden;text-overflow:ellipsis">'+det+'</td></tr>';
+  }).join('');
+}
+async function renderAuditoria(){
+  // Popular lista de usuários no filtro
+  try{
+    let users=await api('GET','/api/usuarios');
+    let sel=document.getElementById('audit-usuario');
+    sel.innerHTML='<option value="">Todos</option>'+users.map(u=>'<option value="'+u.nome+'">'+u.nome+'</option>').join('');
+  }catch(e){}
+  buscarAuditoria();
+}
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria};
 checkAuth();
 })();

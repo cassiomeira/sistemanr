@@ -63,6 +63,7 @@
             <li><a href="#" class="nav-link" data-section="caixas" id="nav-caixas"><i class="fas fa-cash-register"></i><span>Caixas</span></a></li>
             <li><a href="#" class="nav-link" data-section="fiscal" id="nav-fiscal"><i class="fas fa-balance-scale"></i><span>Controle Fiscal</span></a></li>
             <li><a href="#" class="nav-link" data-section="usuarios" id="nav-usuarios"><i class="fas fa-users-cog"></i><span>Usuários</span></a></li>
+            <li><a href="#" class="nav-link" data-section="auditoria" id="nav-auditoria"><i class="fas fa-clipboard-list"></i><span>Auditoria</span></a></li>
         </ul>
         <div class="sidebar-footer"><div class="month-selector"><label>Mês/Ano</label><input type="month" id="monthSelector"></div></div>
     </nav>
@@ -626,6 +627,27 @@
             <div class="panel mt-20">
                 <div class="panel-header"><h3><i class="fas fa-users-cog"></i> Usuários Cadastrados</h3></div>
                 <div class="table-wrap"><table class="data-table" id="tabelaUsuarios"><thead><tr><th>Nome</th><th>Login</th><th>Tipo</th><th>Permissões</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- AUDITORIA -->
+        <section class="content-section" id="section-auditoria">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-clipboard-list"></i> Filtros de Auditoria</h3></div>
+                <div class="form-grid" style="padding:0 20px 20px">
+                    <div class="form-group"><label>Usuário</label><select id="audit-usuario"><option value="">Todos</option></select></div>
+                    <div class="form-group"><label>Seção</label><select id="audit-secao"><option value="">Todas</option><option value="Acerto">Acerto</option><option value="Contas a Pagar">Contas a Pagar</option><option value="Cheques">Cheques</option><option value="Conta Dono">Conta Dono</option><option value="Drogaria">Drogaria</option><option value="Movimentação">Movimentação</option><option value="Caixas">Caixas</option><option value="Configurações">Configurações</option></select></div>
+                    <div class="form-group"><label>Data Início</label><input type="date" id="audit-inicio"></div>
+                    <div class="form-group"><label>Data Fim</label><input type="date" id="audit-fim"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button class="btn btn-primary" onclick="NR.buscarAuditoria()"><i class="fas fa-search"></i> Buscar</button></div>
+                </div>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header">
+                    <h3><i class="fas fa-history"></i> Registros de Auditoria</h3>
+                    <div class="summary-badges"><span class="badge badge-purple">Total: <b id="audit-total">0</b></span></div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaAuditoria"><thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Seção</th><th>Detalhes</th></tr></thead><tbody></tbody></table></div>
             </div>
         </section>
     </main>
