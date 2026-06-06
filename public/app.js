@@ -1297,6 +1297,7 @@ function gerarParcelas(){
   let qtd=parseInt(document.getElementById('parc-qtd').value)||1;
   let valor=parseFloat(document.getElementById('parc-valor').value)||0;
   let mesInicial=document.getElementById('parc-mes').value;
+  let diaVenc=String(parseInt(document.getElementById('parc-dia').value)||15).padStart(2,'0');
   if(!mesInicial){toast('Selecione o mês inicial','error');return;}
   // Keep existing frete items
   let fretes=parcItems.filter(p=>p.frete);
@@ -1307,7 +1308,7 @@ function gerarParcelas(){
     while(m>12){m-=12;a++;}
     parcItems.push({
       mesAno:a+'-'+String(m).padStart(2,'0'),
-      dia:'15',
+      dia:diaVenc,
       descricao:desc+' '+(i+1)+'/'+qtd,
       valor:valor,
       frete:false
@@ -1318,10 +1319,11 @@ function gerarParcelas(){
 function addFreteParcela(){
   let desc=document.getElementById('parc-desc').value.trim()||'Produto';
   let mesInicial=document.getElementById('parc-mes').value;
+  let diaVenc=String(parseInt(document.getElementById('parc-dia').value)||15).padStart(2,'0');
   if(!mesInicial){toast('Selecione o mês inicial','error');return;}
   parcItems.push({
     mesAno:mesInicial,
-    dia:'15',
+    dia:diaVenc,
     descricao:'Frete - '+desc,
     valor:0,
     frete:true
