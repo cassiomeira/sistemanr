@@ -123,6 +123,7 @@ function initDB(dbInstance) {
   if (colabCount === 0) { for (let i = 1; i <= 5; i++) dbInstance.run("INSERT INTO colaboradores (nome,percentual) VALUES (?,2.2)", ['Colaborador ' + i]); }
   // Migrations
   try { dbInstance.run('ALTER TABLE acerto ADD COLUMN fornecedor TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN a_chegar INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN tipo_nota TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.exec("ALTER TABLE contas_pagar ADD COLUMN fornecedor TEXT DEFAULT ''"); } catch (e) {}
   try { dbInstance.exec("ALTER TABLE movimentacao ADD COLUMN diferenca REAL DEFAULT 0"); } catch (e) {}
@@ -311,8 +312,8 @@ module.exports = {
     return query(slug, 'SELECT * FROM acerto ORDER BY data');
   },
   addAcerto(slug, item) {
-    run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '', item.veiculo || '', item.placa || '', item.km || '', item.localidade || '', item.condutor || '']);
+    run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor,a_chegar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '', item.veiculo || '', item.placa || '', item.km || '', item.localidade || '', item.condutor || '', item.a_chegar ? 1 : 0]);
     
     // Atualizar KM do veiculo se for abastecimento e se veio o ID (enviado pelo frontend)
     if (item.categoria === 'Abastecimento' && item.veiculo_id && item.km) {
@@ -328,12 +329,12 @@ module.exports = {
     return scalar(slug, "SELECT COUNT(*) FROM acerto WHERE origem_conta_pagar=?", [contaId]) > 0;
   },
   updateAcerto(slug, id, fields) {
-    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar','data','descricao','veiculo','placa','km','localidade','condutor'];
+    const allowed = ['categoria','fornecedor','recorrente','tipo_nota','entrada','saida','origem_conta_pagar','data','descricao','veiculo','placa','km','localidade','condutor','a_chegar'];
     const sets = [], vals = [];
     allowed.forEach(k => {
       if (fields[k] !== undefined) {
         sets.push(k+'=?');
-        vals.push(k === 'recorrente' ? (fields[k] ? 1 : 0) : fields[k]);
+        vals.push((k === 'recorrente' || k === 'a_chegar') ? (fields[k] ? 1 : 0) : fields[k]);
       }
     });
     if (sets.length) { vals.push(id); run(slug, 'UPDATE acerto SET ' + sets.join(',') + ' WHERE id=?', vals); }
@@ -392,10 +393,16 @@ module.exports = {
     run(slug, 'UPDATE contas_pagar SET a_chegar=1 WHERE grupo_parcela=?', [grupoParcela]);
   },
   getAChegar(slug) {
-    return query(slug, 'SELECT * FROM contas_pagar WHERE a_chegar=1 ORDER BY vencimento');
+    return query(slug, `
+      SELECT id, vencimento, descricao, valor, fornecedor, 'contas_pagar' as origem FROM contas_pagar WHERE a_chegar=1
+      UNION ALL
+      SELECT id, data as vencimento, descricao, saida as valor, fornecedor, 'acerto' as origem FROM acerto WHERE a_chegar=1
+      ORDER BY vencimento
+    `);
   },
   delContaPagar(slug, id) { run(slug, 'DELETE FROM contas_pagar WHERE id=?', [id]); },
   getContaPagarById(slug, id) { const r = query(slug, 'SELECT * FROM contas_pagar WHERE id=?', [id]); return r[0]; },
+  getAcertoById(slug, id) { const r = query(slug, 'SELECT * FROM acerto WHERE id=?', [id]); return r[0]; },
   getContasPendentes(slug, hoje) {
     return query(slug, "SELECT * FROM contas_pagar WHERE vencimento <= ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [hoje]);
   },

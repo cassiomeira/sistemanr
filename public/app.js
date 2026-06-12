@@ -209,7 +209,7 @@ async function addFornInline(selId){
 }
 // ACERTO FINANCEIRO
 document.getElementById('ac-cat').addEventListener('change',function(){document.getElementById('abastecimentoFields').style.display=this.value==='Abastecimento'?'block':'none';});
-document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();let body={data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value};if(body.categoria==='Abastecimento'){let sel=document.getElementById('ac-veiculo');body.veiculo_id=sel.value;body.veiculo=sel.options[sel.selectedIndex]?.text||'';body.placa=document.getElementById('ac-placa').value.trim().toUpperCase();body.km=document.getElementById('ac-km').value.trim();body.localidade=document.getElementById('ac-localidade').value.trim();body.condutor=document.getElementById('ac-condutor').value.trim();}await api('POST','/api/acerto',body);this.reset();setToday('ac-data');populateCats();document.getElementById('abastecimentoFields').style.display='none';toast('Lançamento salvo!');refreshAll();});
+document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();let body={data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value,a_chegar:document.getElementById('ac-achegar').value==='1'};if(body.categoria==='Abastecimento'){let sel=document.getElementById('ac-veiculo');body.veiculo_id=sel.value;body.veiculo=sel.options[sel.selectedIndex]?.text||'';body.placa=document.getElementById('ac-placa').value.trim().toUpperCase();body.km=document.getElementById('ac-km').value.trim();body.localidade=document.getElementById('ac-localidade').value.trim();body.condutor=document.getElementById('ac-condutor').value.trim();}await api('POST','/api/acerto',body);this.reset();setToday('ac-data');populateCats();document.getElementById('abastecimentoFields').style.display='none';toast('Lançamento salvo!');refreshAll();});
 let acFiltro=document.getElementById('ac-filtro');
 acFiltro.addEventListener('change',()=>renderAcerto());
 async function renderAcerto(){
@@ -223,11 +223,16 @@ async function renderAcerto(){
     te+=i.entrada||0;ts+=i.saida||0;
     let pago = i.origem_conta_pagar && i.origem_conta_pagar.includes('Cheques:');
     let chqBtn = (i.saida > 0 && !pago) ? '<button class="btn-cheque-pay" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="NR.openChequePag(\''+i.id+'\',\'acerto\')" title="Pagar com cheque"><i class="fas fa-money-check-alt"></i></button>' : (pago ? '<span style="font-size:11px;color:var(--green);margin-right:4px" title="'+i.origem_conta_pagar+'"><i class="fas fa-check"></i> Chq</span>' : '');
+    let achegar=i.a_chegar?'<span style="background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px"><i class="fas fa-truck-loading"></i> A CHEGAR</span>':'';
+    let chegarBtn='';
+    if(i.saida > 0) {
+      chegarBtn=i.a_chegar?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px;margin-right:4px" onclick="NR.marcarChegou(\''+i.id+'\',\'acerto\')" title="Marcar como chegou"><i class="fas fa-check"></i> Chegou</button> ':'<button class="btn btn-sm" style="background:var(--bg3);color:var(--amber);font-size:10px;border:1px solid var(--amber);margin-right:4px" onclick="NR.toggleAChegar(\''+i.id+'\',\'acerto\')" title="Marcar como produto a chegar"><i class="fas fa-truck-loading"></i></button> ';
+    }
     let catSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'categoria\',this.value)"><option value=""'+((!i.categoria||i.categoria==='')?' selected':'')+'>—</option>'+CFG.categoriasLoja.map(c=>'<option'+(c===i.categoria?' selected':'')+'>'+c+'</option>').join('')+'</select>';
     let fornSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'fornecedor\',this.value)"><option value=""'+((!i.fornecedor||i.fornecedor==='')?' selected':'')+'>—</option>'+(CFG.fornecedores||[]).map(f=>'<option'+(f===i.fornecedor?' selected':'')+'>'+f+'</option>').join('')+'</select>';
     let recSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'recorrente\',this.value)"><option value="0"'+(i.recorrente?'':' selected')+'>Não</option><option value="1"'+(i.recorrente?' selected':'')+'>Sim</option></select>';
     let dfSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'tipo_nota\',this.value)"><option value=""'+(!i.tipo_nota?' selected':'')+'>—</option><option value="D"'+(i.tipo_nota==='D'?' selected':'')+'>D</option><option value="F"'+(i.tipo_nota==='F'?' selected':'')+'>F</option></select>';
-    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+chqBtn+'<button class="btn-edit" onclick="NR.editRow(\'acerto\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+achegar+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+chqBtn+chegarBtn+'<button class="btn-edit" onclick="NR.editRow(\'acerto\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
   document.getElementById('ac-total-ent').textContent=fmt(te);
   document.getElementById('ac-total-sai').textContent=fmt(ts);
   document.getElementById('ac-saldo').textContent=fmt(te-ts);
@@ -320,16 +325,25 @@ async function renderAChegar(){
   document.getElementById('achegar-total').textContent=items.length;
   let tb=document.querySelector('#tabelaAChegar tbody');
   if(!items.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)"><i class="fas fa-check-circle" style="font-size:2rem;margin-bottom:8px;display:block;color:var(--green)"></i>Todos os produtos chegaram!</td></tr>';return;}
-  tb.innerHTML=items.map(i=>'<tr><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+'</td><td>'+fmt(i.valor)+'</td><td>'+(i.fornecedor||'—')+'</td><td><button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.marcarChegou(\''+i.id+'\')"><i class="fas fa-check"></i> Chegou</button></td></tr>').join('');
+  tb.innerHTML=items.map(i=>'<tr><td>'+fD(i.vencimento)+'</td><td>'+i.descricao+'</td><td>'+fmt(i.valor)+'</td><td>'+(i.fornecedor||'—')+'</td><td><button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.marcarChegou(\''+i.id+'\',\''+i.origem+'\')"><i class="fas fa-check"></i> Chegou</button></td></tr>').join('');
 }
-async function marcarChegou(id){
-  if(!confirm('Marcar produto como chegou? (Todas as parcelas do mesmo produto serão desmarcadas)'))return;
-  await api('PUT','/api/contas-pagar/'+id+'/chegou');
+async function marcarChegou(id, origem='contas-pagar'){
+  let msg = origem==='acerto' ? 'Marcar produto como chegou?' : 'Marcar produto como chegou? (Todas as parcelas do mesmo produto serão desmarcadas)';
+  if(!confirm(msg))return;
+  if(origem==='acerto'){
+    await api('PUT','/api/acerto/'+id+'/chegou');
+  } else {
+    await api('PUT','/api/contas-pagar/'+id+'/chegou');
+  }
   toast('Produto marcado como chegou!');
   refreshAll();
 }
-async function toggleAChegar(id){
-  await api('PUT','/api/contas-pagar/'+id+'/a-chegar');
+async function toggleAChegar(id, origem='contas-pagar'){
+  if(origem==='acerto'){
+    await api('PUT','/api/acerto/'+id+'/a-chegar');
+  } else {
+    await api('PUT','/api/contas-pagar/'+id+'/a-chegar');
+  }
   toast('Marcado como produto a chegar!');
   refreshAll();
 }

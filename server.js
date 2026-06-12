@@ -281,6 +281,20 @@ app.put('/api/contas-pagar/:id/a-chegar', (req, res) => {
   }
   res.json({ ok: true });
 });
+app.put('/api/acerto/:id/chegou', (req, res) => {
+  db.updateAcerto(req.emp, req.params.id, { a_chegar: false });
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Acerto', 'Produto marcado como chegou - ID: ' + req.params.id);
+  res.json({ ok: true });
+});
+app.put('/api/acerto/:id/a-chegar', (req, res) => {
+  const conta = db.getAcertoById(req.emp, req.params.id);
+  if (conta) {
+    const novoStatus = !conta.a_chegar;
+    db.updateAcerto(req.emp, req.params.id, { a_chegar: novoStatus });
+    db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Acerto', 'Produto ' + (novoStatus ? 'marcado como a chegar' : 'desmarcado como a chegar') + ' - ID: ' + req.params.id);
+  }
+  res.json({ ok: true });
+});
 // === DROGARIA ===
 app.get('/api/drogaria', (req, res) => res.json(db.getLancamentos(req.emp, 'drogaria', req.query.mes)));
 app.post('/api/drogaria', (req, res) => { const item = { id: uid(), origem: 'drogaria', ...req.body }; db.addLancamento(req.emp, item); res.json({ ok: true, id: item.id }); });
