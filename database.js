@@ -312,7 +312,7 @@ module.exports = {
     return query(slug, 'SELECT * FROM acerto ORDER BY data');
   },
   addAcerto(slug, item) {
-    run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor,a_chegar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor,a_chegar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       [item.id, item.data, item.descricao, item.entrada || 0, item.saida || 0, item.categoria, item.recorrente ? 1 : 0, item.tipo_nota || '', item.origem_conta_pagar || '', item.fornecedor || '', item.veiculo || '', item.placa || '', item.km || '', item.localidade || '', item.condutor || '', item.a_chegar ? 1 : 0]);
     
     // Atualizar KM do veiculo se for abastecimento e se veio o ID (enviado pelo frontend)
