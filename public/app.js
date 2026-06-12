@@ -186,9 +186,10 @@ document.getElementById('monthNext').addEventListener('click',()=>{
 function setToday(id){let e=document.getElementById(id);if(e)e.value=now.toISOString().split('T')[0];}
 ['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc','mov-data'].forEach(setToday);
 function populateCats(){
-  document.getElementById('ac-cat').innerHTML=CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
-  let drogCat=document.getElementById('drog-cat');if(drogCat)drogCat.innerHTML=CFG.categoriasDrog.map(c=>'<option>'+c+'</option>').join('');
-  document.getElementById('cp-cat').innerHTML=CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
+  let catOpts='<option value="">—</option>'+CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
+  document.getElementById('ac-cat').innerHTML=catOpts;
+  let drogCat=document.getElementById('drog-cat');if(drogCat)drogCat.innerHTML='<option value="">—</option>'+CFG.categoriasDrog.map(c=>'<option>'+c+'</option>').join('');
+  document.getElementById('cp-cat').innerHTML=catOpts;
   document.getElementById('rel-cat').innerHTML='<option value="">Todas</option>'+CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
   let fornOpts='<option value="">—</option>'+(CFG.fornecedores||[]).map(f=>'<option>'+f+'</option>').join('');
   document.getElementById('ac-forn').innerHTML=fornOpts;
@@ -222,7 +223,7 @@ async function renderAcerto(){
     te+=i.entrada||0;ts+=i.saida||0;
     let pago = i.origem_conta_pagar && i.origem_conta_pagar.includes('Cheques:');
     let chqBtn = (i.saida > 0 && !pago) ? '<button class="btn-cheque-pay" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="NR.openChequePag(\''+i.id+'\',\'acerto\')" title="Pagar com cheque"><i class="fas fa-money-check-alt"></i></button>' : (pago ? '<span style="font-size:11px;color:var(--green);margin-right:4px" title="'+i.origem_conta_pagar+'"><i class="fas fa-check"></i> Chq</span>' : '');
-    let catSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'categoria\',this.value)">'+CFG.categoriasLoja.map(c=>'<option'+(c===i.categoria?' selected':'')+'>'+c+'</option>').join('')+'</select>';
+    let catSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'categoria\',this.value)"><option value=""'+((!i.categoria||i.categoria==='')?' selected':'')+'>—</option>'+CFG.categoriasLoja.map(c=>'<option'+(c===i.categoria?' selected':'')+'>'+c+'</option>').join('')+'</select>';
     let fornSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'fornecedor\',this.value)"><option value=""'+((!i.fornecedor||i.fornecedor==='')?' selected':'')+'>—</option>'+(CFG.fornecedores||[]).map(f=>'<option'+(f===i.fornecedor?' selected':'')+'>'+f+'</option>').join('')+'</select>';
     let recSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'recorrente\',this.value)"><option value="0"'+(i.recorrente?'':' selected')+'>Não</option><option value="1"'+(i.recorrente?' selected':'')+'>Sim</option></select>';
     let dfSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'tipo_nota\',this.value)"><option value=""'+(!i.tipo_nota?' selected':'')+'>—</option><option value="D"'+(i.tipo_nota==='D'?' selected':'')+'>D</option><option value="F"'+(i.tipo_nota==='F'?' selected':'')+'>F</option></select>';
@@ -1397,7 +1398,7 @@ function editRow(section,id){
   lastCell.innerHTML='<div style="display:flex;gap:4px"><button class="btn-save" onclick="NR.saveRow(\''+section+'\',\''+id+'\')" title="Salvar"><i class="fas fa-check"></i></button><button class="btn-cancel" onclick="NR.cancelEdit(\''+section+'\')" title="Cancelar"><i class="fas fa-times"></i></button></div>';
 }
 function getEditFields(section,d){
-  const catOpts=CFG.categoriasLoja.map(c=>({v:c,l:c}));
+  const catOpts=[{v:'',l:'\u2014'}].concat(CFG.categoriasLoja.map(c=>({v:c,l:c})));
   const fornOpts=[{v:'',l:'\u2014'}].concat((CFG.fornecedores||[]).map(f=>({v:f,l:f})));
   const dfOpts=[{v:'',l:'\u2014'},{v:'D',l:'D'},{v:'F',l:'F'}];
   const recOpts=[{v:'0',l:'N\u00e3o'},{v:'1',l:'Sim'}];
