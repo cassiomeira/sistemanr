@@ -740,7 +740,22 @@ async function renderVeiculos(){
     sel.innerHTML='<option value="">— Selecione —</option>'+VEICULOS.map(v=>'<option value="'+v.id+'" data-placa="'+v.placa+'">'+v.nome+'</option>').join('');
     if(vAtual)sel.value=vAtual;
 }
-function editVeiculo(id){let v=VEICULOS.find(x=>x.id===id);if(!v)return;document.getElementById('veiculo-id').value=v.id;document.getElementById('v-nome').value=v.nome;document.getElementById('v-placa').value=v.placa;document.getElementById('v-kmatual').value=v.km_atual;document.getElementById('v-kmtroca').value=v.km_proxima_troca;}
+function editVeiculo(id){
+    console.log('editVeiculo chamando id:', id, typeof id);
+    console.log('Veículos disponíveis:', VEICULOS);
+    let v=VEICULOS.find(x=>x.id===id);
+    if(!v){
+        console.warn('Não encontrado com ===, tentando com ==');
+        v=VEICULOS.find(x=>x.id==id);
+    }
+    console.log('Veículo encontrado:', v);
+    if(!v)return;
+    document.getElementById('veiculo-id').value=v.id;
+    document.getElementById('v-nome').value=v.nome;
+    document.getElementById('v-placa').value=v.placa;
+    document.getElementById('v-kmatual').value=v.km_atual;
+    document.getElementById('v-kmtroca').value=v.km_proxima_troca;
+}
 async function delVeiculo(id){if(!confirm('Excluir veículo?'))return;await api('DELETE','/api/veiculos/'+id);toast('Excluído!');refreshAll();}
 
 // === ABASTECIMENTOS ===
