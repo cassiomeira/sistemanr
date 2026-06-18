@@ -1435,6 +1435,18 @@ function getEditFields(section,d){
   const tipoDOpts=[{v:'debito',l:'D\u00e9bito'},{v:'credito',l:'Cr\u00e9dito'}];
   const origemOpts=[{v:'caixa-empresa',l:'Caixa'},{v:'dinheiro-dono',l:'Celso'}];
   switch(section){
+    case 'fiscal':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:'',cellIndex:0},
+      {field:'nota_entrada',type:'number',value:d.nota_entrada||0,step:'0.01',cellIndex:1},
+      {field:'nota_saida',type:'number',value:d.nota_saida||0,step:'0.01',cellIndex:2},
+      {field:'banco_boleto',type:'number',value:d.banco_boleto||0,step:'0.01',cellIndex:3},
+      {field:'banco_deposito',type:'number',value:d.banco_deposito||0,step:'0.01',cellIndex:4},
+      {field:'banco_cartao',type:'number',value:d.banco_cartao||0,step:'0.01',cellIndex:5},
+      {skip:true,cellIndex:6},
+      {skip:true,cellIndex:7},
+      {skip:true,cellIndex:8},
+      {field:'observacao',type:'text',value:d.observacao||'',cellIndex:9}
+    ];
     case 'acerto':return[
       {field:'data',type:'date',value:d.data?d.data.split('T')[0]:''},
       {field:'descricao',type:'text',value:d.descricao},
