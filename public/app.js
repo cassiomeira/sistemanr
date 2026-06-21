@@ -714,6 +714,7 @@ async function renderFiscal(){
     '<div class="card card-blue"><div class="card-icon"><i class="fas fa-barcode"></i></div><div><span class="card-label">Boletos</span><span class="card-value">'+fmt(tBol)+'</span></div></div>'+
     '<div class="card card-purple"><div class="card-icon"><i class="fas fa-piggy-bank"></i></div><div><span class="card-label">Depósitos</span><span class="card-value">'+fmt(tDep)+'</span></div></div>'+
     '<div class="card card-orange"><div class="card-icon"><i class="fas fa-credit-card"></i></div><div><span class="card-label">Cartões</span><span class="card-value">'+fmt(tCar)+'</span></div></div>'+
+    '<div class="card card-cyan"><div class="card-icon"><i class="fas fa-university"></i></div><div><span class="card-label">Soma Banco</span><span class="card-value">'+fmt(tBanco)+'</span></div></div>'+
     '<div class="card card-'+(saldoTotal>=0?'green':'red')+'"><div class="card-icon"><i class="fas fa-balance-scale"></i></div><div><span class="card-label">Saldo Fiscal</span><span class="card-value">'+fmt(saldoTotal)+'</span></div></div>'+
     '<div class="card card-'+(aEmitirTotal>0?'red':'green')+'" style="'+(aEmitirTotal>0?'animation:pulse 1.5s infinite;border:2px solid #ef4444;box-shadow:0 0 20px rgba(239,68,68,0.4)':'border:2px solid #22c55e;box-shadow:0 0 15px rgba(34,197,94,0.3)')+'"><div class="card-icon" style="font-size:1.6rem"><i class="fas fa-'+(aEmitirTotal>0?'exclamation-triangle':'check-circle')+'"></i></div><div><span class="card-label" style="font-size:.95rem;font-weight:700">⚠️ A EMITIR</span><span class="card-value" style="font-size:1.4rem">'+(aEmitirTotal>0?fmt(aEmitirTotal):'✅ OK')+'</span></div></div>'+
     '<div class="card card-'+(metaOk?'green':'red')+'" style="'+(metaOk?'border:2px solid #22c55e;box-shadow:0 0 15px rgba(34,197,94,0.3)':'animation:pulse 1.5s infinite;border:2px solid #f59e0b;box-shadow:0 0 20px rgba(245,158,11,0.4)')+'"><div class="card-icon" style="font-size:1.6rem"><i class="fas fa-'+(metaOk?'trophy':'bullseye')+'"></i></div><div><span class="card-label" style="font-size:.95rem;font-weight:700">🎯 META 30%</span><span class="card-value" style="font-size:1.4rem">'+(metaOk?'✅ '+pctAtual.toFixed(0)+'%':'Falta '+fmt(faltaMeta))+'</span><span style="font-size:.75rem;color:var(--text3)">Meta: '+fmt(meta30)+' | Atual: '+pctAtual.toFixed(1)+'%</span></div></div>';
@@ -723,6 +724,7 @@ async function renderFiscal(){
     '<span class="badge badge-blue">Boletos: '+fmt(tBol)+'</span>'+
     '<span class="badge badge-purple">Depósitos: '+fmt(tDep)+'</span>'+
     '<span class="badge badge-orange">Cartões: '+fmt(tCar)+'</span>'+
+    '<span class="badge badge-blue">Soma Banco: '+fmt(tBanco)+'</span>'+
     '<span class="badge badge-'+(saldoTotal>=0?'green':'red')+'">Saldo: '+fmt(saldoTotal)+'</span>'+
     '<span class="badge badge-'+(aEmitirTotal>0?'red':'green')+'">A Emitir: '+(aEmitirTotal>0?fmt(aEmitirTotal):'OK')+'</span>'+
     '<span class="badge badge-'+(metaOk?'green':'red')+'">Meta 30%: '+(metaOk?'✅ '+pctAtual.toFixed(0)+'%':'Falta '+fmt(faltaMeta))+'</span>';
