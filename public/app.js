@@ -186,14 +186,14 @@ document.getElementById('monthNext').addEventListener('click',()=>{
 function setToday(id){let e=document.getElementById(id);if(e)e.value=now.toISOString().split('T')[0];}
 ['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc','mov-data'].forEach(setToday);
 function populateCats(){
-  let catOpts='<option value="">—</option>'+CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
-  document.getElementById('ac-cat').innerHTML=catOpts;
+  let catDatalistOpts=CFG.categoriasLoja.map(c=>'<option value="'+c+'">').join('');
+  let acCatList=document.getElementById('ac-cat-list'); if(acCatList) acCatList.innerHTML=catDatalistOpts;
+  let cpCatList=document.getElementById('cp-cat-list'); if(cpCatList) cpCatList.innerHTML=catDatalistOpts;
   let drogCat=document.getElementById('drog-cat');if(drogCat)drogCat.innerHTML='<option value="">—</option>'+CFG.categoriasDrog.map(c=>'<option>'+c+'</option>').join('');
-  document.getElementById('cp-cat').innerHTML=catOpts;
-  document.getElementById('rel-cat').innerHTML='<option value="">Todas</option>'+CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
-  let fornOpts='<option value="">—</option>'+(CFG.fornecedores||[]).map(f=>'<option>'+f+'</option>').join('');
-  document.getElementById('ac-forn').innerHTML=fornOpts;
-  document.getElementById('cp-forn').innerHTML=fornOpts;
+  document.getElementById('rel-cat').innerHTML='<option value="">Todas</option>'+CFG.categoriasLoja.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  let fornDatalistOpts=(CFG.fornecedores||[]).map(f=>'<option value="'+f+'">').join('');
+  let acFornList=document.getElementById('ac-forn-list'); if(acFornList) acFornList.innerHTML=fornDatalistOpts;
+  let cpFornList=document.getElementById('cp-forn-list'); if(cpFornList) cpFornList.innerHTML=fornDatalistOpts;
 }
 async function addCatInline(selId,tipo){
   let v=prompt('Nome da nova categoria:');if(!v||!v.trim())return;v=v.trim();
@@ -208,7 +208,9 @@ async function addFornInline(selId){
   populateCats();document.getElementById(selId).value=v;toast('Fornecedor "'+v+'" adicionado!');
 }
 // ACERTO FINANCEIRO
-document.getElementById('ac-cat').addEventListener('change',function(){document.getElementById('abastecimentoFields').style.display=this.value==='Abastecimento'?'block':'none';});
+const showAbastecimento = function(){document.getElementById('abastecimentoFields').style.display=this.value==='Abastecimento'?'block':'none';};
+document.getElementById('ac-cat').addEventListener('change',showAbastecimento);
+document.getElementById('ac-cat').addEventListener('input',showAbastecimento);
 document.getElementById('formAcerto').addEventListener('submit',async function(e){e.preventDefault();let body={data:document.getElementById('ac-data').value,descricao:document.getElementById('ac-desc').value,entrada:parseFloat(document.getElementById('ac-entrada').value)||0,saida:parseFloat(document.getElementById('ac-saida').value)||0,categoria:document.getElementById('ac-cat').value,fornecedor:document.getElementById('ac-forn').value,recorrente:document.getElementById('ac-rec').value==='1',tipo_nota:document.getElementById('ac-nota').value,a_chegar:document.getElementById('ac-achegar').value==='1'};if(body.categoria==='Abastecimento'){let sel=document.getElementById('ac-veiculo');body.veiculo_id=sel.value;body.veiculo=sel.options[sel.selectedIndex]?.text||'';body.placa=document.getElementById('ac-placa').value.trim().toUpperCase();body.km=document.getElementById('ac-km').value.trim();body.localidade=document.getElementById('ac-localidade').value.trim();body.condutor=document.getElementById('ac-condutor').value.trim();}await api('POST','/api/acerto',body);this.reset();setToday('ac-data');populateCats();document.getElementById('abastecimentoFields').style.display='none';toast('Lançamento salvo!');refreshAll();});
 let acFiltro=document.getElementById('ac-filtro');
 acFiltro.addEventListener('change',()=>renderAcerto());
@@ -1315,8 +1317,10 @@ function openParcelas(){
   let now=new Date();
   document.getElementById('parc-mes').value=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
   // Populate selects
-  document.getElementById('parc-cat').innerHTML=CFG.categoriasLoja.map(c=>'<option>'+c+'</option>').join('');
-  document.getElementById('parc-forn').innerHTML='<option value="">—</option>'+(CFG.fornecedores||[]).map(f=>'<option>'+f+'</option>').join('');
+  document.getElementById('parc-cat').value='';
+  document.getElementById('parc-forn').value='';
+  let parcCatList=document.getElementById('parc-cat-list'); if(parcCatList) parcCatList.innerHTML=CFG.categoriasLoja.map(c=>'<option value="'+c+'">').join('');
+  let parcFornList=document.getElementById('parc-forn-list'); if(parcFornList) parcFornList.innerHTML=(CFG.fornecedores||[]).map(f=>'<option value="'+f+'">').join('');
   parcItems=[];
   renderParcelas();
 }

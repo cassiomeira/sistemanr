@@ -472,3 +472,19 @@ input, select, button { font-family:inherit; font-size:.9rem; }
 .lembrete-card button.btn-concluir:hover { background: var(--green); border-color: var(--green); color: #fff; }
 .lembrete-card button.btn-excluir:hover { background: var(--red); border-color: var(--red); }
 .lembrete-card button.btn-desmarcar:hover { background: var(--amber); border-color: var(--amber); color: #000; }
+
+/* AUTOCOMPLETE SUGGESTION PICKER */
+input[list] {
+    cursor: text;
+}
+input[list]::-webkit-calendar-picker-indicator {
+    display: block !important;
+    opacity: 0.5;
+    cursor: pointer;
+    transition: opacity var(--transition);
+    filter: invert(1);
+}
+input[list]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.9;
+}
+

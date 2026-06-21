@@ -158,8 +158,8 @@
                     <div class="form-group"><label>Descrição</label><input type="text" id="ac-desc" placeholder="Ex: Venda de produto" required></div>
                     <div class="form-group"><label>Entrada (R$)</label><input type="number" id="ac-entrada" step="0.01" min="0" placeholder="0,00"></div>
                     <div class="form-group"><label>Saída (R$)</label><input type="number" id="ac-saida" step="0.01" min="0" placeholder="0,00"></div>
-                    <div class="form-group"><label>Categoria <button type="button" class="btn-inline-add" onclick="NR.addCatInline('ac-cat','loja')" title="Nova categoria">+</button></label><select id="ac-cat"></select></div>
-                    <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline()" title="Novo fornecedor">+</button></label><select id="ac-forn"><option value="">—</option></select></div>
+                    <div class="form-group"><label>Categoria <button type="button" class="btn-inline-add" onclick="NR.addCatInline('ac-cat','loja')" title="Nova categoria">+</button></label><input type="text" id="ac-cat" list="ac-cat-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="ac-cat-list"></datalist></div>
+                    <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline()" title="Novo fornecedor">+</button></label><input type="text" id="ac-forn" list="ac-forn-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="ac-forn-list"></datalist></div>
                     <div class="form-group"><label>Recorrente</label><select id="ac-rec"><option value="0">Não</option><option value="1">Sim</option></select></div>
                     <div class="form-group"><label>D/F</label><select id="ac-nota"><option value="">—</option><option value="D">D</option><option value="F">F</option></select></div>
                     <div class="form-group"><label>A Chegar?</label><select id="ac-achegar"><option value="0">Não</option><option value="1">Sim</option></select></div>
@@ -264,8 +264,8 @@
                     <div class="form-group"><label>Vencimento</label><input type="date" id="cp-venc" required></div>
                     <div class="form-group"><label>Descrição</label><input type="text" id="cp-desc" placeholder="Ex: Aluguel" required></div>
                     <div class="form-group"><label>Valor (R$)</label><input type="number" id="cp-valor" step="0.01" min="0" required></div>
-                    <div class="form-group"><label>Categoria <button type="button" class="btn-inline-add" onclick="NR.addCatInline('cp-cat','loja')" title="Nova categoria">+</button></label><select id="cp-cat"></select></div>
-                    <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline('cp-forn')" title="Novo fornecedor">+</button></label><select id="cp-forn"><option value="">—</option></select></div>
+                    <div class="form-group"><label>Categoria <button type="button" class="btn-inline-add" onclick="NR.addCatInline('cp-cat','loja')" title="Nova categoria">+</button></label><input type="text" id="cp-cat" list="cp-cat-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="cp-cat-list"></datalist></div>
+                    <div class="form-group"><label>Fornecedor <button type="button" class="btn-inline-add" onclick="NR.addFornInline('cp-forn')" title="Novo fornecedor">+</button></label><input type="text" id="cp-forn" list="cp-forn-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="cp-forn-list"></datalist></div>
                     <div class="form-group"><label>Recorrente</label><select id="cp-rec"><option value="0">Não</option><option value="1">Sim</option></select></div>
                     <div class="form-group"><label>D/F</label><select id="cp-nota"><option value="">—</option><option value="D">D</option><option value="F">F</option></select></div>
                     <div class="form-group"><label>A Chegar?</label><select id="cp-achegar"><option value="0">Não</option><option value="1">Sim</option></select></div>
@@ -699,8 +699,8 @@
             <div style="padding:0 24px 24px">
                 <div class="form-grid" style="margin-bottom:16px">
                     <div class="form-group"><label>Descrição do Produto</label><input type="text" id="parc-desc" required placeholder="Ex: Geladeira Brastemp"></div>
-                    <div class="form-group"><label>Fornecedor</label><select id="parc-forn"></select></div>
-                    <div class="form-group"><label>Categoria</label><select id="parc-cat"></select></div>
+                    <div class="form-group"><label>Fornecedor</label><input type="text" id="parc-forn" list="parc-forn-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="parc-forn-list"></datalist></div>
+                    <div class="form-group"><label>Categoria</label><input type="text" id="parc-cat" list="parc-cat-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="parc-cat-list"></datalist></div>
                     <div class="form-group"><label>Nº de Parcelas</label><input type="number" id="parc-qtd" min="1" max="60" value="6"></div>
                     <div class="form-group"><label>Valor por Parcela</label><input type="number" id="parc-valor" step="0.01" min="0"></div>
                     <div class="form-group"><label>Mês Inicial</label><input type="month" id="parc-mes"></div>
