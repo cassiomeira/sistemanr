@@ -308,8 +308,8 @@ module.exports = {
 
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
-    if (mes) return query(slug, 'SELECT * FROM acerto WHERE data LIKE ? ORDER BY data', [mes + '%']);
-    return query(slug, 'SELECT * FROM acerto ORDER BY data');
+    if (mes) return query(slug, 'SELECT * FROM acerto WHERE data LIKE ? ORDER BY data DESC', [mes + '%']);
+    return query(slug, 'SELECT * FROM acerto ORDER BY data DESC');
   },
   addAcerto(slug, item) {
     run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor,a_chegar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -340,12 +340,12 @@ module.exports = {
     if (sets.length) { vals.push(id); run(slug, 'UPDATE acerto SET ' + sets.join(',') + ' WHERE id=?', vals); }
   },
   getAbastecimentos(slug, mes) {
-    if (mes) return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' AND data LIKE ? ORDER BY data", [mes + '%']);
-    return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' ORDER BY data");
+    if (mes) return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' AND data LIKE ? ORDER BY data DESC", [mes + '%']);
+    return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' ORDER BY data DESC");
   },
   getRecorrentes(slug, mes) {
-    if (mes) return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 AND data LIKE ? ORDER BY data', [mes + '%']);
-    return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 ORDER BY data');
+    if (mes) return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 AND data LIKE ? ORDER BY data DESC', [mes + '%']);
+    return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 ORDER BY data DESC');
   },
   getAcertoSummary(slug, mes) {
     const mp = mes ? mes + '%' : '%';
@@ -364,8 +364,8 @@ module.exports = {
 
   // -- Contas a Pagar --
   getContasPagar(slug, mes) {
-    if (mes) return query(slug, 'SELECT * FROM contas_pagar WHERE vencimento LIKE ? ORDER BY vencimento', [mes + '%']);
-    return query(slug, 'SELECT * FROM contas_pagar ORDER BY vencimento');
+    if (mes) return query(slug, 'SELECT * FROM contas_pagar WHERE vencimento LIKE ? ORDER BY vencimento DESC', [mes + '%']);
+    return query(slug, 'SELECT * FROM contas_pagar ORDER BY vencimento DESC');
   },
   addContaPagar(slug, item) {
     run(slug, 'INSERT INTO contas_pagar (id,vencimento,descricao,valor,recorrente,boleto_chegou,pago_por,categoria,tipo_nota,fornecedor,a_chegar,grupo_parcela) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -412,8 +412,8 @@ module.exports = {
 
   // -- Lancamentos (drogaria) --
   getLancamentos(slug, origem, mes) {
-    if (mes) return query(slug, 'SELECT * FROM lancamentos WHERE origem=? AND data LIKE ? ORDER BY data', [origem, mes + '%']);
-    return query(slug, 'SELECT * FROM lancamentos WHERE origem=? ORDER BY data', [origem]);
+    if (mes) return query(slug, 'SELECT * FROM lancamentos WHERE origem=? AND data LIKE ? ORDER BY data DESC', [origem, mes + '%']);
+    return query(slug, 'SELECT * FROM lancamentos WHERE origem=? ORDER BY data DESC', [origem]);
   },
   addLancamento(slug, item) { run(slug, 'INSERT INTO lancamentos (id,origem,data,tipo,descricao,valor,categoria) VALUES (?,?,?,?,?,?,?)', [item.id, item.origem, item.data, item.tipo, item.descricao, item.valor, item.categoria]); },
   delLancamento(slug, id) { run(slug, 'DELETE FROM lancamentos WHERE id=?', [id]); },
@@ -427,7 +427,7 @@ module.exports = {
   },
 
   // -- Cheques --
-  getCheques(slug, mes) { if (mes) return query(slug, 'SELECT * FROM cheques WHERE data LIKE ? ORDER BY data', [mes + '%']); return query(slug, 'SELECT * FROM cheques ORDER BY data'); },
+  getCheques(slug, mes) { if (mes) return query(slug, 'SELECT * FROM cheques WHERE data LIKE ? ORDER BY data DESC', [mes + '%']); return query(slug, 'SELECT * FROM cheques ORDER BY data DESC'); },
   addCheque(slug, item) { run(slug, 'INSERT INTO cheques (id,numero,data,cliente,valor,taxa,dias,lucro,bom_para,destino,origem_dinheiro,vencimento,status,dono_cheque,juros_antecipado,taxa_extra) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [item.id, item.numero || '', item.data, item.cliente, item.valor, item.taxa, item.dias || 30, item.lucro, item.bom_para || '', item.destino || '', item.origem_dinheiro, item.vencimento, item.status, item.dono_cheque || '', item.juros_antecipado ? 1 : 0, item.taxa_extra || 0]); },
   delCheque(slug, id) { run(slug, 'DELETE FROM cheques WHERE id=?', [id]); },
   compensarCheque(slug, id) { run(slug, "UPDATE cheques SET status='compensado' WHERE id=?", [id]); return query(slug, 'SELECT * FROM cheques WHERE id=?', [id])[0]; },
@@ -466,7 +466,7 @@ module.exports = {
   },
 
   // -- Conta Dono --
-  getContaDono(slug, mes) { if (mes) return query(slug, 'SELECT * FROM conta_dono WHERE data LIKE ? ORDER BY data', [mes + '%']); return query(slug, 'SELECT * FROM conta_dono ORDER BY data'); },
+  getContaDono(slug, mes) { if (mes) return query(slug, 'SELECT * FROM conta_dono WHERE data LIKE ? ORDER BY data DESC', [mes + '%']); return query(slug, 'SELECT * FROM conta_dono ORDER BY data DESC'); },
   addContaDono(slug, item) { run(slug, 'INSERT INTO conta_dono (id,data,tipo,descricao,valor,origem_cheque) VALUES (?,?,?,?,?,?)', [item.id, item.data, item.tipo, item.descricao, item.valor, item.origem_cheque || '']); },
   delContaDono(slug, id) { run(slug, 'DELETE FROM conta_dono WHERE id=?', [id]); },
   delContaDonoByCheque(slug, chequeId) { run(slug, 'DELETE FROM conta_dono WHERE origem_cheque=?', [chequeId]); },
@@ -502,8 +502,8 @@ module.exports = {
 
   // -- Movimentação --
   getMovimentacao(slug, mes) {
-    if (mes) return query(slug, 'SELECT * FROM movimentacao WHERE data LIKE ? ORDER BY data', [mes + '%']);
-    return query(slug, 'SELECT * FROM movimentacao ORDER BY data');
+    if (mes) return query(slug, 'SELECT * FROM movimentacao WHERE data LIKE ? ORDER BY data DESC', [mes + '%']);
+    return query(slug, 'SELECT * FROM movimentacao ORDER BY data DESC');
   },
   addMovimentacao(slug, item) {
     run(slug, 'INSERT INTO movimentacao (id,data,descricao,entrada,saida,diferenca) VALUES (?,?,?,?,?,?)',
