@@ -2,7 +2,7 @@
 'use strict';
 let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[]},COLABS=[];
 let currentEmpresa='nunesrocha';
-let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[];
+let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
 const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
 const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
@@ -267,6 +267,12 @@ async function renderContasPagar(){
   let items=await api('GET','/api/contas-pagar?mes='+gM()),tp=0,tpg=0;
   let caixas=await api('GET','/api/caixas');
   chequePagContas=items;
+  const btn = document.getElementById('btnToggleOcultarPagas');
+  if (btn) {
+    btn.innerHTML = ocultarContasPagas 
+      ? '<i class="fas fa-eye-slash"></i> Ocultando Pagas' 
+      : '<i class="fas fa-eye"></i> Mostrando Pagas';
+  }
   let colabOpts='<option value="">—</option><option value="A Pagar">A Pagar</option>'+COLABS.map(c=>'<option value="'+c.nome+'">'+c.nome+'</option>').join('');
   let caixaOpts='<option value="0">—</option>'+caixas.map(cx=>'<option value="'+cx.id+'">'+cx.nome+' ('+fmt(cx.saldo)+')</option>').join('');
   let tb=document.querySelector('#tabelaContasPagar tbody');
@@ -275,6 +281,7 @@ async function renderContasPagar(){
     let boletoN=!i.boleto_chegou;
     let cls=pago?'row-pago':(boletoN?'row-boleto-pendente':'');
     if(pago)tpg+=i.valor;else tp+=i.valor;
+    if(ocultarContasPagas && pago)return'';
     let chqBtn=pago?'':'<button class="btn-cheque-pay" onclick="NR.openChequePag(\''+i.id+'\')" title="Pagar com cheque"><i class="fas fa-money-check-alt"></i> Cheque</button> ';
     let cxSel='<select class="inline-select" onchange="NR.setCaixaPago(\''+i.id+'\',this.value)">'+caixaOpts.replace('value="'+(i.caixa_id||0)+'"','value="'+(i.caixa_id||0)+'" selected')+'</select>';
     let achegar=i.a_chegar?'<span style="background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px"><i class="fas fa-truck-loading"></i> A CHEGAR</span>':'';
@@ -289,6 +296,10 @@ async function renderContasPagar(){
   batchSel.innerHTML='<option value="">— Escolha —</option>'+COLABS.map(c=>'<option value="'+c.nome+'">'+c.nome+'</option>').join('');
   document.getElementById('cpBatchBar').style.display='none';
   document.getElementById('cpSelectAll').checked=false;
+}
+function toggleOcultarPagas(){
+  ocultarContasPagas=!ocultarContasPagas;
+  renderContasPagar();
 }
 function updateCpBatch(){
   let cbs=document.querySelectorAll('.cp-sel-cb:checked');
@@ -1571,6 +1582,6 @@ async function renderAuditoria(){
   }catch(e){}
   buscarAuditoria();
 }
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas};
 checkAuth();
 })();
