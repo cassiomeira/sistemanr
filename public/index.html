@@ -145,7 +145,28 @@
                 <div class="card card-pink"><div class="card-icon"><i class="fas fa-users"></i></div><div class="card-info"><span class="card-label" id="dash-label-colab">Comissões</span><span class="card-value" id="dash-parte-colab">R$ 0,00</span><small class="card-sub">Base: Lucro da Loja</small></div></div>
                 <div class="card card-teal"><div class="card-icon"><i class="fas fa-piggy-bank"></i></div><div class="card-info"><span class="card-label" id="dash-label-reserva">Reserva (30%)</span><span class="card-value" id="dash-reserva">R$ 0,00</span></div></div>
             </div>
-            <div class="panel mt-20"><h3><i class="fas fa-exclamation-triangle"></i> Saldo Conta do Celso</h3><p class="big-value" id="dash-saldo-dono">R$ 0,00</p><small>Positivo = Celso deve à empresa | Negativo = Empresa deve ao Celso</small></div>
+            <div class="panel mt-20">
+                <h3><i class="fas fa-user-tie"></i> Conta do Celso (Consolidado)</h3>
+                <div style="display:flex; justify-content:space-around; align-items:center; flex-wrap:wrap; gap:20px; padding:15px 0;">
+                    <div style="text-align:center;">
+                        <span style="display:block; font-size:.85rem; color:var(--text3); margin-bottom:6px;">Celso (Pessoal)</span>
+                        <b id="dash-saldo-celso-pessoal" style="font-size:1.5rem; font-weight:700;">R$ 0,00</b>
+                    </div>
+                    <div style="font-size:1.8rem; color:var(--text3); font-weight:300;">+</div>
+                    <div style="text-align:center;">
+                        <span style="display:block; font-size:.85rem; color:var(--text3); margin-bottom:6px;">Saldo Drogaria</span>
+                        <b id="dash-saldo-celso-drogaria" style="font-size:1.5rem; font-weight:700;">R$ 0,00</b>
+                    </div>
+                    <div style="font-size:1.8rem; color:var(--text3); font-weight:300;">=</div>
+                    <div style="text-align:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); padding:12px 24px; border-radius:10px; min-width:200px;">
+                        <span style="display:block; font-size:.85rem; color:var(--text3); margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Saldo Geral Consolidado</span>
+                        <b id="dash-saldo-celso-total" style="font-size:1.8rem; font-weight:800;">R$ 0,00</b>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:10px;">
+                    <small style="color:var(--text3); font-size:11px;">Positivo = Celso/Drogaria deve à loja | Negativo = Loja deve ao Celso/Drogaria</small>
+                </div>
+            </div>
             <div class="panel mt-20"><h3><i class="fas fa-cash-register"></i> Saldos dos Caixas</h3><div class="cards-grid" id="dashCaixasCards"><p style="color:var(--text3)">Nenhum caixa cadastrado</p></div></div>
         </section>
 
