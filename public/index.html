@@ -756,7 +756,23 @@
             </div>
         </div>
     </div>
+    <!-- MENU CONTEXTO AUDITORIA -->
+    <div id="ctxMenuAudit" style="display:none;position:fixed;z-index:10000;background:var(--bg2);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px 0;min-width:180px">
+        <button id="ctxMenuAuditBtn" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:none;border:none;color:var(--text);cursor:pointer;font-size:13px;text-align:left" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
+            <i class="fas fa-history" style="color:var(--amber)"></i> Ver Auditoria
+        </button>
+    </div>
+    <!-- MODAL AUDITORIA ITEM -->
+    <div class="modal-overlay" id="modalAuditItem" style="display:none">
+        <div class="modal-card" style="max-width:600px">
+            <div class="modal-header"><h3><i class="fas fa-history" style="color:var(--amber)"></i> Histórico do Item</h3><button class="modal-close" onclick="NR.closeAuditItem()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px">
+                <p id="auditItemDesc" style="margin-bottom:16px;color:var(--text2);font-size:.9rem"></p>
+                <div id="auditItemBody" style="max-height:400px;overflow-y:auto"></div>
+            </div>
+        </div>
+    </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=43"></script>
+    <script src="app.js?v=44"></script>
 </body>
 </html>

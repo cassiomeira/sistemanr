@@ -1600,6 +1600,50 @@ async function renderAuditoria(){
   }catch(e){}
   buscarAuditoria();
 }
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas};
+// === MENU CONTEXTO AUDITORIA POR ITEM ===
+const ctxMenu=document.getElementById('ctxMenuAudit');
+const ctxBtn=document.getElementById('ctxMenuAuditBtn');
+let ctxItemId='',ctxItemSecao='',ctxItemDesc='';
+const TABLE_SECAO={'tabelaAcerto':'Acerto','tabelaFat':'Acerto','tabelaContasPagar':'Contas a Pagar','tabelaCheques':'Cheques','tabelaDono':'Conta Dono','tabelaDrogaria':'Drogaria','tabelaMov':'Movimentação','tabelaFiscal':'Controle Fiscal','tabelaAbastecimentos':'Acerto'};
+document.addEventListener('contextmenu',function(e){
+  let tr=e.target.closest('tr[data-id]');
+  if(!tr){ctxMenu.style.display='none';return;}
+  let table=tr.closest('.data-table');
+  if(!table||!table.id)return;
+  let secaoNome=TABLE_SECAO[table.id];
+  if(!secaoNome)return;
+  e.preventDefault();
+  ctxItemId=tr.dataset.id;
+  ctxItemSecao=secaoNome;
+  try{let d=JSON.parse(decodeURIComponent(tr.dataset.row));ctxItemDesc=d.descricao||d.cliente||d.nome||'';}catch(ex){ctxItemDesc='';}
+  ctxMenu.style.display='block';
+  let mx=e.clientX,my=e.clientY;
+  if(mx+200>window.innerWidth)mx=window.innerWidth-210;
+  if(my+50>window.innerHeight)my=window.innerHeight-60;
+  ctxMenu.style.left=mx+'px';ctxMenu.style.top=my+'px';
+});
+document.addEventListener('click',function(){ctxMenu.style.display='none';});
+ctxBtn.addEventListener('click',async function(){
+  ctxMenu.style.display='none';
+  let logs=await api('GET','/api/auditoria/item?secao='+encodeURIComponent(ctxItemSecao)+'&id='+encodeURIComponent(ctxItemId));
+  document.getElementById('auditItemDesc').innerHTML='<i class="fas fa-tag"></i> <b>'+ctxItemSecao+'</b>: '+(ctxItemDesc||'ID '+ctxItemId);
+  let body=document.getElementById('auditItemBody');
+  const acaoIcons={'criou':'<span style="color:var(--green)"><i class="fas fa-plus-circle"></i> Criou</span>','alterou':'<span style="color:var(--amber)"><i class="fas fa-edit"></i> Alterou</span>','excluiu':'<span style="color:var(--red)"><i class="fas fa-trash"></i> Excluiu</span>'};
+  if(!logs.length){
+    body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum registro de auditoria encontrado para este item.<br><span style="font-size:12px">Itens criados antes da auditoria não terão histórico.</span></div>';
+  }else{
+    body.innerHTML='<table class="data-table" style="font-size:.85rem"><thead><tr><th>Data/Hora</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead><tbody>'+logs.map(function(l){
+      let dt=new Date(l.data);
+      let dataStr=dt.toLocaleDateString('pt-BR')+' '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      let acaoHtml=acaoIcons[l.acao]||('<span>'+l.acao+'</span>');
+      let det=l.detalhes||'';if(det.length>120)det=det.substring(0,120)+'...';
+      return'<tr><td style="white-space:nowrap">'+dataStr+'</td><td><b>'+l.usuario+'</b></td><td>'+acaoHtml+'</td><td style="font-size:12px;color:var(--text3);max-width:250px;overflow:hidden;text-overflow:ellipsis">'+det+'</td></tr>';
+    }).join('')+'</tbody></table>';
+  }
+  document.getElementById('modalAuditItem').style.display='flex';
+});
+function closeAuditItem(){document.getElementById('modalAuditItem').style.display='none';}
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem};
 checkAuth();
 })();

@@ -593,6 +593,9 @@ module.exports = {
     const data = new Date().toISOString();
     run(slug, 'INSERT INTO auditoria (data, usuario, acao, secao, detalhes, empresa) VALUES (?,?,?,?,?,?)', [data, usuario, acao, secao, detalhes || '', slug]);
   },
+  getAuditByItem(slug, secao, id) {
+    return query(slug, "SELECT * FROM auditoria WHERE secao=? AND (detalhes LIKE ? OR detalhes LIKE ?) ORDER BY data DESC LIMIT 50", [secao, '%ID: ' + id + '%', '%ID: ' + id]);
+  },
   getAuditLogs(slug, filtros) {
     let sql = 'SELECT * FROM auditoria WHERE 1=1';
     const params = [];

@@ -139,7 +139,7 @@ app.post('/api/acerto', (req, res) => {
   const b = req.body;
   const item = { id: uid(), ...b };
   db.addAcerto(req.emp, item);
-  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Acerto', b.descricao + ' - Entrada: ' + (b.entrada||0) + ' Saída: ' + (b.saida||0));
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Acerto', 'ID: ' + item.id + ' - ' + b.descricao + ' - Entrada: ' + (b.entrada||0) + ' Saída: ' + (b.saida||0));
   res.json({ ok: true, id: item.id });
 });
 app.put('/api/acerto/:id', (req, res) => { db.updateAcerto(req.emp, req.params.id, req.body); res.json({ ok: true }); });
@@ -175,7 +175,7 @@ app.post('/api/contas-pagar', (req, res) => {
   const b = req.body;
   const item = { id: uid(), ...b };
   db.addContaPagar(req.emp, item);
-  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', b.descricao + ' - R$ ' + b.valor);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'ID: ' + item.id + ' - ' + b.descricao + ' - R$ ' + b.valor);
   res.json({ ok: true, id: item.id });
 });
 app.put('/api/contas-pagar/:id', (req, res) => {
@@ -314,7 +314,7 @@ app.post('/api/cheques', (req, res) => {
     const valorDebito = item.juros_antecipado ? (item.valor - item.lucro) : item.valor;
     db.addContaDono(req.emp, { id: uid(), data: item.data, tipo: 'debito', descricao: 'Troca de cheque (caixa empresa) - ' + item.cliente, valor: valorDebito, origem_cheque: item.id });
   }
-  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Cheques', b.cliente + ' - R$ ' + b.valor);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Cheques', 'ID: ' + item.id + ' - ' + b.cliente + ' - R$ ' + b.valor);
   res.json({ ok: true, id: item.id });
 });
 app.delete('/api/cheques/:id', (req, res) => {
@@ -345,7 +345,7 @@ app.post('/api/conta-dono', (req, res) => {
   const b = req.body;
   const item = { id: uid(), ...b };
   db.addContaDono(req.emp, item);
-  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Conta Dono', b.descricao + ' - R$ ' + b.valor);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Conta Dono', 'ID: ' + item.id + ' - ' + b.descricao + ' - R$ ' + b.valor);
   res.json({ ok: true, id: item.id });
 });
 app.delete('/api/conta-dono/:id', (req, res) => {
@@ -486,6 +486,11 @@ app.post('/api/backup/manual', adminOnly, async (req, res) => {
 app.get('/api/auditoria', adminOnly, (req, res) => {
   const filtros = { usuario: req.query.usuario, secao: req.query.secao, dataInicio: req.query.dataInicio, dataFim: req.query.dataFim };
   res.json(db.getAuditLogs(req.emp, filtros));
+});
+app.get('/api/auditoria/item', (req, res) => {
+  const { secao, id } = req.query;
+  if (!secao || !id) return res.status(400).json({ error: 'secao e id obrigatórios' });
+  res.json(db.getAuditByItem(req.emp, secao, id));
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
