@@ -63,6 +63,7 @@
             <li><a href="#" class="nav-link" data-section="caixas" id="nav-caixas"><i class="fas fa-cash-register"></i><span>Caixas</span></a></li>
             <li><a href="#" class="nav-link" data-section="fiscal" id="nav-fiscal"><i class="fas fa-balance-scale"></i><span>Controle Fiscal</span></a></li>
             <li><a href="#" class="nav-link" data-section="usuarios" id="nav-usuarios"><i class="fas fa-users-cog"></i><span>Usuários</span></a></li>
+            <li><a href="#" class="nav-link" data-section="somas" id="nav-somas"><i class="fas fa-calculator"></i><span>Somas</span></a></li>
             <li><a href="#" class="nav-link" data-section="auditoria" id="nav-auditoria"><i class="fas fa-clipboard-list"></i><span>Auditoria</span></a></li>
         </ul>
         <div class="sidebar-footer"><div class="month-selector"><label>Mês/Ano</label><input type="month" id="monthSelector"></div></div>
@@ -264,11 +265,21 @@
         <!-- FAT (RECORRENTES) -->
         <section class="content-section" id="section-fat">
             <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Gasto Recorrente</h3></div>
+                <form id="formFat" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="fat-data" required></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="fat-desc" required placeholder="Ex: Aluguel, Internet..."></div>
+                    <div class="form-group"><label>Valor (Saída)</label><input type="number" id="fat-valor" step="0.01" min="0" required placeholder="0,00"></div>
+                    <div class="form-group"><label>Categoria</label><input type="text" id="fat-cat" list="fat-cat-list" placeholder="Selecione ou digite..." autocomplete="off"><datalist id="fat-cat-list"></datalist></div>
+                    <div class="form-group"><label>D/F</label><select id="fat-nota"><option value="">—</option><option value="D">D</option><option value="F">F</option></select></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
                 <div class="panel-header">
                     <h3><i class="fas fa-redo"></i> Gastos Recorrentes do Mês</h3><button class="btn btn-sm btn-danger" style="font-size:11px;margin-left:auto" onclick="NR.confirmClear('Fat (Recorrentes)','fat')"><i class="fas fa-trash"></i> Excluir Tudo</button>
                     <div class="summary-badges"><span class="badge badge-orange">Total Recorrente: <b id="fat-total">R$ 0,00</b></span></div>
                 </div>
-                <p class="config-desc">Estes são os gastos marcados como "Recorrente" no Acerto Financeiro. Use para planejar o que pagar nos próximos meses.</p>
                 <div class="table-wrap mt-20"><table class="data-table" id="tabelaFat"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Categoria</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
             </div>
             <div class="panel mt-20">
@@ -656,6 +667,16 @@
         </section>
 
         <!-- AUDITORIA -->
+        <section class="content-section" id="section-somas">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-calculator"></i> Somas / Rascunhos</h3>
+                    <button class="btn btn-primary btn-sm" onclick="NR.novaSoma()"><i class="fas fa-plus"></i> Nova Soma</button>
+                </div>
+                <p style="padding:0 20px 10px;color:var(--text3);font-size:.85rem"><i class="fas fa-users"></i> Compartilhado — todos os usuários veem as somas criadas.</p>
+                <div id="somasContainer" style="padding:0 20px 20px;display:flex;flex-wrap:wrap;gap:16px"></div>
+            </div>
+        </section>
         <section class="content-section" id="section-auditoria">
             <div class="panel">
                 <div class="panel-header"><h3><i class="fas fa-clipboard-list"></i> Filtros de Auditoria</h3></div>
@@ -773,6 +794,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=44"></script>
+    <script src="app.js?v=47"></script>
 </body>
 </html>

@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -184,11 +184,12 @@ document.getElementById('monthNext').addEventListener('click',()=>{
   ms.value=y+'-'+String(m).padStart(2,'0');updateMonthDisplay();refreshAll();
 });
 function setToday(id){let e=document.getElementById(id);if(e)e.value=now.toISOString().split('T')[0];}
-['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc','mov-data'].forEach(setToday);
+['ac-data','drog-data','chq-data','chq-venc','dono-data','cp-venc','mov-data','fat-data'].forEach(setToday);
 function populateCats(){
   let catDatalistOpts=CFG.categoriasLoja.map(c=>'<option value="'+c+'">').join('');
   let acCatList=document.getElementById('ac-cat-list'); if(acCatList) acCatList.innerHTML=catDatalistOpts;
   let cpCatList=document.getElementById('cp-cat-list'); if(cpCatList) cpCatList.innerHTML=catDatalistOpts;
+  let fatCatList=document.getElementById('fat-cat-list'); if(fatCatList) fatCatList.innerHTML=catDatalistOpts;
   let drogCat=document.getElementById('drog-cat');if(drogCat)drogCat.innerHTML='<option value="">—</option>'+CFG.categoriasDrog.map(c=>'<option>'+c+'</option>').join('');
   document.getElementById('rel-cat').innerHTML='<option value="">Todas</option>'+CFG.categoriasLoja.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
   let fornDatalistOpts=(CFG.fornecedores||[]).map(f=>'<option value="'+f+'">').join('');
@@ -249,6 +250,11 @@ async function renderAcerto(){
   else{let maxf=Math.max(...forns.map(f=>f.total));
   chf.innerHTML=forns.map((f,i)=>'<div class="chart-bar-row"><span class="chart-bar-label">'+f.fornecedor+'</span><div class="chart-bar-track"><div class="chart-bar-fill" style="width:'+Math.max(f.total/maxf*100,5)+'%;background:'+COLORS[(i+3)%COLORS.length]+'">'+Math.round(f.total/maxf*100)+'%</div></div><span class="chart-bar-value">'+fmt(f.total)+'</span></div>').join('');}
 }
+document.getElementById('formFat').addEventListener('submit',async function(e){
+  e.preventDefault();
+  await api('POST','/api/acerto',{data:document.getElementById('fat-data').value,descricao:document.getElementById('fat-desc').value,entrada:0,saida:parseFloat(document.getElementById('fat-valor').value)||0,categoria:document.getElementById('fat-cat').value,fornecedor:'',recorrente:1,tipo_nota:document.getElementById('fat-nota').value});
+  this.reset();setToday('fat-data');populateCats();toast('Gasto recorrente salvo!');refreshAll();
+});
 async function renderFat(){
   let items=await api('GET','/api/fat?mes='+gM()),total=0;
   document.querySelector('#tabelaFat tbody').innerHTML=items.map(i=>{total+=i.saida||0;return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td><td><button class="btn-edit" onclick="NR.editRow(\'fat\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');
@@ -747,7 +753,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -865,7 +871,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -1600,6 +1606,122 @@ async function renderAuditoria(){
   }catch(e){}
   buscarAuditoria();
 }
+// === SOMAS / RASCUNHOS COMPARTILHADOS ===
+let somaFocusTarget=null;
+function calcExpr(str){
+  str=(str||'').toString().replace(/,/g,'.').trim();
+  let subtract=false;
+  if(str.length>1&&str.endsWith('-')){subtract=true;str=str.slice(0,-1).trim();}
+  str=str.replace(/[^0-9+\-*/.() ]/g,'').trim();
+  if(!str)return 0;
+  try{let r=Function('"use strict";return('+str+')')();if(!isFinite(r))r=parseFloat(str)||0;r=Math.round(Math.abs(r)*100)/100;return subtract?-r:r;}catch(e){let r=parseFloat(str)||0;return subtract?-Math.abs(r):r;}
+}
+function somaLocalTotal(card){
+  let vals=card.querySelectorAll('.soma-val');
+  let total=0;vals.forEach(function(v){total+=calcExpr(v.value);});
+  let el=card.querySelector('.soma-total-display');
+  if(el)el.textContent=fmt(total);
+}
+async function renderSomas(){
+  let somas=await api('GET','/api/somas');
+  let container=document.getElementById('somasContainer');
+  if(!somas.length){container.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);width:100%"><i class="fas fa-calculator" style="font-size:2.5rem;display:block;margin-bottom:12px;opacity:.4"></i>Nenhuma soma criada ainda.<br>Clique em <b>Nova Soma</b> para começar.</div>';return;}
+  container.innerHTML=somas.map(function(s){
+    let itensHtml=s.itens.map(function(it){
+      let isSub=it.valor<0;
+      let displayVal=isSub?Math.abs(it.valor)+'-':it.valor;
+      let valStyle='width:100%;padding:6px 8px;background:var(--bg3);border:1px solid '+(isSub?'var(--red)':'var(--border)')+';border-radius:4px;color:'+(isSub?'var(--red)':'var(--text)')+';font-size:13px;text-align:right;font-weight:600';
+      return'<tr data-item-id="'+it.id+'">'+(isSub?'<td style="position:relative"><span style="position:absolute;left:4px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--red);font-weight:700"><i class="fas fa-minus-circle"></i></span><input type="text" class="inline-input soma-desc" value="'+(it.descricao||'').replace(/"/g,'&quot;')+'" placeholder="Descrição (opcional)" data-id="'+it.id+'" style="width:100%;padding:6px 8px 6px 20px;background:var(--bg3);border:1px solid var(--red);border-radius:4px;color:var(--red);font-size:13px"></td>':'<td><input type="text" class="inline-input soma-desc" value="'+(it.descricao||'').replace(/"/g,'&quot;')+'" placeholder="Descrição (opcional)" data-id="'+it.id+'" style="width:100%;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px"></td>')+'<td style="width:140px"><input type="text" class="inline-input soma-val" value="'+displayVal+'" data-id="'+it.id+'" data-soma="'+s.id+'" placeholder="0 ou 5*3" style="'+valStyle+'"></td><td style="width:36px"><button class="btn btn-sm btn-danger" onclick="NR.delSomaItem(\''+it.id+'\',\''+s.id+'\')" style="padding:4px 6px"><i class="fas fa-times"></i></button></td></tr>';
+    }).join('');
+    let dt=new Date(s.data_criacao);
+    let dataStr=dt.toLocaleDateString('pt-BR')+' '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    return'<div class="panel" style="flex:1;min-width:320px;max-width:500px;margin:0;border:1px solid var(--border)" data-soma-id="'+s.id+'">'
+      +'<div class="panel-header" style="padding:12px 16px;display:flex;align-items:center;gap:8px">'
+      +'<input type="text" class="soma-titulo" value="'+s.titulo.replace(/"/g,'&quot;')+'" data-id="'+s.id+'" style="flex:1;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:15px;font-weight:600">'
+      +'<button class="btn btn-sm btn-danger" onclick="NR.delSoma(\''+s.id+'\')" title="Excluir soma"><i class="fas fa-trash"></i></button>'
+      +'</div>'
+      +'<div style="padding:0 16px 4px;font-size:.75rem;color:var(--text3)"><i class="fas fa-user"></i> '+s.criado_por+' — '+dataStr+'</div>'
+      +'<div style="padding:4px 16px 4px;font-size:.7rem;color:var(--text3)"><i class="fas fa-info-circle"></i> Aceita expressões: 5*3, 100-20, 1500/3, 2+3</div>'
+      +'<div style="padding:0 16px 12px"><table class="data-table" style="font-size:.85rem"><thead><tr><th>Descrição</th><th style="width:140px">Valor</th><th style="width:36px"></th></tr></thead><tbody>'+itensHtml+'</tbody></table>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">'
+      +'<button class="btn btn-sm btn-outline" onclick="NR.addSomaItem(\''+s.id+'\')" style="font-size:12px"><i class="fas fa-plus"></i> Linha</button>'
+      +'<div style="font-size:1.2rem;font-weight:700;color:var(--green)"><i class="fas fa-equals"></i> <span class="soma-total-display">'+fmt(s.total)+'</span></div>'
+      +'</div></div></div>';
+  }).join('');
+  container.querySelectorAll('.soma-titulo').forEach(function(el){
+    el.addEventListener('change',function(){NR.updateSomaTitulo(this.dataset.id,this.value);});
+  });
+  container.querySelectorAll('.soma-desc').forEach(function(el){
+    el.addEventListener('change',function(){NR.updateSomaItem(this.dataset.id,{descricao:this.value});});
+    el.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){e.preventDefault();let valInput=this.closest('tr').querySelector('.soma-val');if(valInput)valInput.focus();}
+    });
+  });
+  container.querySelectorAll('.soma-val').forEach(function(el){
+    el.addEventListener('blur',function(){
+      let v=calcExpr(this.value);
+      this.value=v;
+      NR.updateSomaItemQuiet(this.dataset.id,{valor:v});
+      somaLocalTotal(this.closest('[data-soma-id]'));
+    });
+    el.addEventListener('keydown',function(e){
+      if(e.key==='Enter'){
+        e.preventDefault();
+        let v=calcExpr(this.value);
+        this.value=v;
+        NR.updateSomaItemQuiet(this.dataset.id,{valor:v});
+        somaLocalTotal(this.closest('[data-soma-id]'));
+        NR.addSomaItemAndFocus(this.dataset.soma);
+      }
+    });
+    el.addEventListener('input',function(){
+      somaLocalTotal(this.closest('[data-soma-id]'));
+    });
+  });
+  if(somaFocusTarget){
+    let card=container.querySelector('[data-soma-id="'+somaFocusTarget+'"]');
+    if(card){let vals=card.querySelectorAll('.soma-val');if(vals.length)vals[vals.length-1].focus();}
+    somaFocusTarget=null;
+  }
+}
+async function novaSoma(){
+  let titulo=prompt('Título da soma:');
+  if(!titulo||!titulo.trim())return;
+  let res=await api('POST','/api/somas',{titulo:titulo.trim()});
+  toast('Soma criada!');
+  somaFocusTarget=res.id;
+  await addSomaItem(res.id);
+}
+async function delSoma(id){
+  if(!confirm('Excluir esta soma e todos os itens?'))return;
+  await api('DELETE','/api/somas/'+id);
+  toast('Soma excluída!');renderSomas();
+}
+async function updateSomaTitulo(id,titulo){
+  await api('PUT','/api/somas/'+id,{titulo:titulo});
+}
+async function addSomaItem(somaId){
+  somaFocusTarget=somaId;
+  await api('POST','/api/somas/'+somaId+'/itens',{descricao:'',valor:0});
+  renderSomas();
+}
+async function addSomaItemAndFocus(somaId){
+  somaFocusTarget=somaId;
+  await api('POST','/api/somas/'+somaId+'/itens',{descricao:'',valor:0});
+  await renderSomas();
+}
+async function updateSomaItem(id,fields){
+  await api('PUT','/api/soma-itens/'+id,fields);
+  renderSomas();
+}
+async function updateSomaItemQuiet(id,fields){
+  await api('PUT','/api/soma-itens/'+id,fields);
+}
+async function delSomaItem(id,somaId){
+  await api('DELETE','/api/soma-itens/'+id);
+  renderSomas();
+}
+
 // === MENU CONTEXTO AUDITORIA POR ITEM ===
 const ctxMenu=document.getElementById('ctxMenuAudit');
 const ctxBtn=document.getElementById('ctxMenuAuditBtn');
@@ -1644,6 +1766,6 @@ ctxBtn.addEventListener('click',async function(){
 });
 function closeAuditItem(){document.getElementById('modalAuditItem').style.display='none';}
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem};
 checkAuth();
 })();

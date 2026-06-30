@@ -482,6 +482,38 @@ app.post('/api/backup/manual', adminOnly, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// === SOMAS (RASCUNHOS COMPARTILHADOS) ===
+app.get('/api/somas', (req, res) => res.json(db.getSomas(req.emp)));
+app.post('/api/somas', (req, res) => {
+  const item = { id: uid(), titulo: req.body.titulo || 'Sem título', criado_por: req.user.nome };
+  db.addSoma(req.emp, item);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/somas/:id', (req, res) => {
+  db.updateSomaTitulo(req.emp, req.params.id, req.body.titulo);
+  res.json({ ok: true });
+});
+app.delete('/api/somas/:id', (req, res) => {
+  db.delSoma(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+app.post('/api/somas/:id/itens', (req, res) => {
+  const item = { id: uid(), soma_id: req.params.id, descricao: req.body.descricao || '', valor: parseFloat(req.body.valor) || 0 };
+  db.addSomaItem(req.emp, item);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/soma-itens/:id', (req, res) => {
+  const fields = {};
+  if (req.body.descricao !== undefined) fields.descricao = req.body.descricao;
+  if (req.body.valor !== undefined) fields.valor = parseFloat(req.body.valor);
+  db.updateSomaItem(req.emp, req.params.id, fields);
+  res.json({ ok: true });
+});
+app.delete('/api/soma-itens/:id', (req, res) => {
+  db.delSomaItem(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+
 // === AUDITORIA ===
 app.get('/api/auditoria', adminOnly, (req, res) => {
   const filtros = { usuario: req.query.usuario, secao: req.query.secao, dataInicio: req.query.dataInicio, dataFim: req.query.dataFim };

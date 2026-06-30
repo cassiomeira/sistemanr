@@ -178,6 +178,21 @@ function initDB(dbInstance) {
     km_atual REAL DEFAULT 0,
     km_proxima_troca REAL DEFAULT 0
   )`);
+  // Tabela Somas (rascunhos compartilhados)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS somas (
+    id TEXT PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    criado_por TEXT NOT NULL,
+    data_criacao DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS soma_itens (
+    id TEXT PRIMARY KEY,
+    soma_id TEXT NOT NULL,
+    descricao TEXT DEFAULT '',
+    valor REAL DEFAULT 0,
+    ordem INTEGER DEFAULT 0,
+    FOREIGN KEY (soma_id) REFERENCES somas(id)
+  )`);
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -586,6 +601,39 @@ module.exports = {
     const u = users[0];
     if (u.senha_hash !== hashSenha(senha)) return null;
     return { id: u.id, username: u.username, nome: u.nome, role: u.role, permissoes: JSON.parse(u.permissoes || '[]') };
+  },
+
+  // -- Somas (rascunhos compartilhados) --
+  getSomas(slug) {
+    const somas = query(slug, 'SELECT * FROM somas ORDER BY data_criacao DESC');
+    return somas.map(s => {
+      s.itens = query(slug, 'SELECT * FROM soma_itens WHERE soma_id=? ORDER BY ordem', [s.id]);
+      s.total = s.itens.reduce((acc, i) => acc + (i.valor || 0), 0);
+      return s;
+    });
+  },
+  addSoma(slug, soma) {
+    run(slug, 'INSERT INTO somas (id, titulo, criado_por) VALUES (?,?,?)', [soma.id, soma.titulo, soma.criado_por]);
+  },
+  updateSomaTitulo(slug, id, titulo) {
+    run(slug, 'UPDATE somas SET titulo=? WHERE id=?', [titulo, id]);
+  },
+  delSoma(slug, id) {
+    run(slug, 'DELETE FROM soma_itens WHERE soma_id=?', [id]);
+    run(slug, 'DELETE FROM somas WHERE id=?', [id]);
+  },
+  addSomaItem(slug, item) {
+    const maxOrdem = query(slug, 'SELECT COALESCE(MAX(ordem),0) as m FROM soma_itens WHERE soma_id=?', [item.soma_id])[0]?.m || 0;
+    run(slug, 'INSERT INTO soma_itens (id, soma_id, descricao, valor, ordem) VALUES (?,?,?,?,?)', [item.id, item.soma_id, item.descricao || '', item.valor || 0, maxOrdem + 1]);
+  },
+  updateSomaItem(slug, id, fields) {
+    const sets = [], vals = [];
+    if (fields.descricao !== undefined) { sets.push('descricao=?'); vals.push(fields.descricao); }
+    if (fields.valor !== undefined) { sets.push('valor=?'); vals.push(fields.valor); }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE soma_itens SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  delSomaItem(slug, id) {
+    run(slug, 'DELETE FROM soma_itens WHERE id=?', [id]);
   },
 
   // -- Auditoria --
