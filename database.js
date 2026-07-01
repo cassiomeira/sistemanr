@@ -416,6 +416,18 @@ module.exports = {
     `);
   },
   delContaPagar(slug, id) { run(slug, 'DELETE FROM contas_pagar WHERE id=?', [id]); },
+  getContasPagarByGrupo(slug, grupo) {
+    return query(slug, 'SELECT * FROM contas_pagar WHERE grupo_parcela=? ORDER BY vencimento', [grupo]);
+  },
+  delContasPagarMulti(slug, ids) {
+    ids.forEach(id => run(slug, 'DELETE FROM contas_pagar WHERE id=?', [id]));
+    return ids.length;
+  },
+  delContasPagarGrupo(slug, grupo) {
+    const count = query(slug, 'SELECT COUNT(*) as c FROM contas_pagar WHERE grupo_parcela=?', [grupo])[0]?.c || 0;
+    run(slug, 'DELETE FROM contas_pagar WHERE grupo_parcela=?', [grupo]);
+    return count;
+  },
   getContaPagarById(slug, id) { const r = query(slug, 'SELECT * FROM contas_pagar WHERE id=?', [id]); return r[0]; },
   getAcertoById(slug, id) { const r = query(slug, 'SELECT * FROM acerto WHERE id=?', [id]); return r[0]; },
   getContasPendentes(slug, hoje) {

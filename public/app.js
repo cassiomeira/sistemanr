@@ -620,7 +620,64 @@ async function loadBackupStatus(){try{let s=await api('GET','/api/backup/status'
 async function del(c,id){if(!confirm('Excluir?'))return;await api('DELETE','/api/'+c+'/'+id);toast('Excluído!','info');refreshAll();}
 async function delAc(id){if(!confirm('Excluir?'))return;await api('DELETE','/api/acerto/'+id);toast('Excluído!','info');refreshAll();}
 async function delC(id){if(!confirm('Remover?'))return;await api('DELETE','/api/colaboradores/'+id);toast('Removido!','info');refreshAll();}
-async function delCP(id){if(!confirm('Excluir?'))return;await api('DELETE','/api/contas-pagar/'+id);toast('Excluído!','info');refreshAll();}
+async function delCP(id){
+  let conta=chequePagContas.find(c=>c.id===id);
+  if(conta&&conta.grupo_parcela){
+    let parcelas=await api('GET','/api/contas-pagar/grupo/'+encodeURIComponent(conta.grupo_parcela));
+    if(!parcelas||!parcelas.length){if(!confirm('Excluir?'))return;await api('DELETE','/api/contas-pagar/'+id);toast('Excluído!','info');refreshAll();return;}
+    let tbody=document.getElementById('delParcList');
+    tbody.innerHTML=parcelas.map(p=>'<tr data-id="'+p.id+'"><td><input type="checkbox" class="delparc-cb" value="'+p.id+'" '+(p.id===id?'checked':'')+' style="width:16px;height:16px"></td><td><input type="date" class="dp-venc" value="'+p.vencimento+'" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:.82rem;width:130px" data-orig="'+p.vencimento+'"></td><td><input type="text" class="dp-desc" value="'+(p.descricao||'').replace(/"/g,'&quot;')+'" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:.82rem;width:100%" data-orig="'+(p.descricao||'').replace(/"/g,'&quot;')+'"></td><td><input type="number" class="dp-valor" value="'+p.valor+'" step="0.01" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:.82rem;width:90px;text-align:right" data-orig="'+p.valor+'"></td><td>'+(p.pago_por&&p.pago_por!=='A Pagar'?'<span style="color:var(--green)">Pago</span>':'<span style="color:var(--amber)">A Pagar</span>')+'</td></tr>').join('');
+    document.getElementById('btnSalvarParcEdit').style.display='none';
+    document.getElementById('delParc-all').checked=false;
+    updateDelParcCount();
+    document.getElementById('modalDelParcelas').style.display='flex';
+  }else{
+    if(!confirm('Excluir?'))return;
+    await api('DELETE','/api/contas-pagar/'+id);toast('Excluído!','info');refreshAll();
+  }
+}
+function updateDelParcCount(){
+  let cbs=document.querySelectorAll('.delparc-cb');
+  let checked=document.querySelectorAll('.delparc-cb:checked').length;
+  document.getElementById('delParc-count').textContent=checked+' selecionada(s)';
+  document.getElementById('btnDelParcConfirm').disabled=checked===0;
+  document.getElementById('delParc-all').checked=checked===cbs.length&&cbs.length>0;
+}
+function closeDelParcelas(){document.getElementById('modalDelParcelas').style.display='none';}
+function checkParcEdited(){
+  let edited=false;
+  document.querySelectorAll('#delParcList tr').forEach(tr=>{
+    ['dp-venc','dp-desc','dp-valor'].forEach(cls=>{
+      let inp=tr.querySelector('.'+cls);
+      if(inp&&inp.value!==inp.dataset.orig)edited=true;
+    });
+  });
+  document.getElementById('btnSalvarParcEdit').style.display=edited?'':'none';
+}
+async function salvarEditParcelas(){
+  let updates=[];
+  document.querySelectorAll('#delParcList tr').forEach(tr=>{
+    let id=tr.dataset.id;
+    let venc=tr.querySelector('.dp-venc'),desc=tr.querySelector('.dp-desc'),val=tr.querySelector('.dp-valor');
+    let changed={};
+    if(venc&&venc.value!==venc.dataset.orig)changed.vencimento=venc.value;
+    if(desc&&desc.value!==desc.dataset.orig)changed.descricao=desc.value;
+    if(val&&val.value!==val.dataset.orig)changed.valor=parseFloat(val.value)||0;
+    if(Object.keys(changed).length)updates.push({id,changed});
+  });
+  if(!updates.length){toast('Nenhuma alteração detectada','info');return;}
+  for(let u of updates)await api('PUT','/api/contas-pagar/'+u.id,u.changed);
+  toast(updates.length+' parcela(s) atualizada(s)!');
+  closeDelParcelas();refreshAll();
+}
+async function confirmarDelParcelas(){
+  let ids=[...document.querySelectorAll('.delparc-cb:checked')].map(cb=>cb.value);
+  if(!ids.length){toast('Selecione ao menos uma parcela','error');return;}
+  if(!confirm('Excluir '+ids.length+' parcela(s)?'))return;
+  await api('POST','/api/contas-pagar/excluir-multi',{ids});
+  toast(ids.length+' parcela(s) excluída(s)!','info');
+  closeDelParcelas();refreshAll();
+}
 async function comp(id){await api('PUT','/api/cheques/'+id+'/compensar');toast('Compensado!');refreshAll();}
 async function toggleBoleto(id,v){await api('PUT','/api/contas-pagar/'+id,{boleto_chegou:v});refreshAll();}
 async function setPago(id,v){await api('PUT','/api/contas-pagar/'+id,{pago_por:v});toast(v&&v!=='A Pagar'?'Pago por '+v:'Status atualizado');refreshAll();}
@@ -1424,13 +1481,14 @@ async function salvarParcelas(){
   let cat=document.getElementById('parc-cat').value;
   let forn=document.getElementById('parc-forn').value;
   let aChegar=document.getElementById('parc-achegar').checked;
+  let boletoChegou=document.getElementById('parc-boleto').checked;
   let grupo='grp_'+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
   toast('Salvando '+parcItems.length+' parcelas...','info');
   let ok=0,errs=0;
   for(const p of parcItems){
     try{
       let venc=p.mesAno+'-'+String(p.dia).padStart(2,'0');
-      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:false,a_chegar:aChegar,grupo_parcela:grupo});
+      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:false,a_chegar:aChegar,boleto_chegou:boletoChegou,grupo_parcela:grupo});
       ok++;
     }catch(e){errs++;}
   }
@@ -1766,6 +1824,10 @@ ctxBtn.addEventListener('click',async function(){
 });
 function closeAuditItem(){document.getElementById('modalAuditItem').style.display='none';}
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem};
+document.getElementById('delParc-all').addEventListener('change',function(){let ch=this.checked;document.querySelectorAll('.delparc-cb').forEach(cb=>cb.checked=ch);updateDelParcCount();});
+document.getElementById('delParcList').addEventListener('change',function(e){if(e.target.classList.contains('delparc-cb'))updateDelParcCount();else checkParcEdited();});
+document.getElementById('delParcList').addEventListener('input',function(e){if(!e.target.classList.contains('delparc-cb'))checkParcEdited();});
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem};
 checkAuth();
 })();

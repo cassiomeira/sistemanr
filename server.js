@@ -242,6 +242,21 @@ app.delete('/api/contas-pagar/:id', (req, res) => {
   db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Contas a Pagar', 'ID: ' + req.params.id);
   res.json({ ok: true });
 });
+app.get('/api/contas-pagar/grupo/:grupo', (req, res) => {
+  res.json(db.getContasPagarByGrupo(req.emp, req.params.grupo));
+});
+app.post('/api/contas-pagar/excluir-multi', (req, res) => {
+  const ids = req.body.ids || [];
+  if (!ids.length) return res.status(400).json({ error: 'Nenhum ID informado' });
+  const count = db.delContasPagarMulti(req.emp, ids);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Contas a Pagar', 'Excluiu ' + count + ' parcelas: ' + ids.join(', '));
+  res.json({ ok: true, count });
+});
+app.delete('/api/contas-pagar/grupo/:grupo', (req, res) => {
+  const count = db.delContasPagarGrupo(req.emp, req.params.grupo);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu grupo', 'Contas a Pagar', 'Grupo: ' + req.params.grupo + ' (' + count + ' parcelas)');
+  res.json({ ok: true, count });
+});
 // Enviar conta existente para o acerto (forçar criação)
 app.post('/api/contas-pagar/:id/enviar-acerto', (req, res) => {
   const conta = db.getContaPagarById(req.emp, req.params.id);
