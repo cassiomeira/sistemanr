@@ -173,6 +173,7 @@ app.get('/api/fornecedores-grafico', (req, res) => res.json(db.getFornecedoresSu
 app.get('/api/contas-pagar', (req, res) => res.json(db.getContasPagar(req.emp, req.query.mes)));
 app.post('/api/contas-pagar', (req, res) => {
   const b = req.body;
+  console.log('POST /contas-pagar body:', JSON.stringify({recorrente: b.recorrente, boleto_chegou: b.boleto_chegou, a_chegar: b.a_chegar}));
   const item = { id: uid(), ...b };
   db.addContaPagar(req.emp, item);
   db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'ID: ' + item.id + ' - ' + b.descricao + ' - R$ ' + b.valor);

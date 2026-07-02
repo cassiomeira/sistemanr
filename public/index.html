@@ -753,6 +753,7 @@
                 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
                     <button class="btn btn-primary btn-sm" onclick="NR.gerarParcelas()"><i class="fas fa-cogs"></i> Gerar Parcelas</button>
                     <button class="btn btn-outline btn-sm" onclick="NR.addFreteParcela()"><i class="fas fa-truck"></i> + Frete</button>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="parc-recorrente" checked style="width:16px;height:16px"> <i class="fas fa-sync-alt" style="color:var(--blue)"></i> Recorrente</label>
                     <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="parc-boleto" style="width:16px;height:16px"> <i class="fas fa-file-invoice" style="color:var(--green)"></i> Boleto já Chegou</label>
                     <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="parc-achegar" checked style="width:16px;height:16px"> <i class="fas fa-truck-loading" style="color:var(--amber)"></i> Produto a Chegar</label>
                 </div>
@@ -816,6 +817,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=49"></script>
+    <script src="app.js?v=50"></script>
 </body>
 </html>

@@ -1482,13 +1482,14 @@ async function salvarParcelas(){
   let forn=document.getElementById('parc-forn').value;
   let aChegar=document.getElementById('parc-achegar').checked;
   let boletoChegou=document.getElementById('parc-boleto').checked;
+  let recorrente=document.getElementById('parc-recorrente').checked;
   let grupo='grp_'+Date.now().toString(36)+Math.random().toString(36).substr(2,4);
   toast('Salvando '+parcItems.length+' parcelas...','info');
   let ok=0,errs=0;
   for(const p of parcItems){
     try{
       let venc=p.mesAno+'-'+String(p.dia).padStart(2,'0');
-      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:false,a_chegar:aChegar,boleto_chegou:boletoChegou,grupo_parcela:grupo});
+      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:recorrente,a_chegar:aChegar,boleto_chegou:boletoChegou,grupo_parcela:grupo});
       ok++;
     }catch(e){errs++;}
   }
