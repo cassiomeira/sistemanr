@@ -57,6 +57,7 @@
             <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
             <li><a href="#" class="nav-link" data-section="conta-dono" id="nav-conta-dono"><i class="fas fa-user-tie"></i><span>Conta do Celso</span></a></li>
             <li><a href="#" class="nav-link" data-section="distribuicao" id="nav-distribuicao"><i class="fas fa-percentage"></i><span>Distribuição</span></a></li>
+            <li><a href="#" class="nav-link" data-section="folha" id="nav-folha"><i class="fas fa-file-invoice-dollar"></i><span>Folha Pagamento</span></a></li>
             <li><a href="#" class="nav-link" data-section="colaboradores" id="nav-colaboradores"><i class="fas fa-users"></i><span>Comissionados</span></a></li>
             <li><a href="#" class="nav-link" data-section="relatorios" id="nav-relatorios"><i class="fas fa-file-alt"></i><span>Relatórios</span></a></li>
             <li><a href="#" class="nav-link" data-section="configuracoes" id="nav-configuracoes"><i class="fas fa-cog"></i><span>Configurações</span></a></li>
@@ -482,6 +483,118 @@
             <div class="panel mt-20"><h3><i class="fas fa-info-circle"></i> Resumo do Cálculo</h3><div class="calc-summary" id="calcSummary"></div></div>
         </section>
 
+        <!-- FOLHA DE PAGAMENTO -->
+        <section class="content-section" id="section-folha">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-file-invoice-dollar"></i> Folha de Pagamento</h3>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <button class="btn btn-outline btn-sm" onclick="NR.openCadColab()"><i class="fas fa-user-plus"></i> Cadastrar Colaborador</button>
+                        <button class="btn btn-primary btn-sm" onclick="NR.openImportHolerite()"><i class="fas fa-file-pdf"></i> Importar Holerites</button>
+                    </div>
+                </div>
+                <div style="padding:0 24px 16px">
+                    <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+                        <div class="summary-badges">
+                            <span class="badge badge-blue">Colaboradores: <b id="folha-qtd-colabs">0</b></span>
+                            <span class="badge badge-green">Total Folha: <b id="folha-total">R$ 0,00</b></span>
+                            <span class="badge badge-amber">Holerites: <b id="folha-qtd-holerites">0</b></span>
+                        </div>
+                    </div>
+                    <!-- Tabs -->
+                    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)">
+                        <button class="btn btn-sm folha-tab active" data-tab="folha-tab-grid" onclick="NR.switchFolhaTab(this)"><i class="fas fa-table"></i> Folha Mensal</button>
+                        <button class="btn btn-sm folha-tab" data-tab="folha-tab-holerites" onclick="NR.switchFolhaTab(this)"><i class="fas fa-file-pdf"></i> Holerites</button>
+                        <button class="btn btn-sm folha-tab" data-tab="folha-tab-comparar" onclick="NR.switchFolhaTab(this)"><i class="fas fa-balance-scale"></i> Comparar</button>
+                        <button class="btn btn-sm folha-tab" data-tab="folha-tab-colabs" onclick="NR.switchFolhaTab(this)"><i class="fas fa-users"></i> Colaboradores</button>
+                    </div>
+                    <!-- Tab: Folha Mensal -->
+                    <div id="folha-tab-grid" class="folha-tab-content">
+                        <div style="overflow-x:auto">
+                            <table class="data-table" style="font-size:.82rem"><thead><tr>
+                                <th>Colaborador</th><th>Salário</th><th>Prêmio</th><th>Valloo</th><th>Adicional</th>
+                                <th>Aj.Custos</th><th>Com.Caixa</th><th>Extra</th><th>Mont/Cart</th><th>Metas</th>
+                                <th>Outros</th><th>FGTS</th><th>Desconto</th><th style="color:var(--green)">TOTAL</th><th></th>
+                            </tr></thead><tbody id="folhaGrid"></tbody>
+                            <tfoot><tr style="font-weight:bold;background:var(--bg3)">
+                                <td>TOTAIS</td><td id="fg-t-sal">0</td><td id="fg-t-pre">0</td><td id="fg-t-val">0</td><td id="fg-t-adi">0</td>
+                                <td id="fg-t-ajc">0</td><td id="fg-t-ccx">0</td><td id="fg-t-ext">0</td><td id="fg-t-mct">0</td><td id="fg-t-met">0</td>
+                                <td id="fg-t-out">0</td><td id="fg-t-fgt">0</td><td id="fg-t-dsc">0</td><td id="fg-t-tot" style="color:var(--green)">0</td><td></td>
+                            </tr></tfoot></table>
+                        </div>
+                    </div>
+                    <!-- Tab: Holerites -->
+                    <div id="folha-tab-holerites" class="folha-tab-content" style="display:none">
+                        <div id="holeritesList"></div>
+                    </div>
+                    <!-- Tab: Comparar -->
+                    <div id="folha-tab-comparar" class="folha-tab-content" style="display:none">
+                        <p style="margin-bottom:12px;color:var(--text3);font-size:.85rem">Regra: <b>Salário + Prêmio</b> (folha) deve bater com o <b>Líquido</b> do holerite — é isso que define o status. Valloo e Adicional são por fora. INSS é informativo: <span style="color:var(--green)">verde = bate</span>, <span style="color:var(--amber)">âmbar = diferente</span>.</p>
+                        <div style="overflow-x:auto">
+                            <table class="data-table" style="font-size:.82rem"><thead><tr>
+                                <th>Colaborador</th><th>Salário</th><th>Prêmio</th><th>Sal+Prêmio</th>
+                                <th>Proventos Holerite</th><th>Descontos Holerite</th><th>Líquido Holerite</th><th>Dif.</th><th>Status</th>
+                            </tr></thead><tbody id="compararGrid"></tbody></table>
+                        </div>
+                    </div>
+                    <!-- Tab: Colaboradores -->
+                    <div id="folha-tab-colabs" class="folha-tab-content" style="display:none">
+                        <div id="colabsFullList"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- MODAL CADASTRAR COLABORADOR -->
+        <div class="modal-overlay" id="modalCadColab" style="display:none">
+            <div class="modal-card" style="max-width:650px">
+                <div class="modal-header"><h3><i class="fas fa-user-plus"></i> Cadastrar Colaborador</h3><button class="modal-close" onclick="NR.closeCadColab()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <form id="formCadColab" class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+                        <div class="form-group" style="grid-column:span 2"><label>Nome Completo *</label><input type="text" id="cc-nome" required></div>
+                        <div class="form-group"><label>Nº Cadastro</label><input type="text" id="cc-cadastro" placeholder="Ex: 80"></div>
+                        <div class="form-group"><label>CPF</label><input type="text" id="cc-cpf" placeholder="000.000.000-00"></div>
+                        <div class="form-group"><label>CBO</label><input type="text" id="cc-cbo" placeholder="Ex: 411005"></div>
+                        <div class="form-group"><label>Cargo / Função</label><input type="text" id="cc-cargo" placeholder="Ex: Auxiliar Administrativo"></div>
+                        <div class="form-group"><label>Departamento</label><input type="text" id="cc-depto" placeholder="Ex: 000.000.999"></div>
+                        <div class="form-group"><label>Salário Base (R$)</label><input type="number" id="cc-salario" step="0.01" min="0"></div>
+                        <div class="form-group"><label>Data Admissão</label><input type="date" id="cc-admissao"></div>
+                        <div class="form-group"><label>Dependentes</label><input type="number" id="cc-dependentes" min="0" value="0"></div>
+                        <div class="form-group"><label>Faixa IRRF</label><input type="number" id="cc-faixa" step="0.01" min="0" value="0"></div>
+                        <div class="form-group"><label>Comissão (%)</label><input type="number" id="cc-pct" step="0.01" min="0" value="0"></div>
+                        <div class="form-group" style="display:flex;align-items:end;gap:16px;padding-bottom:4px">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cc-registrado" checked style="width:16px;height:16px"> CLT</label>
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cc-ativo" checked style="width:16px;height:16px"> Ativo</label>
+                        </div>
+                    </form>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-outline" onclick="NR.closeCadColab()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.salvarCadColab()"><i class="fas fa-check"></i> Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- MODAL IMPORTAR HOLERITE -->
+        <div class="modal-overlay" id="modalImportHolerite" style="display:none">
+            <div class="modal-card" style="max-width:500px">
+                <div class="modal-header"><h3><i class="fas fa-file-pdf" style="color:var(--red)"></i> Importar Holerites (PDF)</h3><button class="modal-close" onclick="NR.closeImportHolerite()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <p style="margin-bottom:12px;color:var(--text2);font-size:.9rem">Selecione os PDFs dos holerites. O sistema extrai os dados e cadastra colaboradores automaticamente.</p>
+                    <div class="form-group" style="margin-bottom:12px"><label>Mês de Referência</label><input type="month" id="hol-mes"></div>
+                    <div style="border:2px dashed var(--border);border-radius:12px;padding:30px;text-align:center;margin-bottom:16px;cursor:pointer" onclick="document.getElementById('hol-files').click()">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:2rem;color:var(--blue);margin-bottom:8px;display:block"></i>
+                        <p style="color:var(--text2);font-size:.9rem">Clique para selecionar PDFs</p>
+                        <p id="hol-file-count" style="color:var(--text3);font-size:.8rem;margin-top:4px">Nenhum arquivo selecionado</p>
+                        <input type="file" id="hol-files" accept=".pdf" multiple style="display:none">
+                    </div>
+                    <div id="hol-progress" style="display:none;margin-bottom:12px"><div style="background:var(--bg3);border-radius:8px;overflow:hidden;height:6px"><div id="hol-bar" style="height:100%;background:var(--blue);width:0%;transition:width .3s"></div></div><p id="hol-status" style="font-size:.8rem;color:var(--text3);margin-top:4px"></p></div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end">
+                        <button class="btn btn-outline" onclick="NR.closeImportHolerite()">Cancelar</button>
+                        <button class="btn btn-primary" id="btnImportHol" onclick="NR.uploadHolerites()"><i class="fas fa-upload"></i> Importar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- COMISSIONADOS -->
         <section class="content-section" id="section-colaboradores">
             <div class="panel">
@@ -748,7 +861,8 @@
                     <div class="form-group"><label>Nº de Parcelas</label><input type="number" id="parc-qtd" min="1" max="60" value="6"></div>
                     <div class="form-group"><label>Valor por Parcela</label><input type="number" id="parc-valor" step="0.01" min="0"></div>
                     <div class="form-group"><label>Mês Inicial</label><input type="month" id="parc-mes"></div>
-                    <div class="form-group"><label>Dia do Vencimento</label><input type="number" id="parc-dia" min="1" max="31" value="15" style="width:80px"></div>
+                    <div class="form-group"><label>Dia do 1º Vencimento</label><input type="number" id="parc-dia" min="1" max="31" value="15" style="width:80px"></div>
+                    <div class="form-group"><label>Intervalo</label><select id="parc-intervalo"><option value="mensal">Mensal (1 por mês)</option><option value="7">A cada 7 dias</option><option value="10">A cada 10 dias</option><option value="15">A cada 15 dias</option><option value="20">A cada 20 dias</option><option value="30">A cada 30 dias</option><option value="45">A cada 45 dias</option></select></div>
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center">
                     <button class="btn btn-primary btn-sm" onclick="NR.gerarParcelas()"><i class="fas fa-cogs"></i> Gerar Parcelas</button>
@@ -758,7 +872,7 @@
                     <label style="display:flex;align-items:center;gap:6px;margin-left:auto;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="parc-achegar" checked style="width:16px;height:16px"> <i class="fas fa-truck-loading" style="color:var(--amber)"></i> Produto a Chegar</label>
                 </div>
                 <div style="max-height:300px;overflow-y:auto" id="parcListWrap">
-                    <table class="data-table" style="font-size:.85rem"><thead><tr><th>#</th><th>Vencimento (dia)</th><th>Descrição</th><th>Valor</th><th style="width:40px"></th></tr></thead><tbody id="parcList"></tbody></table>
+                    <table class="data-table" style="font-size:.85rem"><thead><tr><th>#</th><th>Vencimento</th><th>Descrição</th><th>Valor</th><th style="width:40px"></th></tr></thead><tbody id="parcList"></tbody></table>
                 </div>
                 <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button class="btn btn-outline" onclick="NR.closeParcelas()">Cancelar</button><button class="btn btn-primary" onclick="NR.salvarParcelas()"><i class="fas fa-check"></i> Salvar Todas</button></div>
             </div>
@@ -817,6 +931,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=50"></script>
+    <script src="app.js?v=58"></script>
 </body>
 </html>

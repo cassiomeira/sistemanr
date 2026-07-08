@@ -193,6 +193,65 @@ function initDB(dbInstance) {
     ordem INTEGER DEFAULT 0,
     FOREIGN KEY (soma_id) REFERENCES somas(id)
   )`);
+  // Folha de Pagamento
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS folha_pagamento (
+    id TEXT PRIMARY KEY,
+    colaborador_id INTEGER NOT NULL,
+    mes TEXT NOT NULL,
+    salario REAL DEFAULT 0,
+    premio REAL DEFAULT 0,
+    valloo REAL DEFAULT 0,
+    adicional REAL DEFAULT 0,
+    ajuda_custos REAL DEFAULT 0,
+    com_caixa REAL DEFAULT 0,
+    extra REAL DEFAULT 0,
+    mont_cart REAL DEFAULT 0,
+    metas REAL DEFAULT 0,
+    outros REAL DEFAULT 0,
+    fgts REAL DEFAULT 0,
+    desconto REAL DEFAULT 0,
+    observacao TEXT DEFAULT ''
+  )`);
+  // Holerites importados
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS holerites (
+    id TEXT PRIMARY KEY,
+    colaborador_id INTEGER,
+    mes TEXT NOT NULL,
+    nome_pdf TEXT NOT NULL,
+    cadastro TEXT DEFAULT '',
+    nome TEXT NOT NULL,
+    cpf TEXT DEFAULT '',
+    cargo TEXT DEFAULT '',
+    cbo TEXT DEFAULT '',
+    data_admissao TEXT DEFAULT '',
+    salario_base REAL DEFAULT 0,
+    total_proventos REAL DEFAULT 0,
+    total_descontos REAL DEFAULT 0,
+    liquido REAL DEFAULT 0,
+    fgts_mes REAL DEFAULT 0,
+    inss REAL DEFAULT 0,
+    irrf REAL DEFAULT 0,
+    sal_cont_inss REAL DEFAULT 0,
+    bas_calc_fgts REAL DEFAULT 0,
+    faixa REAL DEFAULT 0,
+    dependentes INTEGER DEFAULT 0,
+    proventos_json TEXT DEFAULT '[]',
+    descontos_json TEXT DEFAULT '[]',
+    data_importacao DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  // Migrations colaboradores
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN cpf TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN cargo TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN cbo TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN data_admissao TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN salario_base REAL DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN departamento TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN registrado INTEGER DEFAULT 1'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN ativo INTEGER DEFAULT 1'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN cadastro TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN dependentes INTEGER DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN faixa REAL DEFAULT 0'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN na_folha INTEGER DEFAULT 1'); } catch(e) {}
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -507,9 +566,47 @@ module.exports = {
   },
 
   // -- Colaboradores --
-  getColaboradores(slug) { return query(slug, 'SELECT * FROM colaboradores ORDER BY id'); },
-  addColaborador(slug, nome, percentual) { run(slug, 'INSERT INTO colaboradores (nome,percentual) VALUES (?,?)', [nome, percentual]); },
+  getColaboradores(slug) { return query(slug, 'SELECT * FROM colaboradores ORDER BY nome'); },
+  addColaborador(slug, data) {
+    run(slug, 'INSERT INTO colaboradores (nome,percentual,cpf,cargo,cbo,data_admissao,salario_base,departamento,registrado,ativo,cadastro,dependentes,faixa) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [data.nome, data.percentual||0, data.cpf||'', data.cargo||'', data.cbo||'', data.data_admissao||'', data.salario_base||0, data.departamento||'', data.registrado!==undefined?data.registrado?1:0:1, data.ativo!==undefined?data.ativo?1:0:1, data.cadastro||'', data.dependentes||0, data.faixa||0]);
+    const r = query(slug, 'SELECT MAX(id) as id FROM colaboradores');
+    return r[0] ? r[0].id : null;
+  },
+  updateColaborador(slug, id, fields) {
+    const allowed = ['nome','percentual','cpf','cargo','cbo','data_admissao','salario_base','departamento','registrado','ativo','cadastro','dependentes','faixa','na_folha'];
+    const sets = [], vals = [];
+    for (const [k,v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k+'=?'); vals.push(v); } }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE colaboradores SET '+sets.join(',')+' WHERE id=?', vals); }
+  },
   delColaborador(slug, id) { run(slug, 'DELETE FROM colaboradores WHERE id=?', [id]); },
+  findColaboradorByNome(slug, nome) {
+    const rows = query(slug, 'SELECT * FROM colaboradores WHERE UPPER(TRIM(nome))=UPPER(TRIM(?))', [nome]);
+    return rows[0] || null;
+  },
+
+  // -- Folha de Pagamento --
+  getFolha(slug, mes) { return query(slug, 'SELECT f.*, c.nome as colab_nome FROM folha_pagamento f JOIN colaboradores c ON f.colaborador_id=c.id WHERE f.mes=? ORDER BY c.nome', [mes]); },
+  getFolhaById(slug, id) { const r = query(slug, 'SELECT * FROM folha_pagamento WHERE id=?', [id]); return r[0]||null; },
+  addFolha(slug, data) {
+    run(slug, 'INSERT INTO folha_pagamento (id,colaborador_id,mes,salario,premio,valloo,adicional,ajuda_custos,com_caixa,extra,mont_cart,metas,outros,fgts,desconto,observacao) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [data.id, data.colaborador_id, data.mes, data.salario||0, data.premio||0, data.valloo||0, data.adicional||0, data.ajuda_custos||0, data.com_caixa||0, data.extra||0, data.mont_cart||0, data.metas||0, data.outros||0, data.fgts||0, data.desconto||0, data.observacao||'']);
+  },
+  updateFolha(slug, id, fields) {
+    const allowed = ['salario','premio','valloo','adicional','ajuda_custos','com_caixa','extra','mont_cart','metas','outros','fgts','desconto','observacao'];
+    const sets = [], vals = [];
+    for (const [k,v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k+'=?'); vals.push(v); } }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE folha_pagamento SET '+sets.join(',')+' WHERE id=?', vals); }
+  },
+  delFolha(slug, id) { run(slug, 'DELETE FROM folha_pagamento WHERE id=?', [id]); },
+
+  // -- Holerites --
+  getHolerites(slug, mes) { return query(slug, 'SELECT * FROM holerites WHERE mes=? ORDER BY nome', [mes]); },
+  addHolerite(slug, data) {
+    run(slug, `INSERT INTO holerites (id,colaborador_id,mes,nome_pdf,cadastro,nome,cpf,cargo,cbo,data_admissao,salario_base,total_proventos,total_descontos,liquido,fgts_mes,inss,irrf,sal_cont_inss,bas_calc_fgts,faixa,dependentes,proventos_json,descontos_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [data.id, data.colaborador_id||null, data.mes, data.nome_pdf, data.cadastro||'', data.nome, data.cpf||'', data.cargo||'', data.cbo||'', data.data_admissao||'', data.salario_base||0, data.total_proventos||0, data.total_descontos||0, data.liquido||0, data.fgts_mes||0, data.inss||0, data.irrf||0, data.sal_cont_inss||0, data.bas_calc_fgts||0, data.faixa||0, data.dependentes||0, JSON.stringify(data.proventos||[]), JSON.stringify(data.descontos||[])]);
+  },
+  delHolerite(slug, id) { run(slug, 'DELETE FROM holerites WHERE id=?', [id]); },
 
   // -- Clear All --
   clearAcerto(slug) { run(slug, 'DELETE FROM acerto'); },

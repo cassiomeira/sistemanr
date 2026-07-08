@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -810,7 +810,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -928,7 +928,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -1413,32 +1413,50 @@ function openParcelas(){
   document.getElementById('parc-forn').value='';
   let parcCatList=document.getElementById('parc-cat-list'); if(parcCatList) parcCatList.innerHTML=CFG.categoriasLoja.map(c=>'<option value="'+c+'">').join('');
   let parcFornList=document.getElementById('parc-forn-list'); if(parcFornList) parcFornList.innerHTML=(CFG.fornecedores||[]).map(f=>'<option value="'+f+'">').join('');
+  document.getElementById('parc-intervalo').value='mensal';
   parcItems=[];
   renderParcelas();
 }
 function closeParcelas(){document.getElementById('modalParcelas').style.display='none';parcItems=[];}
+function toYMD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function gerarParcelas(){
   let desc=document.getElementById('parc-desc').value.trim();
   if(!desc){toast('Preencha a descrição do produto','error');return;}
   let qtd=parseInt(document.getElementById('parc-qtd').value)||1;
   let valor=parseFloat(document.getElementById('parc-valor').value)||0;
   let mesInicial=document.getElementById('parc-mes').value;
-  let diaVenc=String(parseInt(document.getElementById('parc-dia').value)||15).padStart(2,'0');
+  let diaVenc=parseInt(document.getElementById('parc-dia').value)||15;
+  let intervalo=document.getElementById('parc-intervalo').value;
   if(!mesInicial){toast('Selecione o mês inicial','error');return;}
   // Keep existing frete items
   let fretes=parcItems.filter(p=>p.frete);
   parcItems=fretes;
   let [ano,mes]=mesInicial.split('-').map(Number);
-  for(let i=0;i<qtd;i++){
-    let m=mes+i,a=ano;
-    while(m>12){m-=12;a++;}
-    parcItems.push({
-      mesAno:a+'-'+String(m).padStart(2,'0'),
-      dia:diaVenc,
-      descricao:desc+' '+(i+1)+'/'+qtd,
-      valor:valor,
-      frete:false
-    });
+  if(intervalo==='mensal'){
+    for(let i=0;i<qtd;i++){
+      let m=mes+i,a=ano;
+      while(m>12){m-=12;a++;}
+      let ultimoDia=new Date(a,m,0).getDate();
+      let dia=Math.min(diaVenc,ultimoDia);
+      parcItems.push({
+        data:a+'-'+String(m).padStart(2,'0')+'-'+String(dia).padStart(2,'0'),
+        descricao:desc+' '+(i+1)+'/'+qtd,
+        valor:valor,
+        frete:false
+      });
+    }
+  }else{
+    let dias=parseInt(intervalo);
+    let dt=new Date(ano,mes-1,diaVenc);
+    for(let i=0;i<qtd;i++){
+      parcItems.push({
+        data:toYMD(dt),
+        descricao:desc+' '+(i+1)+'/'+qtd,
+        valor:valor,
+        frete:false
+      });
+      dt=new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+dias);
+    }
   }
   renderParcelas();
 }
@@ -1448,8 +1466,7 @@ function addFreteParcela(){
   let diaVenc=String(parseInt(document.getElementById('parc-dia').value)||15).padStart(2,'0');
   if(!mesInicial){toast('Selecione o mês inicial','error');return;}
   parcItems.push({
-    mesAno:mesInicial,
-    dia:diaVenc,
+    data:mesInicial+'-'+diaVenc,
     descricao:'Frete - '+desc,
     valor:0,
     frete:true
@@ -1464,7 +1481,7 @@ function renderParcelas(){
     let label=p.frete?'<span style="background:var(--amber);color:#000;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">FRETE</span>':'<b>'+(i+1)+'</b>';
     return '<tr>'
       +'<td>'+label+'</td>'
-      +'<td><div style="display:flex;gap:4px;align-items:center"><span style="color:var(--text3);font-size:12px">'+p.mesAno+'-</span><input type="number" class="inline-input" value="'+p.dia+'" min="1" max="31" style="width:50px" onchange="NR.setParcField('+i+',\'dia\',this.value)"></div></td>'
+      +'<td><input type="date" class="inline-input" value="'+p.data+'" style="width:140px" onchange="NR.setParcField('+i+',\'data\',this.value)"></td>'
       +'<td><input type="text" class="inline-input" value="'+p.descricao+'" style="width:100%" onchange="NR.setParcField('+i+',\'descricao\',this.value)"></td>'
       +'<td><input type="number" class="inline-input" value="'+p.valor+'" step="0.01" style="width:90px" onchange="NR.setParcField('+i+',\'valor\',this.value)"></td>'
       +'<td><button class="btn btn-sm btn-danger" onclick="NR.removeParcela('+i+')"><i class="fas fa-times"></i></button></td>'
@@ -1473,7 +1490,6 @@ function renderParcelas(){
 }
 function setParcField(idx,campo,valor){
   if(campo==='valor')parcItems[idx][campo]=parseFloat(valor)||0;
-  else if(campo==='dia')parcItems[idx][campo]=valor;
   else parcItems[idx][campo]=valor;
 }
 async function salvarParcelas(){
@@ -1488,8 +1504,7 @@ async function salvarParcelas(){
   let ok=0,errs=0;
   for(const p of parcItems){
     try{
-      let venc=p.mesAno+'-'+String(p.dia).padStart(2,'0');
-      await api('POST','/api/contas-pagar',{vencimento:venc,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:recorrente,a_chegar:aChegar,boleto_chegou:boletoChegou,grupo_parcela:grupo});
+      await api('POST','/api/contas-pagar',{vencimento:p.data,descricao:p.descricao,valor:p.valor,categoria:cat,fornecedor:forn,recorrente:recorrente,a_chegar:aChegar,boleto_chegou:boletoChegou,grupo_parcela:grupo});
       ok++;
     }catch(e){errs++;}
   }
@@ -1829,6 +1844,240 @@ document.getElementById('delParc-all').addEventListener('change',function(){let 
 document.getElementById('delParcList').addEventListener('change',function(e){if(e.target.classList.contains('delparc-cb'))updateDelParcCount();else checkParcEdited();});
 document.getElementById('delParcList').addEventListener('input',function(e){if(!e.target.classList.contains('delparc-cb'))checkParcEdited();});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem};
+// === FOLHA DE PAGAMENTO ===
+document.getElementById('hol-files').addEventListener('change',function(){
+  let n=this.files.length;
+  document.getElementById('hol-file-count').textContent=n?n+' arquivo(s) selecionado(s)':'Nenhum arquivo selecionado';
+});
+
+function switchFolhaTab(btn){
+  document.querySelectorAll('.folha-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.folha-tab-content').forEach(d=>d.style.display='none');
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.tab).style.display='';
+}
+
+async function renderFolha(){
+  let mes=gM();
+  let [folha,holerites]=await Promise.all([api('GET','/api/folha?mes='+mes),api('GET','/api/holerites?mes='+mes)]);
+  let colabs=COLABS||await api('GET','/api/colaboradores');
+  // Grid da folha
+  let tots={sal:0,pre:0,val:0,adi:0,ajc:0,ccx:0,ext:0,mct:0,met:0,out:0,fgt:0,dsc:0,tot:0};
+  let folhaMap={};folha.forEach(f=>folhaMap[f.colaborador_id]=f);
+  let folhaColabs=colabs.filter(c=>c.ativo&&c.na_folha!==0);
+  let gridHtml=folhaColabs.map(c=>{
+    let f=folhaMap[c.id];
+    let cid=c.id;
+    if(!f){
+      return '<tr><td>'+c.nome+'</td>'+Array(12).fill('<td>-</td>').join('')+'<td>-</td><td><button class="btn btn-sm btn-primary" onclick="NR.addFolhaColab('+cid+')"><i class="fas fa-plus"></i></button></td></tr>';
+    }
+    let t=(f.salario||0)+(f.premio||0)+(f.valloo||0)+(f.adicional||0)+(f.ajuda_custos||0)+(f.com_caixa||0)+(f.extra||0)+(f.mont_cart||0)+(f.metas||0)+(f.outros||0)-(f.desconto||0);
+    tots.sal+=f.salario||0;tots.pre+=f.premio||0;tots.val+=f.valloo||0;tots.adi+=f.adicional||0;
+    tots.ajc+=f.ajuda_custos||0;tots.ccx+=f.com_caixa||0;tots.ext+=f.extra||0;tots.mct+=f.mont_cart||0;
+    tots.met+=f.metas||0;tots.out+=f.outros||0;tots.fgt+=f.fgts||0;tots.dsc+=f.desconto||0;tots.tot+=t;
+    let fields=['salario','premio','valloo','adicional','ajuda_custos','com_caixa','extra','mont_cart','metas','outros','fgts','desconto'];
+    let cells=fields.map(k=>'<td><input type="number" step="0.01" value="'+(f[k]||0)+'" style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:.8rem;text-align:right" onchange="NR.updateFolhaField(\''+f.id+'\',\''+k+'\',this.value)"></td>').join('');
+    return '<tr><td style="white-space:nowrap"><b>'+c.nome+'</b></td>'+cells+'<td style="color:var(--green);font-weight:bold">'+fmt(t)+'</td><td><button class="btn btn-sm btn-danger" onclick="NR.delFolhaItem(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  }).join('');
+  document.getElementById('folhaGrid').innerHTML=gridHtml;
+  ['sal','pre','val','adi','ajc','ccx','ext','mct','met','out','fgt','dsc','tot'].forEach(k=>document.getElementById('fg-t-'+k).textContent=fmt(tots[k]));
+  document.getElementById('folha-qtd-colabs').textContent=folhaColabs.length;
+  document.getElementById('folha-total').textContent=fmt(tots.tot);
+  document.getElementById('folha-qtd-holerites').textContent=holerites.length;
+
+  // Holerites
+  if(!holerites.length){
+    document.getElementById('holeritesList').innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-file-pdf" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum holerite importado para este mês.<br>Clique em "Importar Holerites" para começar.</div>';
+  }else{
+    document.getElementById('holeritesList').innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px">'+holerites.map(h=>{
+      let prov=[];try{prov=JSON.parse(h.proventos_json||'[]');}catch(e){}
+      let desc=[];try{desc=JSON.parse(h.descontos_json||'[]');}catch(e){}
+      return '<div style="background:var(--bg3);border-radius:10px;padding:16px;border:1px solid var(--border)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:.95rem">'+h.nome+'</b><button class="btn btn-sm btn-danger" onclick="NR.delHolerite(\''+h.id+'\')"><i class="fas fa-trash"></i></button></div>'+
+        '<div style="font-size:.8rem;color:var(--text3);margin-bottom:8px">'+h.cargo+' | CPF: '+h.cpf+' | Adm: '+h.data_admissao+'</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.82rem">'+
+        '<div>Sal.Base: <b>'+fmt(h.salario_base)+'</b></div>'+
+        '<div>Proventos: <b style="color:var(--green)">'+fmt(h.total_proventos)+'</b></div>'+
+        '<div>Descontos: <b style="color:var(--red)">'+fmt(h.total_descontos)+'</b></div>'+
+        '<div>Líquido: <b style="color:var(--blue)">'+fmt(h.liquido)+'</b></div>'+
+        '<div>FGTS: <b>'+fmt(h.fgts_mes)+'</b></div>'+
+        '<div>INSS: <b>'+fmt(h.sal_cont_inss)+'</b></div>'+
+        '</div>'+
+        '<details style="margin-top:8px;font-size:.8rem"><summary style="cursor:pointer;color:var(--text2)">Detalhes ('+prov.length+' prov / '+desc.length+' desc)</summary>'+
+        '<div style="margin-top:4px">'+prov.map(p=>'<div style="display:flex;justify-content:space-between"><span>'+p.descricao+'</span><span style="color:var(--green)">'+fmt(p.valor)+'</span></div>').join('')+
+        desc.map(d=>'<div style="display:flex;justify-content:space-between"><span>'+d.descricao+'</span><span style="color:var(--red)">-'+fmt(d.valor)+'</span></div>').join('')+'</div></details>'+
+        '<div style="font-size:.75rem;color:var(--text3);margin-top:6px"><i class="fas fa-file-pdf"></i> '+h.nome_pdf+'</div></div>';
+    }).join('')+'</div>';
+  }
+
+  // Comparação
+  let holMap={};holerites.forEach(h=>{if(h.colaborador_id)holMap[h.colaborador_id]=h;});
+  let compHtml=folhaColabs.map(c=>{
+    let f=folhaMap[c.id],h=holMap[c.id];
+    if(!f&&!h)return '';
+    if(!h){
+      // Sem holerite (sem registro): mostra só a folha
+      let salPre=(f.salario||0)+(f.premio||0);
+      return '<tr style="opacity:.6"><td><b>'+c.nome+'</b></td><td>'+fmt(f.salario||0)+'</td><td>'+fmt(f.premio||0)+'</td><td>'+fmt(salPre)+'</td><td>-</td><td>-</td><td>-</td><td>-</td><td><span style="color:var(--text3)"><i class="fas fa-user-slash"></i> Sem holerite</span></td></tr>';
+    }
+    if(!f){
+      return '<tr><td><b>'+c.nome+'</b></td><td>-</td><td>-</td><td>-</td><td>'+fmt(h.total_proventos||0)+'</td><td>'+fmt(h.total_descontos||0)+'</td><td style="color:var(--blue)">'+fmt(h.liquido)+'</td><td>-</td><td><span style="color:var(--amber)"><i class="fas fa-exclamation-circle"></i> Sem folha</span></td></tr>';
+    }
+    let salF=f.salario||0,preF=f.premio||0,salPre=salF+preF;
+    let liqH=h.liquido||0,provH=h.total_proventos||0,descH=h.total_descontos||0;
+    let dif=salPre-liqH;
+    let liqOk=Math.abs(dif)<=0.05;
+    // Tooltips com os itens detalhados do holerite
+    let provItens=[],descItens=[];
+    try{provItens=JSON.parse(h.proventos_json||'[]');}catch(e){}
+    try{descItens=JSON.parse(h.descontos_json||'[]');}catch(e){}
+    let provTip=provItens.map(p=>p.descricao+': '+fmt(p.valor)).join('&#10;')||'Sem detalhes';
+    let descTip=descItens.map(d=>d.descricao+': '+fmt(d.valor)).join('&#10;')||'Sem detalhes';
+    function cc(ok,v){return '<td style="color:var(--'+(ok?'green':'red')+');font-weight:'+(ok?'normal':'bold')+'">'+fmt(v)+'</td>';}
+    return '<tr><td><b>'+c.nome+'</b></td><td>'+fmt(salF)+'</td><td>'+fmt(preF)+'</td>'+cc(liqOk,salPre)+
+      '<td style="color:var(--green);cursor:help;text-decoration:underline dotted" title="'+provTip+'">'+fmt(provH)+'</td>'+
+      '<td style="color:var(--red);cursor:help;text-decoration:underline dotted" title="'+descTip+'">'+fmt(descH)+'</td>'+
+      cc(liqOk,liqH)+
+      '<td style="color:var(--'+(liqOk?'text3':'red')+')">'+(liqOk?'-':fmt(dif))+'</td>'+
+      '<td>'+(liqOk?'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> OK</span>':'<span style="color:var(--red)"><i class="fas fa-exclamation-triangle"></i> Diverge</span>')+'</td></tr>';
+  }).filter(Boolean).join('');
+  if(!compHtml)compHtml='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Preencha a folha e importe holerites para comparar</td></tr>';
+  document.getElementById('compararGrid').innerHTML=compHtml;
+
+  // Lista de Colaboradores
+  document.getElementById('colabsFullList').innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Cad.</th><th>Nome</th><th>CPF</th><th>CBO</th><th>Cargo</th><th>Depto</th><th>Sal.Base</th><th>Admissão</th><th>Dep.</th><th>Faixa</th><th>Com.%</th><th>CLT</th><th>Folha</th><th>Ativo</th><th></th></tr></thead><tbody>'+
+    colabs.map(c=>'<tr style="'+(c.ativo?'':'opacity:.5')+'"><td>'+(c.cadastro||'-')+'</td><td><b>'+c.nome+'</b></td><td>'+(c.cpf||'-')+'</td><td>'+(c.cbo||'-')+'</td><td>'+(c.cargo||'-')+'</td><td>'+(c.departamento||'-')+'</td><td>'+fmt(c.salario_base||0)+'</td><td>'+(c.data_admissao||'-')+'</td><td>'+(c.dependentes||0)+'</td><td>'+(c.faixa||0)+'</td><td>'+(c.percentual||0)+'%</td><td>'+(c.registrado?'<i class="fas fa-check" style="color:var(--green)"></i>':'<i class="fas fa-times" style="color:var(--red)"></i>')+'</td><td><button class="btn btn-sm '+(c.na_folha!==0?'btn-primary':'btn-outline')+'" title="'+(c.na_folha!==0?'Aparece na folha - clique para remover':'Fora da folha - clique para incluir')+'" onclick="NR.toggleNaFolha('+c.id+','+(c.na_folha!==0?0:1)+')">'+(c.na_folha!==0?'<i class="fas fa-check"></i>':'<i class="fas fa-minus"></i>')+'</button></td><td>'+(c.ativo?'<i class="fas fa-check" style="color:var(--green)"></i>':'<span style="color:var(--red)"><i class="fas fa-times"></i></span>')+'</td><td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="NR.editColab('+c.id+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="NR.delC('+c.id+')"><i class="fas fa-trash"></i></button></td></tr>').join('')+
+    '</tbody></table></div>';
+}
+
+async function addFolhaColab(colabId){
+  let mes=gM();
+  await api('POST','/api/folha',{colaborador_id:colabId,mes:mes});
+  toast('Linha adicionada!');renderFolha();
+}
+async function updateFolhaField(id,field,value){
+  let body={};body[field]=parseFloat(value)||0;
+  await api('PUT','/api/folha/'+id,body);
+  renderFolha();
+}
+async function delFolhaItem(id){
+  if(!confirm('Remover esta linha da folha?'))return;
+  await api('DELETE','/api/folha/'+id);toast('Removido!');renderFolha();
+}
+
+function openCadColab(){
+  document.getElementById('formCadColab').reset();
+  document.getElementById('cc-registrado').checked=true;
+  document.getElementById('cc-ativo').checked=true;
+  delete document.getElementById('modalCadColab').dataset.editId;
+  document.getElementById('modalCadColab').querySelector('h3').innerHTML='<i class="fas fa-user-plus"></i> Cadastrar Colaborador';
+  document.getElementById('modalCadColab').style.display='flex';
+}
+function closeCadColab(){document.getElementById('modalCadColab').style.display='none';delete document.getElementById('modalCadColab').dataset.editId;}
+function getColabFormData(){
+  return {
+    nome:document.getElementById('cc-nome').value.trim(),
+    cadastro:document.getElementById('cc-cadastro').value.trim(),
+    cpf:document.getElementById('cc-cpf').value.trim(),
+    cbo:document.getElementById('cc-cbo').value.trim(),
+    cargo:document.getElementById('cc-cargo').value.trim(),
+    departamento:document.getElementById('cc-depto').value.trim(),
+    salario_base:parseFloat(document.getElementById('cc-salario').value)||0,
+    data_admissao:document.getElementById('cc-admissao').value,
+    dependentes:parseInt(document.getElementById('cc-dependentes').value)||0,
+    faixa:parseFloat(document.getElementById('cc-faixa').value)||0,
+    percentual:parseFloat(document.getElementById('cc-pct').value)||0,
+    registrado:document.getElementById('cc-registrado').checked?1:0,
+    ativo:document.getElementById('cc-ativo').checked?1:0
+  };
+}
+async function salvarCadColab(){
+  let data=getColabFormData();
+  if(!data.nome){toast('Nome obrigatório','error');return;}
+  let editId=document.getElementById('modalCadColab').dataset.editId;
+  if(editId){
+    await api('PUT','/api/colaboradores/'+editId,data);
+    toast('Colaborador atualizado!');
+  }else{
+    await api('POST','/api/colaboradores',data);
+    toast('Colaborador cadastrado!');
+  }
+  closeCadColab();refreshAll();
+}
+
+function editColab(id){
+  let c=COLABS.find(x=>x.id===id);if(!c)return;
+  document.getElementById('cc-nome').value=c.nome||'';
+  document.getElementById('cc-cadastro').value=c.cadastro||'';
+  document.getElementById('cc-cpf').value=c.cpf||'';
+  document.getElementById('cc-cbo').value=c.cbo||'';
+  document.getElementById('cc-cargo').value=c.cargo||'';
+  document.getElementById('cc-depto').value=c.departamento||'';
+  document.getElementById('cc-salario').value=c.salario_base||0;
+  document.getElementById('cc-admissao').value=c.data_admissao||'';
+  document.getElementById('cc-dependentes').value=c.dependentes||0;
+  document.getElementById('cc-faixa').value=c.faixa||0;
+  document.getElementById('cc-pct').value=c.percentual||0;
+  document.getElementById('cc-registrado').checked=!!c.registrado;
+  document.getElementById('cc-ativo').checked=c.ativo!==0;
+  document.getElementById('modalCadColab').dataset.editId=id;
+  document.getElementById('modalCadColab').querySelector('h3').innerHTML='<i class="fas fa-user-edit"></i> Editar Colaborador';
+  document.getElementById('modalCadColab').style.display='flex';
+}
+
+function openImportHolerite(){
+  document.getElementById('hol-mes').value=gM();
+  document.getElementById('hol-files').value='';
+  document.getElementById('hol-file-count').textContent='Nenhum arquivo selecionado';
+  document.getElementById('hol-progress').style.display='none';
+  document.getElementById('modalImportHolerite').style.display='flex';
+}
+function closeImportHolerite(){document.getElementById('modalImportHolerite').style.display='none';}
+async function uploadHolerites(){
+  let files=document.getElementById('hol-files').files;
+  let mes=document.getElementById('hol-mes').value;
+  if(!files.length){toast('Selecione pelo menos um PDF','error');return;}
+  if(!mes){toast('Selecione o mês','error');return;}
+  let fd=new FormData();
+  fd.append('mes',mes);
+  for(let i=0;i<files.length;i++)fd.append('pdfs',files[i]);
+  document.getElementById('hol-progress').style.display='';
+  document.getElementById('hol-bar').style.width='30%';
+  document.getElementById('hol-status').textContent='Enviando '+files.length+' arquivo(s)...';
+  document.getElementById('btnImportHol').disabled=true;
+  try{
+    let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
+    let r=await fetch('/api/holerites/upload',{method:'POST',headers:hdrs,body:fd});
+    let text=await r.text();
+    console.log('Upload response:', r.status, text);
+    let data;
+    try{data=JSON.parse(text);}catch(pe){document.getElementById('hol-status').textContent='Erro servidor: '+text.substring(0,200);toast('Erro ao importar','error');document.getElementById('btnImportHol').disabled=false;return;}
+    if(data.error){document.getElementById('hol-status').textContent='Erro: '+data.error;toast('Erro: '+data.error,'error');document.getElementById('btnImportHol').disabled=false;return;}
+    document.getElementById('hol-bar').style.width='100%';
+    let ok=Array.isArray(data)?data.filter(d=>d.ok).length:0;
+    let errs=Array.isArray(data)?data.filter(d=>!d.ok).length:0;
+    document.getElementById('hol-status').textContent=ok+' importado(s)'+(errs?' | '+errs+' erro(s)':'');
+    toast(ok+' holerite(s) importado(s)!'+(errs?' ('+errs+' erros)':''));
+    if(errs&&Array.isArray(data)){let errMsgs=data.filter(d=>!d.ok).map(d=>d.file+': '+d.error);console.error('Erros importação:',errMsgs);}
+    setTimeout(()=>{closeImportHolerite();refreshAll();},1500);
+  }catch(e){
+    console.error('Upload error:', e);
+    document.getElementById('hol-status').textContent='Erro: '+e.message;
+    toast('Erro ao importar: '+e.message,'error');
+  }
+  document.getElementById('btnImportHol').disabled=false;
+}
+async function delHolerite(id){
+  if(!confirm('Excluir este holerite?'))return;
+  await api('DELETE','/api/holerites/'+id);toast('Excluído!');renderFolha();
+}
+async function toggleNaFolha(id,v){
+  await api('PUT','/api/colaboradores/'+id,{na_folha:v});
+  toast(v?'Incluído na folha':'Removido da folha');
+  COLABS=await api('GET','/api/colaboradores');
+  renderFolha();
+}
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,addFolhaColab,updateFolhaField,delFolhaItem,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha};
 checkAuth();
 })();

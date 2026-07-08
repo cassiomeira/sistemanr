@@ -373,8 +373,239 @@ app.put('/api/conta-dono/:id', (req, res) => { db.updateContaDono(req.emp, req.p
 
 // === COLABORADORES ===
 app.get('/api/colaboradores', (req, res) => res.json(db.getColaboradores(req.emp)));
-app.post('/api/colaboradores', (req, res) => { db.addColaborador(req.emp, req.body.nome, req.body.percentual); res.json({ ok: true }); });
+app.post('/api/colaboradores', (req, res) => {
+  const b = req.body;
+  const id = db.addColaborador(req.emp, b);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Colaboradores', 'ID: '+id+' - '+b.nome);
+  res.json({ ok: true, id });
+});
+app.put('/api/colaboradores/:id', (req, res) => {
+  db.updateColaborador(req.emp, parseInt(req.params.id), req.body);
+  res.json({ ok: true });
+});
 app.delete('/api/colaboradores/:id', (req, res) => { db.delColaborador(req.emp, parseInt(req.params.id)); res.json({ ok: true }); });
+
+// === FOLHA DE PAGAMENTO ===
+app.get('/api/folha', (req, res) => res.json(db.getFolha(req.emp, req.query.mes)));
+app.post('/api/folha', (req, res) => {
+  const b = req.body; b.id = uid();
+  db.addFolha(req.emp, b);
+  res.json({ ok: true, id: b.id });
+});
+app.put('/api/folha/:id', (req, res) => {
+  db.updateFolha(req.emp, req.params.id, req.body);
+  res.json({ ok: true });
+});
+app.delete('/api/folha/:id', (req, res) => {
+  db.delFolha(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+
+// === HOLERITES ===
+const { PDFParse } = require('pdf-parse');
+async function pdfParse(buffer) {
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  try {
+    const result = await parser.getText();
+    return { text: result.text };
+  } finally {
+    await parser.destroy().catch(() => {});
+  }
+}
+app.get('/api/holerites', (req, res) => res.json(db.getHolerites(req.emp, req.query.mes)));
+app.post('/api/holerites/upload', upload.array('pdfs', 50), async (req, res) => {
+  try {
+  const mes = req.body.mes;
+  if (!mes) return res.status(400).json({ error: 'Mês obrigatório' });
+  const results = [];
+  for (const file of (req.files || [])) {
+    try {
+      console.log('Parsing PDF:', file.originalname, 'size:', file.size);
+      const pdf = await pdfParse(file.buffer);
+      const blocks = splitHolerites(pdf.text);
+      console.log('Holerites encontrados no PDF:', blocks.length);
+      const seen = new Set();
+      for (const block of blocks) {
+        const parsed = parseHolerite(block);
+        console.log('Parsed:', JSON.stringify({nome: parsed.nome, cadastro: parsed.cadastro, liquido: parsed.liquido, salario_base: parsed.salario_base}));
+        if (!parsed.nome) { results.push({ ok: false, file: file.originalname, error: 'Nome não identificado em um bloco' }); continue; }
+        // Holerite geralmente vem em 2 vias iguais - deduplicar
+        const key = parsed.cadastro + '|' + parsed.cpf + '|' + parsed.nome;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        parsed.id = uid();
+        parsed.mes = mes;
+        parsed.nome_pdf = file.originalname;
+        // Se já importou este colaborador neste mês, substituir
+        db.run_raw(req.emp, 'DELETE FROM holerites WHERE mes=? AND UPPER(TRIM(nome))=UPPER(TRIM(?))', [mes, parsed.nome]);
+        // Vincular a colaborador existente pelo nome
+        const colab = db.findColaboradorByNome(req.emp, parsed.nome);
+        if (colab) {
+          parsed.colaborador_id = colab.id;
+          // Atualizar dados cadastrais que estiverem vazios
+          const upd = {};
+          if (!colab.cpf && parsed.cpf) upd.cpf = parsed.cpf;
+          if (!colab.cargo && parsed.cargo) upd.cargo = parsed.cargo;
+          if (!colab.cbo && parsed.cbo) upd.cbo = parsed.cbo;
+          if (!colab.data_admissao && parsed.data_admissao) upd.data_admissao = parsed.data_admissao;
+          if (!colab.salario_base && parsed.salario_base) upd.salario_base = parsed.salario_base;
+          if (!colab.cadastro && parsed.cadastro) upd.cadastro = parsed.cadastro;
+          if (!colab.departamento && parsed.departamento) upd.departamento = parsed.departamento;
+          if (Object.keys(upd).length) db.updateColaborador(req.emp, colab.id, upd);
+        } else {
+          let colabId = db.addColaborador(req.emp, {
+            nome: parsed.nome, cpf: parsed.cpf, cargo: parsed.cargo,
+            cbo: parsed.cbo, data_admissao: parsed.data_admissao,
+            salario_base: parsed.salario_base, departamento: parsed.departamento || '',
+            cadastro: parsed.cadastro, dependentes: parsed.dependentes,
+            faixa: parsed.faixa, registrado: 1
+          });
+          if (!colabId) {
+            const novo = db.findColaboradorByNome(req.emp, parsed.nome);
+            colabId = novo ? novo.id : null;
+          }
+          parsed.colaborador_id = colabId;
+        }
+        db.addHolerite(req.emp, parsed);
+        results.push({ ok: true, nome: parsed.nome, file: file.originalname });
+      }
+      if (!blocks.length) results.push({ ok: false, file: file.originalname, error: 'Nenhum holerite reconhecido no PDF' });
+    } catch (e) {
+      console.error('Erro parsing holerite:', file.originalname, e.message);
+      results.push({ ok: false, file: file.originalname, error: e.message });
+    }
+  }
+  db.addAuditLog(req.emp, req.user.nome, 'importou', 'Folha Pagamento', 'Importou ' + results.filter(r => r.ok).length + ' holerite(s)');
+  res.json(results);
+  } catch(globalErr) {
+    console.error('Erro global upload holerites:', globalErr);
+    res.status(500).json({ error: globalErr.message });
+  }
+});
+
+// Divide o texto do PDF em blocos, um por holerite
+function splitHolerites(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  let cur = [];
+  for (const line of lines) {
+    if (/Demonstrativo de Pagamento de Sal[aá]rio/i.test(line) && cur.length) {
+      blocks.push(cur.join('\n'));
+      cur = [];
+    }
+    cur.push(line);
+  }
+  if (cur.length) blocks.push(cur.join('\n'));
+  return blocks.filter(b => /Demonstrativo de Pagamento de Sal[aá]rio/i.test(b));
+}
+app.delete('/api/holerites/:id', (req, res) => {
+  db.delHolerite(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+
+function parseVal(s) { return parseFloat((s || '0').replace(/\./g, '').replace(',', '.')) || 0; }
+
+function parseHolerite(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const result = { nome: '', cpf: '', cargo: '', cbo: '', data_admissao: '', salario_base: 0,
+    total_proventos: 0, total_descontos: 0, liquido: 0, fgts_mes: 0, inss: 0, irrf: 0,
+    sal_cont_inss: 0, bas_calc_fgts: 0, faixa: 0, dependentes: 0, cadastro: '', departamento: '',
+    proventos: [], descontos: [] };
+
+  // CPF
+  const cpfM = text.match(/CPF[:\s]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);
+  if (cpfM) result.cpf = cpfM[1];
+
+  // Linha de identificação após o cabeçalho "Cadastro Nome do Funcionário CBO Empresa Local Departamento FL"
+  // Ex: "53 ALESSANDRA DE MORAIS OLIVEIRA 521110 47 1 000.000.999 01"
+  for (let i = 0; i < lines.length; i++) {
+    if (/Cadastro\s+Nome\s+do\s+Funcion/i.test(lines[i])) {
+      const identLine = lines[i + 1] || '';
+      const m = identLine.match(/^(\d+)\s+(.+?)\s+(\d{6})\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s*$/);
+      if (m) {
+        result.cadastro = m[1];
+        result.nome = m[2].trim();
+        result.cbo = m[3];
+        result.departamento = m[6];
+      } else {
+        // Fallback: cadastro + nome até o primeiro bloco numérico
+        const m2 = identLine.match(/^(\d+)\s+([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\s]+?)(?=\s+\d)/);
+        if (m2) { result.cadastro = m2[1]; result.nome = m2[2].trim(); }
+      }
+      // Linha seguinte: "BALCONISTA Data Admissão: 01/03/2017"
+      const cargoLine = lines[i + 2] || '';
+      const cm = cargoLine.match(/^(.*?)\s*Data\s+Admiss[ãa]o[:\s]*(\d{2}\/\d{2}\/\d{4})/i);
+      if (cm) { result.cargo = cm[1].trim(); result.data_admissao = cm[2]; }
+      break;
+    }
+  }
+  // Data admissão fallback (pode estar em outra linha)
+  if (!result.data_admissao) {
+    const admM = text.match(/Data\s+Admiss[ãa]o[:\s]*(\d{2}\/\d{2}\/\d{4})/i);
+    if (admM) result.data_admissao = admM[1];
+  }
+
+  // Tabela de eventos (proventos/descontos)
+  let inEv = false;
+  for (const line of lines) {
+    if (/^Ev\s+Descri/i.test(line)) { inEv = true; continue; }
+    if (inEv) {
+      if (/^Total\b/i.test(line)) {
+        const tm = line.match(/^Total\s+([\d.,]+)(?:\s+([\d.,]+))?\s*$/i);
+        if (tm) {
+          result.total_proventos = parseVal(tm[1]);
+          result.total_descontos = tm[2] !== undefined ? parseVal(tm[2]) : 0;
+        }
+        inEv = false; continue;
+      }
+      // Ex: "1 Horas Normais Diurnas 30 Dias 1.621,00" | "1950 INSS 7,50 % 121,57" | "890 Desconto Adiantamento Férias 1.991,14"
+      const em = line.match(/^(\d+)\s+(.+?)\s+([\d.]+,\d{2})\s*$/);
+      if (em) {
+        let desc = em[2].trim();
+        // Remove a referência do final da descrição ("30 Dias", "7,50 %", "2,00")
+        desc = desc.replace(/\s+[\d.,]+\s*(Dias|%|Hrs|Hs|Horas)?\s*$/i, '').trim();
+        const valor = parseVal(em[3]);
+        const isDesconto = /INSS|IRRF|Desconto|Adiant|Falta|Vale|Atraso|Contribui|Pens[aã]o|Empr[eé]st|Conv[eê]nio|Farm[aá]cia/i.test(desc);
+        if (isDesconto) result.descontos.push({ ev: em[1], descricao: desc, valor });
+        else result.proventos.push({ ev: em[1], descricao: desc, valor });
+      }
+    }
+  }
+
+  // INSS destacado
+  const inssItem = result.descontos.find(d => /INSS/i.test(d.descricao));
+  if (inssItem) result.inss = inssItem.valor;
+
+  // Total Líquido — valor vem ANTES do rótulo: "1.499,43	Total Líquido"
+  let liqM = text.match(/([\d.]+,\d{2})\s*Total\s+L[ií]quido/i);
+  if (!liqM) liqM = text.match(/Total\s+L[ií]quido\s*([\d.]+,\d{2})/i);
+  if (liqM) result.liquido = parseVal(liqM[1]);
+
+  // Rodapé: "Salário Base Sal Cont INSS Bas Cálc FGTS FGTS Mês Bas Cálc IRRF Faixa Dep"
+  // Valores podem estar na mesma linha, na linha seguinte ou na anterior
+  for (let i = 0; i < lines.length; i++) {
+    if (/Sal[aá]rio\s+Base/i.test(lines[i]) && /FGTS/i.test(text.substring(text.indexOf(lines[i])))) {
+      const candidates = [lines[i], lines[i + 1] || '', lines[i - 1] || '', (lines[i] + ' ' + (lines[i + 1] || ''))];
+      for (const cand of candidates) {
+        const nums = cand.match(/[\d.]+,\d{2}/g) || [];
+        if (nums.length >= 4) {
+          result.salario_base = parseVal(nums[0]);
+          result.sal_cont_inss = parseVal(nums[1]);
+          result.bas_calc_fgts = parseVal(nums[2]);
+          result.fgts_mes = parseVal(nums[3]);
+          if (nums[4] !== undefined) result.irrf = parseVal(nums[4]);
+          if (nums[5] !== undefined) result.faixa = parseVal(nums[5]);
+          const depM = cand.match(/(\d{1,2})\s*$/);
+          if (depM && !cand.trim().endsWith(nums[nums.length-1])) result.dependentes = parseInt(depM[1]);
+          break;
+        }
+      }
+      if (result.salario_base) break;
+    }
+  }
+
+  return result;
+}
 
 // === CLEAR ALL (admin only) ===
 app.delete('/api/clear/acerto', adminOnly, (req, res) => { db.clearAcerto(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Acerto', ''); res.json({ ok: true }); });
