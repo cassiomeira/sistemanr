@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const db = require('./database');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
@@ -607,6 +608,161 @@ function parseHolerite(text) {
   return result;
 }
 
+// === NF-e (NOTAS EMITIDAS CONTRA O CNPJ) ===
+const nfe = require('./nfe');
+app.get('/api/nfe/config', adminOnly, (req, res) => {
+  const cfg = nfe.getNfeConfig(req.emp);
+  res.json({ cnpj: cfg.cnpj, uf: cfg.uf, auto: cfg.auto, temCert: cfg.temCert, temSenha: !!cfg.senha, ultNSU: cfg.ultNSU, ultimaConsulta: cfg.ultimaConsulta, ultimoErro: cfg.ultimoErro });
+});
+app.post('/api/nfe/config', adminOnly, upload.single('pfx'), (req, res) => {
+  try {
+    if (req.file) fs.writeFileSync(nfe.certPath(req.emp), req.file.buffer);
+    if (req.body.senha) db.updateConfig(req.emp, 'nfe_senha', req.body.senha);
+    if (req.body.cnpj !== undefined) db.updateConfig(req.emp, 'nfe_cnpj', (req.body.cnpj || '').replace(/\D/g, ''));
+    if (req.body.uf) db.updateConfig(req.emp, 'nfe_uf', req.body.uf);
+    if (req.body.auto !== undefined) db.updateConfig(req.emp, 'nfe_auto', req.body.auto === '1' || req.body.auto === true || req.body.auto === 'true' ? '1' : '0');
+    db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Notas CNPJ', 'Atualizou configuração NF-e' + (req.file ? ' (novo certificado)' : ''));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/nfe/consultar', async (req, res) => {
+  try {
+    const r = await nfe.consultarNotas(req.emp);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/notas-recebidas', (req, res) => res.json(db.getNotasRecebidas(req.emp)));
+app.put('/api/notas-recebidas/:id', (req, res) => {
+  const allowed = {};
+  if (req.body.status) allowed.status = req.body.status;
+  db.updateNotaRecebida(req.emp, req.params.id, allowed);
+  res.json({ ok: true });
+});
+app.get('/api/notas-recebidas/:id/xml', (req, res) => {
+  const nota = db.getNotaRecebidaById(req.emp, req.params.id);
+  if (!nota || !nota.xml) return res.status(404).json({ error: 'XML não disponível' });
+  res.setHeader('Content-Type', 'application/xml');
+  res.setHeader('Content-Disposition', 'attachment; filename="NFe' + nota.chave + '.xml"');
+  res.send(nota.xml);
+});
+// Contas parecidas com a nota (aviso de duplicidade)
+app.get('/api/notas-recebidas/:id/similares', (req, res) => {
+  const nota = db.getNotaRecebidaById(req.emp, req.params.id);
+  if (!nota) return res.status(404).json({ error: 'Nota não encontrada' });
+  let dups = [];
+  try { dups = JSON.parse(nota.duplicatas_json || '[]'); } catch (e) {}
+  if (!dups.length) dups = [{ vencimento: nota.data_emissao, valor: nota.valor }];
+  const similares = [];
+  const vistos = new Set();
+  for (const d of dups) {
+    for (const c of db.findContasSimilares(req.emp, d.vencimento, d.valor, nota.emitente)) {
+      if (!vistos.has(c.id)) { vistos.add(c.id); similares.push(c); }
+    }
+  }
+  res.json(similares);
+});
+// Aprovar várias notas de uma vez (usa as parcelas do XML)
+app.post('/api/notas-recebidas/aprovar-multi', (req, res) => {
+  const ids = req.body.ids || [];
+  let aprovadas = 0, semXml = 0, duplicadas = 0;
+  for (const id of ids) {
+    const nota = db.getNotaRecebidaById(req.emp, id);
+    if (!nota || nota.status !== 'nova') continue;
+    if (nota.tipo !== 'completa') { semXml++; continue; }
+    let dups = [];
+    try { dups = JSON.parse(nota.duplicatas_json || '[]'); } catch (e) {}
+    if (!dups.length) dups = [{ vencimento: nota.data_emissao, valor: nota.valor }];
+    // Pular se já existe conta parecida (possível duplicidade)
+    let temSimilar = false;
+    for (const d of dups) { if (db.findContasSimilares(req.emp, d.vencimento, d.valor, nota.emitente).length) { temSimilar = true; break; } }
+    if (temSimilar) { duplicadas++; continue; }
+    const grupo = dups.length > 1 ? 'grp_nfe_' + nota.id : '';
+    const descBase = (nota.emitente || 'Nota') + (nota.numero ? ' NF ' + nota.numero : '');
+    const temBoleto = /Boleto|Duplicata/i.test(nota.forma_pagamento || '');
+    dups.forEach((d, i) => {
+      db.addContaPagar(req.emp, {
+        id: uid(), vencimento: d.vencimento || nota.data_emissao, valor: d.valor,
+        descricao: descBase + (dups.length > 1 ? ' ' + (i + 1) + '/' + dups.length : ''),
+        categoria: 'Outros', fornecedor: nota.emitente, recorrente: true,
+        boleto_chegou: temBoleto, a_chegar: false, grupo_parcela: grupo,
+      });
+    });
+    db.updateNotaRecebida(req.emp, id, { status: 'lancada' });
+    aprovadas++;
+  }
+  if (aprovadas) db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'Aprovou ' + aprovadas + ' nota(s) NF-e em lote');
+  res.json({ ok: true, aprovadas, semXml, duplicadas });
+});
+// Ignorar/restaurar várias
+app.put('/api/notas-recebidas-multi', (req, res) => {
+  const ids = req.body.ids || [];
+  const status = req.body.status === 'nova' ? 'nova' : 'ignorada';
+  for (const id of ids) db.updateNotaRecebida(req.emp, id, { status });
+  res.json({ ok: true, count: ids.length });
+});
+
+// === FORNECEDORES (CADASTRO COMPLETO) ===
+app.get('/api/fornecedores-cad', (req, res) => res.json(db.getFornecedoresCad(req.emp)));
+app.post('/api/fornecedores-cad', (req, res) => {
+  const f = { id: uid(), ...req.body, origem: 'manual' };
+  db.addFornecedorCad(req.emp, f);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Fornecedores', 'ID: ' + f.id + ' - ' + (f.razao || f.fantasia));
+  res.json({ ok: true, id: f.id });
+});
+app.put('/api/fornecedores-cad/:id', (req, res) => {
+  db.updateFornecedorCad(req.emp, req.params.id, req.body);
+  res.json({ ok: true });
+});
+app.delete('/api/fornecedores-cad/:id', (req, res) => {
+  db.delFornecedorCad(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+
+// === ALERTAS (dashboard) ===
+app.get('/api/alertas', (req, res) => {
+  const hoje = new Date();
+  const amanha = new Date(hoje.getTime() + 86400000);
+  const f = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const notasNovas = db.getNotasRecebidas(req.emp).filter(n => n.status === 'nova').length;
+  const vencendo = db.getContasVencendo(req.emp, f(hoje), f(amanha));
+  const hojeStr = f(hoje);
+  res.json({
+    notasNovas,
+    boletosHoje: vencendo.filter(c => c.vencimento === hojeStr),
+    boletosAmanha: vencendo.filter(c => c.vencimento !== hojeStr),
+  });
+});
+
+// === TELEGRAM ===
+const telegram = require('./telegram');
+app.post('/api/telegram/testar', adminOnly, async (req, res) => {
+  const r = await telegram.sendTelegram(req.emp, '✅ Teste de notificação do Sistema Nunes Rocha funcionando!');
+  res.json(r);
+});
+
+app.post('/api/notas-recebidas/:id/lancar', (req, res) => {
+  const nota = db.getNotaRecebidaById(req.emp, req.params.id);
+  if (!nota) return res.status(404).json({ error: 'Nota não encontrada' });
+  const b = req.body;
+  const parcelas = b.parcelas || [];
+  if (!parcelas.length) return res.status(400).json({ error: 'Nenhuma parcela informada' });
+  const grupo = parcelas.length > 1 ? 'grp_nfe_' + nota.id : '';
+  let criadas = 0;
+  for (const p of parcelas) {
+    const item = {
+      id: uid(), vencimento: p.vencimento, descricao: p.descricao, valor: p.valor,
+      categoria: b.categoria || 'Outros', fornecedor: b.fornecedor || nota.emitente,
+      recorrente: !!b.recorrente, boleto_chegou: !!b.boleto_chegou, a_chegar: !!b.a_chegar,
+      grupo_parcela: grupo,
+    };
+    db.addContaPagar(req.emp, item);
+    criadas++;
+  }
+  db.updateNotaRecebida(req.emp, req.params.id, { status: 'lancada' });
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'Lançou NF-e ' + (nota.numero || nota.chave) + ' de ' + nota.emitente + ' em ' + criadas + ' parcela(s)');
+  res.json({ ok: true, criadas });
+});
+
 // === CLEAR ALL (admin only) ===
 app.delete('/api/clear/acerto', adminOnly, (req, res) => { db.clearAcerto(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Acerto', ''); res.json({ ok: true }); });
 app.delete('/api/clear/fat', adminOnly, (req, res) => { db.clearFat(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'FAT', ''); res.json({ ok: true }); });
@@ -782,4 +938,14 @@ db.init().then(() => {
     backup.runBackup(getBackupConfig);
   });
   console.log('⏰ Backup agendado: 07:00, 12:00, 16:00, 20:00');
+  cron.schedule('15 * * * *', () => {
+    console.log('⏰ Consulta NF-e agendada iniciando...');
+    nfe.consultarTodasEmpresas().catch(e => console.error('Erro consulta NF-e:', e.message));
+  });
+  console.log('⏰ Consulta NF-e agendada: a cada hora (minuto 15)');
+  cron.schedule('0 8 * * *', () => {
+    console.log('⏰ Aviso de boletos vencendo (Telegram)...');
+    telegram.notificarTodasEmpresas().catch(e => console.error('Erro Telegram:', e.message));
+  });
+  console.log('⏰ Aviso Telegram de boletos: 08:00');
 }).catch(err => { console.error('Erro ao iniciar banco:', err); process.exit(1); });

@@ -252,6 +252,44 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN dependentes INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN faixa REAL DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN na_folha INTEGER DEFAULT 1'); } catch(e) {}
+  // Notas recebidas via SEFAZ (emitidas contra o CNPJ)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS notas_recebidas (
+    id TEXT PRIMARY KEY,
+    chave TEXT UNIQUE,
+    nsu TEXT DEFAULT '',
+    tipo TEXT DEFAULT 'resumo',
+    numero TEXT DEFAULT '',
+    emitente TEXT DEFAULT '',
+    emitente_cnpj TEXT DEFAULT '',
+    valor REAL DEFAULT 0,
+    data_emissao TEXT DEFAULT '',
+    status TEXT DEFAULT 'nova',
+    manifestada INTEGER DEFAULT 0,
+    duplicatas_json TEXT DEFAULT '[]',
+    itens_json TEXT DEFAULT '[]',
+    xml TEXT DEFAULT '',
+    data_recebimento DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try { dbInstance.run('ALTER TABLE notas_recebidas ADD COLUMN forma_pagamento TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE notas_recebidas ADD COLUMN pagamentos_json TEXT DEFAULT "[]"'); } catch(e) {}
+  // Cadastro de fornecedores (alimentado pelas NF-e + manual)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS fornecedores_cad (
+    id TEXT PRIMARY KEY,
+    cnpj TEXT UNIQUE,
+    razao TEXT DEFAULT '',
+    fantasia TEXT DEFAULT '',
+    ie TEXT DEFAULT '',
+    telefone TEXT DEFAULT '',
+    email TEXT DEFAULT '',
+    responsavel TEXT DEFAULT '',
+    endereco TEXT DEFAULT '',
+    municipio TEXT DEFAULT '',
+    uf TEXT DEFAULT '',
+    cep TEXT DEFAULT '',
+    observacao TEXT DEFAULT '',
+    origem TEXT DEFAULT 'manual',
+    data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -607,6 +645,70 @@ module.exports = {
       [data.id, data.colaborador_id||null, data.mes, data.nome_pdf, data.cadastro||'', data.nome, data.cpf||'', data.cargo||'', data.cbo||'', data.data_admissao||'', data.salario_base||0, data.total_proventos||0, data.total_descontos||0, data.liquido||0, data.fgts_mes||0, data.inss||0, data.irrf||0, data.sal_cont_inss||0, data.bas_calc_fgts||0, data.faixa||0, data.dependentes||0, JSON.stringify(data.proventos||[]), JSON.stringify(data.descontos||[])]);
   },
   delHolerite(slug, id) { run(slug, 'DELETE FROM holerites WHERE id=?', [id]); },
+
+  // -- Notas Recebidas (NF-e SEFAZ) --
+  getNotasRecebidas(slug) { return query(slug, 'SELECT id,chave,nsu,tipo,numero,emitente,emitente_cnpj,valor,data_emissao,status,manifestada,duplicatas_json,itens_json,forma_pagamento,pagamentos_json,data_recebimento FROM notas_recebidas ORDER BY data_emissao DESC, data_recebimento DESC'); },
+  getNotaRecebidaByChave(slug, chave) { const r = query(slug, 'SELECT * FROM notas_recebidas WHERE chave=?', [chave]); return r[0] || null; },
+  getNotaRecebidaById(slug, id) { const r = query(slug, 'SELECT * FROM notas_recebidas WHERE id=?', [id]); return r[0] || null; },
+  addNotaRecebida(slug, n) {
+    run(slug, 'INSERT INTO notas_recebidas (id,chave,nsu,tipo,numero,emitente,emitente_cnpj,valor,data_emissao,status,manifestada,duplicatas_json,itens_json,forma_pagamento,pagamentos_json,xml) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [n.id, n.chave, n.nsu || '', n.tipo || 'resumo', n.numero || '', n.emitente || '', n.emitente_cnpj || '', n.valor || 0, n.data_emissao || '', n.status || 'nova', n.manifestada ? 1 : 0, JSON.stringify(n.duplicatas || []), JSON.stringify(n.itens || []), n.forma_pagamento || '', JSON.stringify(n.pagamentos || []), n.xml || '']);
+  },
+  updateNotaRecebida(slug, id, fields) {
+    const allowed = ['nsu', 'tipo', 'numero', 'emitente', 'emitente_cnpj', 'valor', 'data_emissao', 'status', 'manifestada', 'duplicatas_json', 'itens_json', 'forma_pagamento', 'pagamentos_json', 'xml'];
+    const sets = [], vals = [];
+    for (const [k, v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k + '=?'); vals.push(v); } }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE notas_recebidas SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  delNotaRecebida(slug, id) { run(slug, 'DELETE FROM notas_recebidas WHERE id=?', [id]); },
+
+  // -- Fornecedores (cadastro completo) --
+  getFornecedoresCad(slug) { return query(slug, 'SELECT * FROM fornecedores_cad ORDER BY razao'); },
+  getFornecedorByCnpj(slug, cnpj) { const r = query(slug, 'SELECT * FROM fornecedores_cad WHERE cnpj=?', [cnpj]); return r[0] || null; },
+  addFornecedorCad(slug, f) {
+    run(slug, 'INSERT INTO fornecedores_cad (id,cnpj,razao,fantasia,ie,telefone,email,responsavel,endereco,municipio,uf,cep,observacao,origem) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [f.id, f.cnpj || '', f.razao || '', f.fantasia || '', f.ie || '', f.telefone || '', f.email || '', f.responsavel || '', f.endereco || '', f.municipio || '', f.uf || '', f.cep || '', f.observacao || '', f.origem || 'manual']);
+  },
+  updateFornecedorCad(slug, id, fields) {
+    const allowed = ['cnpj', 'razao', 'fantasia', 'ie', 'telefone', 'email', 'responsavel', 'endereco', 'municipio', 'uf', 'cep', 'observacao'];
+    const sets = [], vals = [];
+    for (const [k, v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k + '=?'); vals.push(v); } }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE fornecedores_cad SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  delFornecedorCad(slug, id) { run(slug, 'DELETE FROM fornecedores_cad WHERE id=?', [id]); },
+  // Upsert vindo da NF-e: cria ou atualiza dados fiscais, preservando campos manuais (email/responsavel/observacao)
+  upsertFornecedorNfe(slug, f) {
+    const exist = this.getFornecedorByCnpj(slug, f.cnpj);
+    if (exist) {
+      const upd = {};
+      if (f.razao) upd.razao = f.razao;
+      if (f.fantasia) upd.fantasia = f.fantasia;
+      if (f.ie) upd.ie = f.ie;
+      if (f.telefone) upd.telefone = f.telefone;
+      if (f.endereco) upd.endereco = f.endereco;
+      if (f.municipio) upd.municipio = f.municipio;
+      if (f.uf) upd.uf = f.uf;
+      if (f.cep) upd.cep = f.cep;
+      if (Object.keys(upd).length) this.updateFornecedorCad(slug, exist.id, upd);
+      return exist.id;
+    }
+    f.origem = 'nfe';
+    this.addFornecedorCad(slug, f);
+    return f.id;
+  },
+
+  // Contas a pagar não pagas vencendo entre duas datas (alertas/Telegram)
+  getContasVencendo(slug, de, ate) {
+    return query(slug, "SELECT id,vencimento,descricao,valor,fornecedor FROM contas_pagar WHERE vencimento>=? AND vencimento<=? AND (pago_por='' OR pago_por='A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [de, ate]);
+  },
+  // Contas similares (possível duplicidade ao aprovar nota)
+  findContasSimilares(slug, vencimento, valor, emitente) {
+    const porValorVenc = query(slug, 'SELECT id,vencimento,descricao,valor,fornecedor,pago_por FROM contas_pagar WHERE vencimento=? AND ABS(valor-?)<0.01', [vencimento, valor]);
+    if (porValorVenc.length) return porValorVenc;
+    const nome = (emitente || '').split(' ')[0];
+    if (nome.length < 3) return [];
+    return query(slug, "SELECT id,vencimento,descricao,valor,fornecedor,pago_por FROM contas_pagar WHERE ABS(valor-?)<0.01 AND (UPPER(fornecedor) LIKE UPPER(?) OR UPPER(descricao) LIKE UPPER(?))", [valor, '%' + nome + '%', '%' + nome + '%']);
+  },
 
   // -- Clear All --
   clearAcerto(slug) { run(slug, 'DELETE FROM acerto'); },

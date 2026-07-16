@@ -57,6 +57,8 @@
             <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
             <li><a href="#" class="nav-link" data-section="conta-dono" id="nav-conta-dono"><i class="fas fa-user-tie"></i><span>Conta do Celso</span></a></li>
             <li><a href="#" class="nav-link" data-section="distribuicao" id="nav-distribuicao"><i class="fas fa-percentage"></i><span>Distribuição</span></a></li>
+            <li><a href="#" class="nav-link" data-section="notas-nfe" id="nav-notas-nfe"><i class="fas fa-file-download"></i><span>Notas CNPJ</span><span class="badge-count" id="badge-nfe" style="display:none;background:var(--blue);color:#fff;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
+            <li><a href="#" class="nav-link" data-section="fornecedores-cad" id="nav-fornecedores-cad"><i class="fas fa-address-book"></i><span>Fornecedores</span></a></li>
             <li><a href="#" class="nav-link" data-section="folha" id="nav-folha"><i class="fas fa-file-invoice-dollar"></i><span>Folha Pagamento</span></a></li>
             <li><a href="#" class="nav-link" data-section="colaboradores" id="nav-colaboradores"><i class="fas fa-users"></i><span>Comissionados</span></a></li>
             <li><a href="#" class="nav-link" data-section="relatorios" id="nav-relatorios"><i class="fas fa-file-alt"></i><span>Relatórios</span></a></li>
@@ -122,6 +124,7 @@
                     <option value="30">30 dias</option>
                 </select>
             </div>
+            <div id="dashAlertasGeral" style="display:none;margin-bottom:16px"></div>
             <div id="alertasContainer"></div>
             <div class="panel mt-20" id="panelSemAlertas" style="display:none">
                 <div style="text-align:center;padding:40px;color:var(--text3)">
@@ -134,6 +137,7 @@
 
         <!-- DASHBOARD -->
         <section class="content-section" id="section-dashboard">
+            <div id="dashAlertas" style="display:none;margin-bottom:16px"></div>
             <div class="cards-grid">
                 <div class="card card-green"><div class="card-icon"><i class="fas fa-arrow-up"></i></div><div class="card-info"><span class="card-label">Lucro Loja</span><span class="card-value" id="dash-receita-loja">R$ 0,00</span></div></div>
                 <div class="card card-blue"><div class="card-icon"><i class="fas fa-pills"></i></div><div class="card-info"><span class="card-label">Saldo Drogaria</span><span class="card-value" id="dash-receita-drogaria">R$ 0,00</span></div></div>
@@ -483,6 +487,133 @@
             <div class="panel mt-20"><h3><i class="fas fa-info-circle"></i> Resumo do Cálculo</h3><div class="calc-summary" id="calcSummary"></div></div>
         </section>
 
+        <!-- NOTAS CNPJ (NF-e SEFAZ) -->
+        <section class="content-section" id="section-notas-nfe">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-file-download"></i> Notas Emitidas Contra o CNPJ</h3>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <button class="btn btn-outline btn-sm" onclick="NR.openNfeConfig()"><i class="fas fa-cog"></i> Configurar</button>
+                        <button class="btn btn-primary btn-sm" id="btnNfeConsultar" onclick="NR.nfeConsultar()"><i class="fas fa-sync-alt"></i> Consultar Agora</button>
+                    </div>
+                </div>
+                <div style="padding:0 24px 16px">
+                    <div class="summary-badges" style="margin-bottom:12px">
+                        <span class="badge badge-amber">Aguardando aprovação: <b id="nfe-qtd-novas">0</b></span>
+                        <span class="badge badge-green">Aprovadas: <b id="nfe-qtd-lancadas">0</b></span>
+                        <span class="badge badge-amber" id="nfe-status-badge" style="display:none"></span>
+                    </div>
+                    <p id="nfe-info" style="margin-bottom:12px;color:var(--text3);font-size:.82rem"></p>
+                    <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="nfe-mostrar-todas" style="width:16px;height:16px" onchange="NR.renderNotasNfe()"> Mostrar ignoradas/aprovadas</label>
+                        <span id="nfe-sel-count" style="font-size:.82rem;color:var(--text3)"></span>
+                        <div id="nfe-sel-actions" style="display:none;gap:8px;margin-left:auto">
+                            <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.aprovarNotasSel()"><i class="fas fa-check-double"></i> Aprovar Selecionadas</button>
+                            <button class="btn btn-sm btn-outline" onclick="NR.ignorarNotasSel()"><i class="fas fa-eye-slash"></i> Ocultar Selecionadas</button>
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto">
+                        <table class="data-table" style="font-size:.82rem"><thead><tr>
+                            <th style="width:34px"><input type="checkbox" id="nfe-sel-all" style="width:16px;height:16px" onchange="NR.toggleAllNotas(this.checked)"></th>
+                            <th>Emissão</th><th>Nº</th><th>Emitente</th><th>CNPJ</th><th>Valor</th><th>Pagamento</th><th>Situação</th><th>Ações</th>
+                        </tr></thead><tbody id="notasNfeGrid"></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- MODAL CONFIG NF-E -->
+        <div class="modal-overlay" id="modalNfeConfig" style="display:none">
+            <div class="modal-card" style="max-width:520px">
+                <div class="modal-header"><h3><i class="fas fa-certificate" style="color:var(--amber)"></i> Configurar NF-e (SEFAZ)</h3><button class="modal-close" onclick="NR.closeNfeConfig()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <p style="margin-bottom:14px;color:var(--text2);font-size:.85rem">O sistema consulta a SEFAZ e baixa automaticamente as notas fiscais emitidas contra o CNPJ da empresa. É necessário o certificado digital A1 (.pfx) da empresa.</p>
+                    <div id="nfe-cfg-status" style="margin-bottom:14px;font-size:.82rem;color:var(--text3)"></div>
+                    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+                        <div class="form-group" style="grid-column:span 2"><label>Certificado A1 (.pfx / .p12)</label><input type="file" id="nfe-pfx" accept=".pfx,.p12"></div>
+                        <div class="form-group"><label>Senha do Certificado</label><input type="password" id="nfe-senha" placeholder="Deixe vazio p/ manter" autocomplete="new-password"></div>
+                        <div class="form-group"><label>CNPJ da Empresa</label><input type="text" id="nfe-cnpj" placeholder="00.000.000/0000-00"></div>
+                        <div class="form-group"><label>UF da Empresa</label><select id="nfe-uf"><option value="31">MG</option><option value="35">SP</option><option value="33">RJ</option><option value="29">BA</option><option value="32">ES</option><option value="52">GO</option><option value="53">DF</option><option value="41">PR</option><option value="42">SC</option><option value="43">RS</option></select></div>
+                        <div class="form-group" style="display:flex;align-items:end;padding-bottom:8px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="nfe-auto" style="width:16px;height:16px"> Consultar automaticamente (a cada hora)</label></div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-outline" onclick="NR.closeNfeConfig()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.salvarNfeConfig()"><i class="fas fa-check"></i> Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- MODAL LANÇAR NOTA -->
+        <div class="modal-overlay" id="modalLancarNota" style="display:none">
+            <div class="modal-card" style="max-width:640px">
+                <div class="modal-header"><h3><i class="fas fa-check-double" style="color:var(--green)"></i> Conferir e Aprovar Nota</h3><button class="modal-close" onclick="NR.closeLancarNota()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <p id="lancarNotaInfo" style="margin-bottom:12px;color:var(--text2);font-size:.88rem"></p>
+                    <div id="lancarNotaSimilares" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(245,158,11,.12);border:1px solid var(--amber);border-radius:8px;font-size:.82rem"></div>
+                    <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
+                        <div class="form-group"><label>Categoria</label><input type="text" id="ln-cat" list="parc-cat-list" autocomplete="off"></div>
+                        <div class="form-group"><label>Fornecedor</label><input type="text" id="ln-forn" list="parc-forn-list" autocomplete="off"></div>
+                    </div>
+                    <div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="ln-recorrente" checked style="width:16px;height:16px"> <i class="fas fa-sync-alt" style="color:var(--blue)"></i> Recorrente</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="ln-boleto" style="width:16px;height:16px"> <i class="fas fa-file-invoice" style="color:var(--green)"></i> Boleto já Chegou</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="ln-achegar" style="width:16px;height:16px"> <i class="fas fa-truck-loading" style="color:var(--amber)"></i> Produto a Chegar</label>
+                    </div>
+                    <div style="max-height:260px;overflow-y:auto">
+                        <table class="data-table" style="font-size:.85rem"><thead><tr><th>#</th><th>Vencimento</th><th>Descrição</th><th>Valor</th><th style="width:40px"></th></tr></thead><tbody id="lancarNotaParcelas"></tbody></table>
+                    </div>
+                    <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="NR.addParcelaNota()"><i class="fas fa-plus"></i> Adicionar Parcela</button>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-outline" onclick="NR.closeLancarNota()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.confirmarLancarNota()" style="background:var(--green)"><i class="fas fa-check-double"></i> Aprovar → Contas a Pagar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FORNECEDORES (CADASTRO) -->
+        <section class="content-section" id="section-fornecedores-cad">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-address-book"></i> Fornecedores</h3>
+                    <button class="btn btn-primary btn-sm" onclick="NR.openCadForn()"><i class="fas fa-plus"></i> Cadastrar Manual</button>
+                </div>
+                <div style="padding:0 24px 16px">
+                    <p style="margin-bottom:12px;color:var(--text3);font-size:.82rem"><i class="fas fa-magic" style="color:var(--blue)"></i> Fornecedores são cadastrados automaticamente a partir das notas fiscais recebidas (razão social, CNPJ, telefone, endereço). E-mail e responsável você completa manualmente.</p>
+                    <div style="margin-bottom:14px"><input type="text" id="forn-busca" placeholder="🔍 Buscar por nome, CNPJ, cidade, telefone..." style="width:100%;max-width:420px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" oninput="NR.renderFornecedoresCad()"></div>
+                    <div style="overflow-x:auto">
+                        <table class="data-table" style="font-size:.82rem"><thead><tr>
+                            <th>Razão Social / Fantasia</th><th>CNPJ</th><th>Telefone</th><th>E-mail</th><th>Responsável</th><th>Cidade/UF</th><th>Origem</th><th>Ações</th>
+                        </tr></thead><tbody id="fornCadGrid"></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- MODAL CADASTRO FORNECEDOR -->
+        <div class="modal-overlay" id="modalCadForn" style="display:none">
+            <div class="modal-card" style="max-width:620px">
+                <div class="modal-header"><h3 id="cadFornTitulo"><i class="fas fa-address-book"></i> Cadastrar Fornecedor</h3><button class="modal-close" onclick="NR.closeCadForn()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+                        <div class="form-group" style="grid-column:span 2"><label>Razão Social *</label><input type="text" id="cf-razao"></div>
+                        <div class="form-group"><label>Nome Fantasia</label><input type="text" id="cf-fantasia"></div>
+                        <div class="form-group"><label>CNPJ</label><input type="text" id="cf-cnpj" placeholder="00.000.000/0000-00"></div>
+                        <div class="form-group"><label>Telefone</label><input type="text" id="cf-telefone"></div>
+                        <div class="form-group"><label>E-mail</label><input type="email" id="cf-email"></div>
+                        <div class="form-group"><label>Responsável / Contato</label><input type="text" id="cf-responsavel"></div>
+                        <div class="form-group"><label>Inscrição Estadual</label><input type="text" id="cf-ie"></div>
+                        <div class="form-group" style="grid-column:span 2"><label>Endereço</label><input type="text" id="cf-endereco"></div>
+                        <div class="form-group"><label>Município</label><input type="text" id="cf-municipio"></div>
+                        <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>UF</label><input type="text" id="cf-uf" maxlength="2" style="width:100%"></div><div><label>CEP</label><input type="text" id="cf-cep" style="width:100%"></div></div>
+                        <div class="form-group" style="grid-column:span 2"><label>Observações</label><input type="text" id="cf-obs" placeholder="Ex: falar com João no setor de vendas"></div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-outline" onclick="NR.closeCadForn()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.salvarCadForn()"><i class="fas fa-check"></i> Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- FOLHA DE PAGAMENTO -->
         <section class="content-section" id="section-folha">
             <div class="panel">
@@ -616,6 +747,22 @@
         <!-- CONFIGURAÇÕES -->
         <section class="content-section" id="section-configuracoes">
             <div class="panel" id="corPickerBox" style="margin-bottom:20px"></div>
+            <div class="panel" style="margin-bottom:20px">
+                <h3><i class="fab fa-telegram" style="color:#2AABEE"></i> Notificações Telegram</h3>
+                <p class="config-desc">Receba avisos no Telegram: crie um bot com o @BotFather, cole o token aqui, mande uma mensagem pro bot e clique em "Detectar Chat ID".</p>
+                <div class="form-grid mt-20" style="grid-template-columns:1fr 1fr">
+                    <div class="form-group"><label>Token do Bot</label><input type="password" id="tg-token" placeholder="123456:ABC-DEF..." autocomplete="new-password"></div>
+                    <div class="form-group"><label>Chat ID <button type="button" class="btn btn-outline btn-sm" style="margin-left:6px;padding:2px 8px;font-size:11px" onclick="NR.detectarChatId()">Detectar Chat ID</button></label><input type="text" id="tg-chatid" placeholder="Ex: 123456789"></div>
+                    <div class="form-group" style="grid-column:span 2;display:flex;gap:18px;flex-wrap:wrap">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="tg-notif-notas" style="width:16px;height:16px"> Avisar notas novas contra o CNPJ</label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="tg-notif-boletos" style="width:16px;height:16px"> Avisar boletos vencendo (08:00, hoje e amanhã)</label>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:8px">
+                    <button class="btn btn-primary btn-sm" onclick="NR.salvarTelegram()"><i class="fas fa-check"></i> Salvar</button>
+                    <button class="btn btn-outline btn-sm" onclick="NR.testarTelegram()"><i class="fas fa-paper-plane"></i> Enviar Teste</button>
+                </div>
+            </div>
             <div class="panel">
                 <h3><i class="fas fa-sliders-h"></i> Percentuais de Distribuição</h3>
                 <p class="config-desc">Distribuição do lucro total. Comissões são calculadas separadamente sobre o lucro da Loja.</p>
@@ -931,6 +1078,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=58"></script>
+    <script src="app.js?v=62"></script>
 </body>
 </html>

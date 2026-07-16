@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -810,7 +810,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha()]);await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -928,7 +928,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -2078,6 +2078,344 @@ async function toggleNaFolha(id,v){
   renderFolha();
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,addFolhaColab,updateFolhaField,delFolhaItem,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha};
+// === NOTAS CNPJ (NF-e SEFAZ) ===
+let notasNfe=[];
+function fmtCnpj(c){c=(c||'').replace(/\D/g,'');if(c.length!==14)return c;return c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');}
+async function renderNotasNfe(){
+  if(!document.getElementById('notasNfeGrid'))return;
+  try{notasNfe=await api('GET','/api/notas-recebidas');}catch(e){notasNfe=[];}
+  let mostrarTodas=document.getElementById('nfe-mostrar-todas').checked;
+  let novas=notasNfe.filter(n=>n.status==='nova').length;
+  let lancadas=notasNfe.filter(n=>n.status==='lancada').length;
+  document.getElementById('nfe-qtd-novas').textContent=novas;
+  document.getElementById('nfe-qtd-lancadas').textContent=lancadas;
+  let navBadge=document.getElementById('badge-nfe');
+  if(navBadge){if(novas){navBadge.textContent=novas;navBadge.style.display='inline';}else{navBadge.style.display='none';}}
+  let lista=mostrarTodas?notasNfe:notasNfe.filter(n=>n.status==='nova');
+  let statusLbl={'nova':'<span style="color:var(--amber)"><i class="fas fa-hourglass-half"></i> Aguardando aprovação</span>','lancada':'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Aprovada</span>','ignorada':'<span style="color:var(--text3)"><i class="fas fa-eye-slash"></i> Ignorada</span>'};
+  document.getElementById('notasNfeGrid').innerHTML=lista.length?lista.map(n=>{
+    let dups=[];try{dups=JSON.parse(n.duplicatas_json||'[]');}catch(e){}
+    let pagInfo;
+    if(n.tipo==='resumo')pagInfo='<span style="color:var(--amber)" title="Aguardando XML completo da SEFAZ (chega na próxima consulta)"><i class="fas fa-hourglass-half"></i> aguardando XML</span>';
+    else pagInfo='<span title="'+dups.map(d=>fD(d.vencimento)+': '+fmt(d.valor)).join('&#10;')+'">'+(n.forma_pagamento||(dups.length>1?dups.length+'x':'à vista'))+'</span>';
+    let acoes='';
+    if(n.status==='nova'){
+      acoes='<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.openLancarNota(\''+n.id+'\')" title="Conferir e Aprovar"><i class="fas fa-check-double"></i> Aprovar</button> '
+        +'<button class="btn btn-sm btn-outline" onclick="NR.ignorarNota(\''+n.id+'\',\'ignorada\')" title="Ignorar"><i class="fas fa-eye-slash"></i></button>';
+    }else if(n.status==='ignorada'){
+      acoes='<button class="btn btn-sm btn-outline" onclick="NR.ignorarNota(\''+n.id+'\',\'nova\')" title="Restaurar"><i class="fas fa-undo"></i></button>';
+    }
+    if(n.tipo==='completa')acoes+=' <button class="btn btn-sm btn-outline" onclick="NR.baixarXmlNota(\''+n.id+'\')" title="Baixar XML da nota"><i class="fas fa-file-code"></i></button>';
+    return '<tr'+(n.status!=='nova'?' style="opacity:.55"':'')+'><td><input type="checkbox" class="nfe-sel-cb" value="'+n.id+'" style="width:16px;height:16px" onchange="NR.updateNotasSel()"></td><td style="white-space:nowrap">'+fD(n.data_emissao)+'</td><td>'+(n.numero||'-')+'</td><td><b>'+n.emitente+'</b></td><td style="white-space:nowrap;font-size:11px">'+fmtCnpj(n.emitente_cnpj)+'</td><td style="font-weight:bold">'+fmt(n.valor)+'</td><td>'+pagInfo+'</td><td>'+(statusLbl[n.status]||n.status)+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
+  }).join(''):'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-inbox" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>Nenhuma nota aguardando aprovação. Configure o certificado e clique em "Consultar Agora".</td></tr>';
+  document.getElementById('nfe-sel-all').checked=false;
+  updateNotasSel();
+  // Info da config (só admin consegue; ignora erro para os demais)
+  try{
+    let cfg=await api('GET','/api/nfe/config');
+    let info=[];
+    if(!cfg.temCert)info.push('⚠️ Certificado não enviado');
+    if(cfg.ultimaConsulta)info.push('Última consulta: '+new Date(cfg.ultimaConsulta).toLocaleString('pt-BR'));
+    if(cfg.auto)info.push('Consulta automática ativa (a cada hora)');
+    document.getElementById('nfe-info').textContent=info.join(' | ');
+    let badge=document.getElementById('nfe-status-badge');
+    if(cfg.ultimoErro){badge.style.display='';badge.innerHTML='<i class="fas fa-exclamation-triangle"></i> '+cfg.ultimoErro;}
+    else badge.style.display='none';
+  }catch(e){}
+}
+async function nfeConsultar(){
+  let btn=document.getElementById('btnNfeConsultar');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Consultando SEFAZ...';
+  try{
+    let r=await api('POST','/api/nfe/consultar',{});
+    if(r.error)toast('Erro: '+r.error,'error');
+    else toast(r.novas+' nota(s) nova(s), '+r.atualizadas+' completada(s)');
+  }catch(e){toast('Erro ao consultar','error');}
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-sync-alt"></i> Consultar Agora';
+  renderNotasNfe();
+}
+async function openNfeConfig(){
+  try{
+    let cfg=await api('GET','/api/nfe/config');
+    document.getElementById('nfe-cnpj').value=cfg.cnpj||'';
+    document.getElementById('nfe-uf').value=cfg.uf||'31';
+    document.getElementById('nfe-auto').checked=!!cfg.auto;
+    document.getElementById('nfe-senha').value='';
+    document.getElementById('nfe-pfx').value='';
+    let st=[];
+    st.push(cfg.temCert?'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Certificado enviado</span>':'<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Certificado ainda não enviado</span>');
+    st.push(cfg.temSenha?'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Senha salva</span>':'<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Senha não salva</span>');
+    if(cfg.ultimaConsulta)st.push('Última consulta: '+new Date(cfg.ultimaConsulta).toLocaleString('pt-BR'));
+    document.getElementById('nfe-cfg-status').innerHTML=st.join('<br>');
+  }catch(e){toast('Apenas administradores podem configurar','error');return;}
+  document.getElementById('modalNfeConfig').style.display='flex';
+}
+function closeNfeConfig(){document.getElementById('modalNfeConfig').style.display='none';}
+async function salvarNfeConfig(){
+  let fd=new FormData();
+  let pfx=document.getElementById('nfe-pfx').files[0];
+  if(pfx)fd.append('pfx',pfx);
+  let senha=document.getElementById('nfe-senha').value;
+  if(senha)fd.append('senha',senha);
+  fd.append('cnpj',document.getElementById('nfe-cnpj').value);
+  fd.append('uf',document.getElementById('nfe-uf').value);
+  fd.append('auto',document.getElementById('nfe-auto').checked?'1':'0');
+  try{
+    let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
+    let r=await fetch('/api/nfe/config',{method:'POST',headers:hdrs,body:fd});
+    let data=await r.json();
+    if(data.error){toast('Erro: '+data.error,'error');return;}
+    toast('Configuração salva!');closeNfeConfig();renderNotasNfe();
+  }catch(e){toast('Erro ao salvar','error');}
+}
+let lancarNotaId=null,lancarNotaParcelas=[];
+function openLancarNota(id){
+  let n=notasNfe.find(x=>x.id===id);if(!n)return;
+  if(n.tipo==='resumo'){toast('XML completo ainda não chegou. Clique em "Consultar Agora" para buscar (a SEFAZ libera após a ciência).','error');return;}
+  lancarNotaId=id;
+  let dups=[];try{dups=JSON.parse(n.duplicatas_json||'[]');}catch(e){}
+  let descBase=(n.emitente||'Nota')+(n.numero?' NF '+n.numero:'');
+  if(dups.length){
+    lancarNotaParcelas=dups.map((d,i)=>({vencimento:d.vencimento||'',valor:d.valor||0,descricao:descBase+' '+(i+1)+'/'+dups.length}));
+  }else{
+    lancarNotaParcelas=[{vencimento:n.data_emissao||'',valor:n.valor||0,descricao:descBase}];
+  }
+  document.getElementById('lancarNotaInfo').innerHTML='<b>'+n.emitente+'</b> — NF '+(n.numero||'-')+' — Total: <b style="color:var(--green)">'+fmt(n.valor)+'</b>'
+    +(n.forma_pagamento?'<br><i class="fas fa-credit-card" style="color:var(--blue)"></i> Pagamento: <b>'+n.forma_pagamento+'</b>':'')
+    +(dups.length?' — '+dups.length+' parcela(s) vindas do XML da nota':'');
+  document.getElementById('ln-cat').value='';
+  document.getElementById('ln-forn').value=n.emitente||'';
+  document.getElementById('ln-recorrente').checked=true;
+  document.getElementById('ln-boleto').checked=dups.length>0;
+  document.getElementById('ln-achegar').checked=false;
+  renderLancarNotaParcelas();
+  // Verificar possível duplicidade com contas já lançadas
+  let simBox=document.getElementById('lancarNotaSimilares');
+  simBox.style.display='none';
+  api('GET','/api/notas-recebidas/'+id+'/similares').then(sims=>{
+    if(sims&&sims.length){
+      simBox.innerHTML='<b style="color:var(--amber)"><i class="fas fa-exclamation-triangle"></i> Atenção: já existe(m) '+sims.length+' conta(s) parecida(s) lançada(s):</b><br>'
+        +sims.slice(0,5).map(s=>'• '+fD(s.vencimento)+' — '+s.descricao+' — '+fmt(s.valor)+(s.pago_por&&s.pago_por!=='A Pagar'?' <span style="color:var(--green)">(paga)</span>':'')).join('<br>')
+        +(sims.length>5?'<br>... e mais '+(sims.length-5):'')
+        +'<br><span style="color:var(--text3)">Confira antes de aprovar para não duplicar.</span>';
+      simBox.style.display='';
+    }
+  }).catch(()=>{});
+  document.getElementById('modalLancarNota').style.display='flex';
+}
+function renderLancarNotaParcelas(){
+  document.getElementById('lancarNotaParcelas').innerHTML=lancarNotaParcelas.map((p,i)=>
+    '<tr><td><b>'+(i+1)+'</b></td>'
+    +'<td><input type="date" class="inline-input" value="'+p.vencimento+'" style="width:140px" onchange="NR.setParcelaNota('+i+',\'vencimento\',this.value)"></td>'
+    +'<td><input type="text" class="inline-input" value="'+p.descricao.replace(/"/g,'&quot;')+'" style="width:100%" onchange="NR.setParcelaNota('+i+',\'descricao\',this.value)"></td>'
+    +'<td><input type="number" class="inline-input" value="'+p.valor+'" step="0.01" style="width:90px" onchange="NR.setParcelaNota('+i+',\'valor\',this.value)"></td>'
+    +'<td><button class="btn btn-sm btn-danger" onclick="NR.removeParcelaNota('+i+')"><i class="fas fa-times"></i></button></td></tr>'
+  ).join('');
+}
+function setParcelaNota(i,campo,valor){if(campo==='valor')lancarNotaParcelas[i][campo]=parseFloat(valor)||0;else lancarNotaParcelas[i][campo]=valor;}
+function addParcelaNota(){
+  let ult=lancarNotaParcelas[lancarNotaParcelas.length-1]||{vencimento:'',valor:0,descricao:''};
+  lancarNotaParcelas.push({vencimento:ult.vencimento,valor:ult.valor,descricao:ult.descricao});
+  renderLancarNotaParcelas();
+}
+function removeParcelaNota(i){lancarNotaParcelas.splice(i,1);renderLancarNotaParcelas();}
+function closeLancarNota(){document.getElementById('modalLancarNota').style.display='none';lancarNotaId=null;}
+async function confirmarLancarNota(){
+  if(!lancarNotaId||!lancarNotaParcelas.length){toast('Nenhuma parcela','error');return;}
+  for(let p of lancarNotaParcelas){if(!p.vencimento){toast('Preencha o vencimento de todas as parcelas','error');return;}}
+  let r=await api('POST','/api/notas-recebidas/'+lancarNotaId+'/lancar',{
+    parcelas:lancarNotaParcelas,
+    categoria:document.getElementById('ln-cat').value,
+    fornecedor:document.getElementById('ln-forn').value,
+    recorrente:document.getElementById('ln-recorrente').checked,
+    boleto_chegou:document.getElementById('ln-boleto').checked,
+    a_chegar:document.getElementById('ln-achegar').checked
+  });
+  if(r&&r.error){toast('Erro: '+r.error,'error');return;}
+  toast((r.criadas||0)+' conta(s) lançada(s)!');
+  closeLancarNota();refreshAll();
+}
+async function ignorarNota(id,status){
+  await api('PUT','/api/notas-recebidas/'+id,{status:status});
+  toast(status==='ignorada'?'Nota ignorada':'Nota restaurada');
+  renderNotasNfe();
+}
+// Seleção em massa de notas
+function toggleAllNotas(checked){document.querySelectorAll('.nfe-sel-cb').forEach(cb=>cb.checked=checked);updateNotasSel();}
+function updateNotasSel(){
+  let sel=document.querySelectorAll('.nfe-sel-cb:checked').length;
+  let el=document.getElementById('nfe-sel-count');
+  let bar=document.getElementById('nfe-sel-actions');
+  if(el)el.textContent=sel?sel+' selecionada(s)':'';
+  if(bar)bar.style.display=sel?'flex':'none';
+}
+function getNotasSel(){return [...document.querySelectorAll('.nfe-sel-cb:checked')].map(cb=>cb.value);}
+async function aprovarNotasSel(){
+  let ids=getNotasSel();
+  if(!ids.length){toast('Selecione ao menos uma nota','error');return;}
+  if(!confirm('Aprovar '+ids.length+' nota(s) e lançar em Contas a Pagar?\n\nAs parcelas serão criadas com os vencimentos e valores do XML de cada nota.'))return;
+  let r=await api('POST','/api/notas-recebidas/aprovar-multi',{ids});
+  if(r&&r.error){toast('Erro: '+r.error,'error');return;}
+  let msg=r.aprovadas+' aprovada(s)';
+  if(r.duplicadas)msg+=' | '+r.duplicadas+' pulada(s) por possível duplicidade (aprove manualmente)';
+  if(r.semXml)msg+=' | '+r.semXml+' aguardando XML';
+  toast(msg,r.duplicadas||r.semXml?'info':undefined);
+  refreshAll();
+}
+async function ignorarNotasSel(){
+  let ids=getNotasSel();
+  if(!ids.length){toast('Selecione ao menos uma nota','error');return;}
+  if(!confirm('Ocultar '+ids.length+' nota(s)? Elas saem da lista mas podem ser restauradas.'))return;
+  await api('PUT','/api/notas-recebidas-multi',{ids,status:'ignorada'});
+  toast(ids.length+' nota(s) ocultada(s)');
+  renderNotasNfe();
+}
+async function baixarXmlNota(id){
+  try{
+    let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
+    let r=await fetch('/api/notas-recebidas/'+id+'/xml',{headers:hdrs});
+    if(!r.ok){toast('XML não disponível','error');return;}
+    let blob=await r.blob();
+    let n=notasNfe.find(x=>x.id===id);
+    let a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='NFe_'+(n&&n.numero?n.numero+'_':'')+(n?n.chave:id)+'.xml';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){toast('Erro ao baixar XML','error');}
+}
+
+// === FORNECEDORES (CADASTRO) ===
+let fornecedoresCad=[];
+async function renderFornecedoresCad(){
+  if(!document.getElementById('fornCadGrid'))return;
+  try{fornecedoresCad=await api('GET','/api/fornecedores-cad');}catch(e){fornecedoresCad=[];}
+  let busca=(document.getElementById('forn-busca').value||'').toLowerCase();
+  let lista=busca?fornecedoresCad.filter(f=>((f.razao||'')+' '+(f.fantasia||'')+' '+(f.cnpj||'')+' '+(f.municipio||'')+' '+(f.telefone||'')+' '+(f.responsavel||'')).toLowerCase().includes(busca)):fornecedoresCad;
+  document.getElementById('fornCadGrid').innerHTML=lista.length?lista.map(f=>{
+    let tel=f.telefone?'<a href="tel:'+f.telefone.replace(/\D/g,'')+'" style="color:var(--blue)"><i class="fas fa-phone"></i> '+f.telefone+'</a>':'-';
+    let mail=f.email?'<a href="mailto:'+f.email+'" style="color:var(--blue)">'+f.email+'</a>':'-';
+    let origem=f.origem==='nfe'?'<span title="Cadastrado automaticamente pela nota fiscal" style="color:var(--blue)"><i class="fas fa-magic"></i> NF-e</span>':'<span style="color:var(--text3)">Manual</span>';
+    return '<tr><td><b>'+(f.razao||'-')+'</b>'+(f.fantasia?'<br><span style="font-size:11px;color:var(--text3)">'+f.fantasia+'</span>':'')+'</td>'
+      +'<td style="white-space:nowrap;font-size:11px">'+fmtCnpj(f.cnpj)+'</td>'
+      +'<td style="white-space:nowrap">'+tel+'</td><td>'+mail+'</td><td>'+(f.responsavel||'-')+'</td>'
+      +'<td>'+(f.municipio?f.municipio+(f.uf?'/'+f.uf:''):'-')+'</td><td>'+origem+'</td>'
+      +'<td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="NR.editFornCad(\''+f.id+'\')" title="Editar / completar dados"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="NR.delFornCad(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-address-book" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>'+(busca?'Nenhum fornecedor encontrado na busca.':'Nenhum fornecedor ainda. Eles são cadastrados automaticamente quando as notas chegam.')+'</td></tr>';
+}
+function openCadForn(){
+  ['razao','fantasia','cnpj','telefone','email','responsavel','ie','endereco','municipio','uf','cep','obs'].forEach(k=>document.getElementById('cf-'+k).value='');
+  delete document.getElementById('modalCadForn').dataset.editId;
+  document.getElementById('cadFornTitulo').innerHTML='<i class="fas fa-address-book"></i> Cadastrar Fornecedor';
+  document.getElementById('modalCadForn').style.display='flex';
+}
+function closeCadForn(){document.getElementById('modalCadForn').style.display='none';}
+function editFornCad(id){
+  let f=fornecedoresCad.find(x=>x.id===id);if(!f)return;
+  document.getElementById('cf-razao').value=f.razao||'';
+  document.getElementById('cf-fantasia').value=f.fantasia||'';
+  document.getElementById('cf-cnpj').value=f.cnpj||'';
+  document.getElementById('cf-telefone').value=f.telefone||'';
+  document.getElementById('cf-email').value=f.email||'';
+  document.getElementById('cf-responsavel').value=f.responsavel||'';
+  document.getElementById('cf-ie').value=f.ie||'';
+  document.getElementById('cf-endereco').value=f.endereco||'';
+  document.getElementById('cf-municipio').value=f.municipio||'';
+  document.getElementById('cf-uf').value=f.uf||'';
+  document.getElementById('cf-cep').value=f.cep||'';
+  document.getElementById('cf-obs').value=f.observacao||'';
+  document.getElementById('modalCadForn').dataset.editId=id;
+  document.getElementById('cadFornTitulo').innerHTML='<i class="fas fa-edit"></i> Editar Fornecedor';
+  document.getElementById('modalCadForn').style.display='flex';
+}
+async function salvarCadForn(){
+  let dados={
+    razao:document.getElementById('cf-razao').value.trim(),
+    fantasia:document.getElementById('cf-fantasia').value.trim(),
+    cnpj:document.getElementById('cf-cnpj').value.trim(),
+    telefone:document.getElementById('cf-telefone').value.trim(),
+    email:document.getElementById('cf-email').value.trim(),
+    responsavel:document.getElementById('cf-responsavel').value.trim(),
+    ie:document.getElementById('cf-ie').value.trim(),
+    endereco:document.getElementById('cf-endereco').value.trim(),
+    municipio:document.getElementById('cf-municipio').value.trim(),
+    uf:document.getElementById('cf-uf').value.trim().toUpperCase(),
+    cep:document.getElementById('cf-cep').value.trim(),
+    observacao:document.getElementById('cf-obs').value.trim()
+  };
+  if(!dados.razao){toast('Razão social obrigatória','error');return;}
+  let editId=document.getElementById('modalCadForn').dataset.editId;
+  if(editId)await api('PUT','/api/fornecedores-cad/'+editId,dados);
+  else await api('POST','/api/fornecedores-cad',dados);
+  toast(editId?'Fornecedor atualizado!':'Fornecedor cadastrado!');
+  closeCadForn();renderFornecedoresCad();
+}
+async function delFornCad(id){
+  if(!confirm('Excluir este fornecedor do cadastro?'))return;
+  await api('DELETE','/api/fornecedores-cad/'+id);toast('Excluído!');renderFornecedoresCad();
+}
+
+// === ALERTAS DASHBOARD ===
+async function renderAlertas(){
+  let boxes=[document.getElementById('dashAlertas'),document.getElementById('dashAlertasGeral')].filter(Boolean);
+  if(!boxes.length)return;
+  try{
+    let a=await api('GET','/api/alertas');
+    let cards=[];
+    if(a.notasNovas)cards.push('<div onclick="document.getElementById(\'nav-notas-nfe\').click()" style="cursor:pointer;flex:1;min-width:220px;background:rgba(59,130,246,.12);border:1px solid var(--blue);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px"><i class="fas fa-file-download" style="font-size:1.4rem;color:var(--blue)"></i><div><b style="font-size:1.1rem">'+a.notasNovas+'</b> nota(s) fiscal(is) aguardando aprovação</div></div>');
+    if(a.boletosHoje.length){
+      let tot=a.boletosHoje.reduce((s,c)=>s+(c.valor||0),0);
+      cards.push('<div onclick="document.getElementById(\'nav-contas-pagar\').click()" style="cursor:pointer;flex:1;min-width:220px;background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px"><i class="fas fa-exclamation-circle" style="font-size:1.4rem;color:var(--red)"></i><div><b style="font-size:1.1rem">'+a.boletosHoje.length+'</b> boleto(s) vencendo <b>HOJE</b> — '+fmt(tot)+'</div></div>');
+    }
+    if(a.boletosAmanha.length){
+      let tot=a.boletosAmanha.reduce((s,c)=>s+(c.valor||0),0);
+      cards.push('<div onclick="document.getElementById(\'nav-contas-pagar\').click()" style="cursor:pointer;flex:1;min-width:220px;background:rgba(245,158,11,.12);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px"><i class="fas fa-clock" style="font-size:1.4rem;color:var(--amber)"></i><div><b style="font-size:1.1rem">'+a.boletosAmanha.length+'</b> boleto(s) vencendo amanhã — '+fmt(tot)+'</div></div>');
+    }
+    let html=cards.length?'<div style="display:flex;gap:12px;flex-wrap:wrap">'+cards.join('')+'</div>':'';
+    boxes.forEach(box=>{if(cards.length){box.innerHTML=html;box.style.display='';}else box.style.display='none';});
+  }catch(e){boxes.forEach(box=>box.style.display='none');}
+}
+
+// === TELEGRAM ===
+function fillTelegramCfg(){
+  let el=document.getElementById('tg-token');
+  if(!el||document.activeElement===el)return;
+  el.value=CFG.tg_token||'';
+  let ch=document.getElementById('tg-chatid');
+  if(ch&&document.activeElement!==ch)ch.value=CFG.tg_chat_id||'';
+  document.getElementById('tg-notif-notas').checked=CFG.tg_notif_notas==='1';
+  document.getElementById('tg-notif-boletos').checked=CFG.tg_notif_boletos==='1';
+}
+async function salvarTelegram(){
+  await api('PUT','/api/config',{
+    tg_token:document.getElementById('tg-token').value.trim(),
+    tg_chat_id:document.getElementById('tg-chatid').value.trim(),
+    tg_notif_notas:document.getElementById('tg-notif-notas').checked?'1':'0',
+    tg_notif_boletos:document.getElementById('tg-notif-boletos').checked?'1':'0'
+  });
+  toast('Configuração do Telegram salva!');
+}
+async function testarTelegram(){
+  await salvarTelegram();
+  let r=await api('POST','/api/telegram/testar',{});
+  if(r&&r.error)toast('Erro: '+r.error,'error');
+  else toast('Mensagem de teste enviada! Confira o Telegram.');
+}
+async function detectarChatId(){
+  let token=document.getElementById('tg-token').value.trim();
+  if(!token){toast('Cole o token do bot primeiro','error');return;}
+  try{
+    let r=await fetch('https://api.telegram.org/bot'+token+'/getUpdates');
+    let data=await r.json();
+    if(!data.ok){toast('Token inválido','error');return;}
+    let msgs=(data.result||[]).filter(u=>u.message&&u.message.chat);
+    if(!msgs.length){toast('Mande uma mensagem qualquer para o bot no Telegram e clique de novo','error');return;}
+    let chat=msgs[msgs.length-1].message.chat;
+    document.getElementById('tg-chatid').value=chat.id;
+    toast('Chat ID detectado: '+chat.id+' ('+(chat.first_name||chat.title||'')+')');
+  }catch(e){toast('Erro ao consultar Telegram','error');}
+}
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,addFolhaColab,updateFolhaField,delFolhaItem,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId};
 checkAuth();
 })();
