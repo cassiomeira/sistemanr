@@ -140,6 +140,7 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN caixa_id INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN a_chegar INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN grupo_parcela TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN linha_digitavel TEXT DEFAULT ""'); } catch(e) {}
   // Controle Fiscal
   dbInstance.run(`CREATE TABLE IF NOT EXISTS controle_fiscal (
     id TEXT PRIMARY KEY, data TEXT NOT NULL,
@@ -480,8 +481,8 @@ module.exports = {
     return query(slug, 'SELECT * FROM contas_pagar ORDER BY vencimento DESC');
   },
   addContaPagar(slug, item) {
-    run(slug, 'INSERT INTO contas_pagar (id,vencimento,descricao,valor,recorrente,boleto_chegou,pago_por,categoria,tipo_nota,fornecedor,a_chegar,grupo_parcela) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-      [item.id, item.vencimento, item.descricao, item.valor, item.recorrente ? 1 : 0, item.boleto_chegou ? 1 : 0, item.pago_por || '', item.categoria || 'Outros', item.tipo_nota || '', item.fornecedor || '', item.a_chegar ? 1 : 0, item.grupo_parcela || '']);
+    run(slug, 'INSERT INTO contas_pagar (id,vencimento,descricao,valor,recorrente,boleto_chegou,pago_por,categoria,tipo_nota,fornecedor,a_chegar,grupo_parcela,linha_digitavel) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [item.id, item.vencimento, item.descricao, item.valor, item.recorrente ? 1 : 0, item.boleto_chegou ? 1 : 0, item.pago_por || '', item.categoria || 'Outros', item.tipo_nota || '', item.fornecedor || '', item.a_chegar ? 1 : 0, item.grupo_parcela || '', item.linha_digitavel || '']);
   },
   updateContaPagar(slug, id, fields) {
     const sets = [], vals = [];

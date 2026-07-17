@@ -2081,9 +2081,10 @@ async function toggleNaFolha(id,v){
 // === NOTAS CNPJ (NF-e SEFAZ) ===
 let notasNfe=[];
 function fmtCnpj(c){c=(c||'').replace(/\D/g,'');if(c.length!==14)return c;return c.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');}
-async function renderNotasNfe(){
+function filtrarNotas(){renderNotasNfe(true);}
+async function renderNotasNfe(semFetch){
   if(!document.getElementById('notasNfeGrid'))return;
-  try{notasNfe=await api('GET','/api/notas-recebidas');}catch(e){notasNfe=[];}
+  if(!semFetch){try{notasNfe=await api('GET','/api/notas-recebidas');}catch(e){notasNfe=[];}}
   let mostrarTodas=document.getElementById('nfe-mostrar-todas').checked;
   let novas=notasNfe.filter(n=>n.status==='nova').length;
   let lancadas=notasNfe.filter(n=>n.status==='lancada').length;
@@ -2092,6 +2093,23 @@ async function renderNotasNfe(){
   let navBadge=document.getElementById('badge-nfe');
   if(navBadge){if(novas){navBadge.textContent=novas;navBadge.style.display='inline';}else{navBadge.style.display='none';}}
   let lista=mostrarTodas?notasNfe:notasNfe.filter(n=>n.status==='nova');
+  let busca=(document.getElementById('nfe-busca')?.value||'').trim().toLowerCase();
+  if(busca){
+    lista=lista.filter(n=>{
+      let dups=[];try{dups=JSON.parse(n.duplicatas_json||'[]');}catch(e){}
+      let campos=[
+        (n.numero||''),
+        (n.emitente||''),
+        (n.emitente_cnpj||''),
+        (n.valor||0).toFixed(2),                       // 3345.49
+        (n.valor||0).toFixed(2).replace('.',','),      // 3345,49
+        fD(n.data_emissao||''),                        // dd/mm/aaaa
+        (n.data_emissao||''),                          // aaaa-mm-dd
+        dups.map(d=>fD(d.vencimento)+' '+(d.vencimento||'')+' '+(d.valor||0).toFixed(2).replace('.',',')).join(' ')
+      ].join(' ').toLowerCase();
+      return campos.includes(busca);
+    });
+  }
   let statusLbl={'nova':'<span style="color:var(--amber)"><i class="fas fa-hourglass-half"></i> Aguardando aprovação</span>','lancada':'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Aprovada</span>','ignorada':'<span style="color:var(--text3)"><i class="fas fa-eye-slash"></i> Ignorada</span>'};
   document.getElementById('notasNfeGrid').innerHTML=lista.length?lista.map(n=>{
     let dups=[];try{dups=JSON.parse(n.duplicatas_json||'[]');}catch(e){}
@@ -2107,7 +2125,7 @@ async function renderNotasNfe(){
     }
     if(n.tipo==='completa')acoes+=' <button class="btn btn-sm btn-outline" onclick="NR.baixarXmlNota(\''+n.id+'\')" title="Baixar XML da nota"><i class="fas fa-file-code"></i></button>';
     return '<tr'+(n.status!=='nova'?' style="opacity:.55"':'')+'><td><input type="checkbox" class="nfe-sel-cb" value="'+n.id+'" style="width:16px;height:16px" onchange="NR.updateNotasSel()"></td><td style="white-space:nowrap">'+fD(n.data_emissao)+'</td><td>'+(n.numero||'-')+'</td><td><b>'+n.emitente+'</b></td><td style="white-space:nowrap;font-size:11px">'+fmtCnpj(n.emitente_cnpj)+'</td><td style="font-weight:bold">'+fmt(n.valor)+'</td><td>'+pagInfo+'</td><td>'+(statusLbl[n.status]||n.status)+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
-  }).join(''):'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-inbox" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>Nenhuma nota aguardando aprovação. Configure o certificado e clique em "Consultar Agora".</td></tr>';
+  }).join(''):'<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-inbox" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>'+(busca?'Nenhuma nota encontrada para "'+busca+'".':'Nenhuma nota aguardando aprovação. Configure o certificado e clique em "Consultar Agora".')+'</td></tr>';
   document.getElementById('nfe-sel-all').checked=false;
   updateNotasSel();
   // Info da config (só admin consegue; ignora erro para os demais)
@@ -2116,6 +2134,7 @@ async function renderNotasNfe(){
     let info=[];
     if(!cfg.temCert)info.push('⚠️ Certificado não enviado');
     if(cfg.ultimaConsulta)info.push('Última consulta: '+new Date(cfg.ultimaConsulta).toLocaleString('pt-BR'));
+    if(cfg.proxConsulta&&new Date(cfg.proxConsulta).getTime()>Date.now())info.push('⏳ Em dia — próxima consulta liberada às '+new Date(cfg.proxConsulta).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
     if(cfg.auto)info.push('Consulta automática ativa (a cada hora)');
     document.getElementById('nfe-info').textContent=info.join(' | ');
     let badge=document.getElementById('nfe-status-badge');
@@ -2416,6 +2435,105 @@ async function detectarChatId(){
   }catch(e){toast('Erro ao consultar Telegram','error');}
 }
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,addFolhaColab,updateFolhaField,delFolhaItem,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId};
+// === BOLETO (BIPE / IMPORTAR PDF) ===
+let boletoDest='contas-pagar', boletoDados=null, boletoTimer=null;
+function openBoleto(modo){
+  boletoDados=null;
+  document.getElementById('boleto-linha').value='';
+  document.getElementById('boleto-bipe-status').textContent='';
+  document.getElementById('boleto-pdf-file').value='';
+  document.getElementById('boleto-pdf-nome').textContent='Nenhum arquivo';
+  document.getElementById('boleto-pdf-status').textContent='';
+  document.getElementById('boleto-dados').style.display='none';
+  document.getElementById('boleto-match').style.display='none';
+  setBoletoDest('contas-pagar');
+  let bipe=modo==='bipe';
+  document.getElementById('boleto-entrada-bipe').style.display=bipe?'':'none';
+  document.getElementById('boleto-entrada-pdf').style.display=bipe?'none':'';
+  document.getElementById('boletoTitulo').innerHTML=bipe?'<i class="fas fa-barcode"></i> Bipar Boleto':'<i class="fas fa-file-pdf"></i> Importar Boleto (PDF)';
+  document.getElementById('modalBoleto').style.display='flex';
+  if(bipe)setTimeout(()=>document.getElementById('boleto-linha').focus(),100);
+}
+function closeBoleto(){document.getElementById('modalBoleto').style.display='none';}
+function setBoletoDest(d){
+  boletoDest=d;
+  document.querySelectorAll('.boleto-dest').forEach(el=>{
+    let on=el.dataset.dest===d;
+    el.style.borderColor=on?'var(--blue)':'var(--border)';
+    el.style.background=on?'rgba(59,130,246,.1)':'transparent';
+    el.querySelector('input').checked=on;
+  });
+}
+async function analisarBipe(){
+  let linha=document.getElementById('boleto-linha').value.replace(/\D/g,'');
+  let st=document.getElementById('boleto-bipe-status');
+  if(linha.length<44){st.textContent=linha.length?'Aguardando código completo... ('+linha.length+' dígitos)':'';return;}
+  st.innerHTML='<i class="fas fa-spinner fa-spin"></i> Lendo código...';
+  try{
+    let r=await api('POST','/api/boleto/analisar',{linha});
+    if(r&&r.error){st.innerHTML='<span style="color:var(--red)">'+r.error+'</span>';return;}
+    st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> Código lido!</span>';
+    preencherBoleto(r);
+  }catch(e){st.innerHTML='<span style="color:var(--red)">Erro ao ler o código</span>';}
+}
+async function importarBoletoPdf(file){
+  let st=document.getElementById('boleto-pdf-status');
+  st.innerHTML='<i class="fas fa-spinner fa-spin"></i> Lendo PDF...';
+  let fd=new FormData();fd.append('pdf',file);
+  try{
+    let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
+    let r=await fetch('/api/boleto/importar-pdf',{method:'POST',headers:hdrs,body:fd});
+    let data=await r.json();
+    if(data.error){st.innerHTML='<span style="color:var(--red)">'+data.error+'</span>';return;}
+    st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> Boleto lido!</span>';
+    preencherBoleto(data);
+  }catch(e){st.innerHTML='<span style="color:var(--red)">Erro ao ler PDF</span>';}
+}
+function preencherBoleto(d){
+  boletoDados=d;
+  document.getElementById('bl-forn').value=d.fornecedor||'';
+  document.getElementById('bl-valor').value=d.valor||'';
+  document.getElementById('bl-venc').value=d.vencimento||'';
+  document.getElementById('bl-cat').value='';
+  document.getElementById('bl-rec').value='0';
+  document.getElementById('bl-nota').value='';
+  let desc=(d.fornecedor||'Boleto');
+  if(d.nota_numero)desc+=' NF '+d.nota_numero;
+  document.getElementById('bl-desc').value=desc;
+  let mBox=document.getElementById('boleto-match');
+  if(d.match&&d.match.indexOf('nota')>=0){
+    mBox.innerHTML='<i class="fas fa-link" style="color:var(--green)"></i> Casou com a nota fiscal <b>'+(d.nota_numero||'')+'</b> de <b>'+(d.fornecedor||'')+'</b>.';
+    mBox.style.display='';
+  }else if(d.match==='cnpj'){
+    mBox.innerHTML='<i class="fas fa-check" style="color:var(--green)"></i> Fornecedor identificado pelo cadastro (CNPJ).';
+    mBox.style.display='';
+  }else{mBox.style.display='none';}
+  document.getElementById('boleto-dados').style.display='';
+}
+async function salvarBoleto(){
+  let forn=document.getElementById('bl-forn').value.trim();
+  let valor=parseFloat(document.getElementById('bl-valor').value)||0;
+  let venc=document.getElementById('bl-venc').value;
+  let cat=document.getElementById('bl-cat').value.trim();
+  let desc=document.getElementById('bl-desc').value.trim()||forn||'Boleto';
+  let rec=document.getElementById('bl-rec').value==='1';
+  let df=document.getElementById('bl-nota').value;
+  if(!valor){toast('Informe o valor','error');return;}
+  if(!venc){toast('Informe o vencimento','error');return;}
+  let linha=(boletoDados&&boletoDados.linha)||'';
+  if(boletoDest==='contas-pagar'){
+    await api('POST','/api/contas-pagar',{vencimento:venc,descricao:desc,valor:valor,categoria:cat||'Outros',fornecedor:forn,boleto_chegou:true,recorrente:rec,tipo_nota:df,linha_digitavel:linha});
+    toast('Boleto lançado em Contas a Pagar!');
+  }else{
+    await api('POST','/api/acerto',{data:venc,descricao:desc,entrada:0,saida:valor,categoria:cat||'Outros',fornecedor:forn,recorrente:rec,tipo_nota:df});
+    toast('Boleto lançado no Acerto (saída)!');
+  }
+  closeBoleto();refreshAll();
+}
+document.getElementById('boleto-linha').addEventListener('input',function(){clearTimeout(boletoTimer);boletoTimer=setTimeout(analisarBipe,350);});
+document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
+document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
+
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,addFolhaColab,updateFolhaField,delFolhaItem,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto};
 checkAuth();
 })();

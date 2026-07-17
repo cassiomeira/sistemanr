@@ -23,9 +23,13 @@ function getNfeConfig(slug) {
     ultNSU: cfg.nfe_ult_nsu || '000000000000000',
     ultimaConsulta: cfg.nfe_ultima_consulta || '',
     ultimoErro: cfg.nfe_ultimo_erro || '',
+    proxConsulta: cfg.nfe_prox_consulta || '',
     temCert: fs.existsSync(certPath(slug)),
   };
 }
+
+// Intervalo mínimo entre consultas quando já está em dia (regra SEFAZ: 1h após "137 - nenhum documento")
+const COOLDOWN_MIN = 61;
 
 function toArr(x) { return !x ? [] : (Array.isArray(x) ? x : [x]); }
 function num(x) { return parseFloat(x) || 0; }
@@ -114,10 +118,19 @@ function processarProcNFe(slug, doc) {
   return { nova: true };
 }
 
-async function consultarNotas(slug) {
+async function consultarNotas(slug, forcar = false) {
   const cfg = getNfeConfig(slug);
   if (!cfg.temCert) return { error: 'Certificado não configurado. Envie o arquivo .pfx nas configurações.' };
   if (!cfg.cnpj) return { error: 'CNPJ não configurado.' };
+  // Respeitar janela mínima da SEFAZ (evita erro 656 - Consumo Indevido)
+  if (cfg.proxConsulta) {
+    const restanteMs = new Date(cfg.proxConsulta).getTime() - Date.now();
+    if (restanteMs > 0) {
+      const min = Math.ceil(restanteMs / 60000);
+      const hora = new Date(cfg.proxConsulta).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      return { ok: true, novas: 0, atualizadas: 0, aguardando: true, error: 'Você já está em dia. A SEFAZ só libera nova consulta em ~' + min + ' min (às ' + hora + '). Notas novas entram sozinhas nesse horário.' };
+    }
+  }
   let pfx;
   try { pfx = fs.readFileSync(certPath(slug)); } catch (e) { return { error: 'Erro ao ler certificado: ' + e.message }; }
 
@@ -126,14 +139,15 @@ async function consultarNotas(slug) {
   let novas = 0, atualizadas = 0;
   const chavesParaCiencia = [];
   let erro = null;
+  let emDia = false, limitado = false;
 
   try {
     for (let iter = 0; iter < 60; iter++) {
       const consulta = await dist.consultaUltNSU(ultNSU);
       if (consulta.error) { erro = String(consulta.error); break; }
       const d = consulta.data || {};
-      if (d.cStat === '656') { erro = 'Limite de consultas da SEFAZ atingido. Aguarde 1 hora.'; break; }
-      if (d.cStat === '137') { ultNSU = d.ultNSU || ultNSU; break; } // nenhum documento novo
+      if (d.cStat === '656') { erro = 'Limite de consultas da SEFAZ atingido. Aguarde 1 hora.'; limitado = true; break; }
+      if (d.cStat === '137') { ultNSU = d.ultNSU || ultNSU; emDia = true; break; } // nenhum documento novo
       if (d.cStat !== '138') { erro = 'SEFAZ: ' + (d.cStat || '?') + ' - ' + (d.xMotivo || 'resposta inesperada'); break; }
       for (const doc of toArr(d.docZip)) {
         try {
@@ -151,7 +165,7 @@ async function consultarNotas(slug) {
       }
       ultNSU = d.ultNSU;
       db.updateConfig(slug, 'nfe_ult_nsu', ultNSU);
-      if (!d.maxNSU || BigInt(d.ultNSU || '0') >= BigInt(d.maxNSU || '0')) break;
+      if (!d.maxNSU || BigInt(d.ultNSU || '0') >= BigInt(d.maxNSU || '0')) { emDia = true; break; }
     }
   } catch (e) {
     erro = e.message;
@@ -160,6 +174,13 @@ async function consultarNotas(slug) {
   db.updateConfig(slug, 'nfe_ult_nsu', ultNSU);
   db.updateConfig(slug, 'nfe_ultima_consulta', new Date().toISOString());
   db.updateConfig(slug, 'nfe_ultimo_erro', erro || '');
+  // Se já está em dia ou tomou limite, agenda a próxima consulta para daqui 1h (regra SEFAZ).
+  // Se ainda há backlog (parou pelo teto de iterações), pode consultar de novo em breve.
+  if (emDia || limitado) {
+    db.updateConfig(slug, 'nfe_prox_consulta', new Date(Date.now() + COOLDOWN_MIN * 60000).toISOString());
+  } else {
+    db.updateConfig(slug, 'nfe_prox_consulta', '');
+  }
 
   // Manifestar ciência da operação para liberar o XML completo (vem na próxima consulta)
   if (chavesParaCiencia.length) {

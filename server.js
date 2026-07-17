@@ -612,7 +612,7 @@ function parseHolerite(text) {
 const nfe = require('./nfe');
 app.get('/api/nfe/config', adminOnly, (req, res) => {
   const cfg = nfe.getNfeConfig(req.emp);
-  res.json({ cnpj: cfg.cnpj, uf: cfg.uf, auto: cfg.auto, temCert: cfg.temCert, temSenha: !!cfg.senha, ultNSU: cfg.ultNSU, ultimaConsulta: cfg.ultimaConsulta, ultimoErro: cfg.ultimoErro });
+  res.json({ cnpj: cfg.cnpj, uf: cfg.uf, auto: cfg.auto, temCert: cfg.temCert, temSenha: !!cfg.senha, ultNSU: cfg.ultNSU, ultimaConsulta: cfg.ultimaConsulta, ultimoErro: cfg.ultimoErro, proxConsulta: cfg.proxConsulta });
 });
 app.post('/api/nfe/config', adminOnly, upload.single('pfx'), (req, res) => {
   try {
@@ -716,6 +716,28 @@ app.put('/api/fornecedores-cad/:id', (req, res) => {
 app.delete('/api/fornecedores-cad/:id', (req, res) => {
   db.delFornecedorCad(req.emp, req.params.id);
   res.json({ ok: true });
+});
+
+// === BOLETO (bipe + importar PDF) ===
+const boleto = require('./boleto');
+app.post('/api/boleto/analisar', (req, res) => {
+  const dec = boleto.decodeLinhaDigitavel(req.body.linha || '');
+  if (!dec.valido && !dec.valor) return res.status(400).json({ error: 'Código não reconhecido. Confira se bipou/colou a linha completa do boleto.' });
+  const enr = boleto.enriquecer(req.emp, { valor: dec.valor, vencimento: dec.vencimento, cnpj: '', beneficiario: '', linha: dec.linha, banco: dec.banco, tipo: dec.tipo });
+  res.json(enr);
+});
+app.post('/api/boleto/importar-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum PDF enviado' });
+    const pdf = await pdfParse(req.file.buffer);
+    const dados = boleto.parseBoletoPdf(pdf.text);
+    if (!dados.valor && !dados.linha) return res.status(422).json({ error: 'Não consegui ler os dados do boleto neste PDF. Pode ser um PDF só de imagem (escaneado).' });
+    const enr = boleto.enriquecer(req.emp, dados);
+    res.json(enr);
+  } catch (e) {
+    console.error('Erro importar boleto PDF:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // === ALERTAS (dashboard) ===

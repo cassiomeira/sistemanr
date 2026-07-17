@@ -296,7 +296,12 @@
         <!-- CONTAS A PAGAR -->
         <section class="content-section" id="section-contas-pagar">
             <div class="panel">
-                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Boleto / Conta</h3></div>
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Novo Boleto / Conta</h3>
+                    <div style="display:flex;gap:8px">
+                        <button type="button" class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.openBoleto('bipe')"><i class="fas fa-barcode"></i> Bipar Boleto</button>
+                        <button type="button" class="btn btn-sm btn-outline" onclick="NR.openBoleto('pdf')"><i class="fas fa-file-pdf"></i> Importar PDF</button>
+                    </div>
+                </div>
                 <form id="formContaPagar" class="form-grid">
                     <div class="form-group"><label>Vencimento</label><input type="date" id="cp-venc" required></div>
                     <div class="form-group"><label>Descrição</label><input type="text" id="cp-desc" placeholder="Ex: Aluguel" required></div>
@@ -504,8 +509,9 @@
                         <span class="badge badge-amber" id="nfe-status-badge" style="display:none"></span>
                     </div>
                     <p id="nfe-info" style="margin-bottom:12px;color:var(--text3);font-size:.82rem"></p>
+                    <div style="margin-bottom:12px"><input type="text" id="nfe-busca" placeholder="🔍 Buscar por nº da nota, emitente, valor (ex: 3345,49) ou vencimento (ex: 15/08)..." style="width:100%;max-width:480px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" oninput="NR.filtrarNotas()"></div>
                     <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
-                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="nfe-mostrar-todas" style="width:16px;height:16px" onchange="NR.renderNotasNfe()"> Mostrar ignoradas/aprovadas</label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="nfe-mostrar-todas" style="width:16px;height:16px" onchange="NR.filtrarNotas()"> Mostrar ignoradas/aprovadas</label>
                         <span id="nfe-sel-count" style="font-size:.82rem;color:var(--text3)"></span>
                         <div id="nfe-sel-actions" style="display:none;gap:8px;margin-left:auto">
                             <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.aprovarNotasSel()"><i class="fas fa-check-double"></i> Aprovar Selecionadas</button>
@@ -1040,6 +1046,57 @@
             </div>
         </div>
     </div>
+    <!-- MODAL BOLETO (BIPE / PDF) -->
+    <div class="modal-overlay" id="modalBoleto" style="display:none">
+        <div class="modal-card" style="max-width:600px">
+            <div class="modal-header"><h3 id="boletoTitulo"><i class="fas fa-barcode"></i> Bipar Boleto</h3><button class="modal-close" onclick="NR.closeBoleto()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px">
+                <!-- Entrada BIPE -->
+                <div id="boleto-entrada-bipe">
+                    <p style="margin-bottom:10px;color:var(--text2);font-size:.88rem"><i class="fas fa-barcode" style="color:var(--blue)"></i> Clique no campo abaixo e <b>bipe o código de barras</b> do boleto (ou digite/cole a linha numérica). O sistema preenche sozinho.</p>
+                    <input type="text" id="boleto-linha" placeholder="Bipe ou cole aqui a linha do boleto..." autocomplete="off" style="width:100%;padding:12px 14px;background:var(--bg3);border:2px solid var(--blue);border-radius:8px;color:var(--text);font-size:16px;letter-spacing:.5px">
+                    <p id="boleto-bipe-status" style="margin-top:8px;font-size:.82rem;color:var(--text3)"></p>
+                </div>
+                <!-- Entrada PDF -->
+                <div id="boleto-entrada-pdf" style="display:none">
+                    <p style="margin-bottom:10px;color:var(--text2);font-size:.88rem"><i class="fas fa-file-pdf" style="color:var(--red)"></i> Selecione o <b>PDF do boleto</b> (o arquivo que o fornecedor enviou). O sistema lê fornecedor, valor e vencimento.</p>
+                    <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer" onclick="document.getElementById('boleto-pdf-file').click()">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:1.8rem;color:var(--red);margin-bottom:6px;display:block"></i>
+                        <p style="color:var(--text2);font-size:.9rem">Clique para selecionar o PDF</p>
+                        <p id="boleto-pdf-nome" style="color:var(--text3);font-size:.8rem;margin-top:4px">Nenhum arquivo</p>
+                        <input type="file" id="boleto-pdf-file" accept=".pdf" style="display:none">
+                    </div>
+                    <p id="boleto-pdf-status" style="margin-top:8px;font-size:.82rem;color:var(--text3)"></p>
+                </div>
+                <!-- Dados extraídos (conferência) -->
+                <div id="boleto-dados" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+                    <div id="boleto-match" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(16,185,129,.12);border:1px solid var(--green);border-radius:8px;font-size:.85rem"></div>
+                    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+                        <div class="form-group"><label>Fornecedor</label><input type="text" id="bl-forn" list="cp-forn-list" autocomplete="off"></div>
+                        <div class="form-group"><label>Valor (R$)</label><input type="number" id="bl-valor" step="0.01"></div>
+                        <div class="form-group"><label>Vencimento</label><input type="date" id="bl-venc"></div>
+                        <div class="form-group"><label>Categoria</label><input type="text" id="bl-cat" list="cp-cat-list" autocomplete="off"></div>
+                        <div class="form-group"><label>Recorrente</label><select id="bl-rec"><option value="0">Não</option><option value="1">Sim</option></select></div>
+                        <div class="form-group"><label>D/F (Dentro/Fora)</label><select id="bl-nota"><option value="">—</option><option value="D">D (Dentro)</option><option value="F">F (Fora)</option></select></div>
+                        <div class="form-group" style="grid-column:span 2"><label>Descrição</label><input type="text" id="bl-desc"></div>
+                    </div>
+                    <div style="margin-top:6px;font-size:.78rem;color:var(--text3)"><i class="fas fa-info-circle"></i> Confira principalmente o <b>vencimento</b> — em alguns boletos ele é calculado do código.</div>
+                    <!-- Destino -->
+                    <div style="margin-top:16px">
+                        <label style="display:block;margin-bottom:8px;font-weight:600;color:var(--text2)">Para onde vai?</label>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap">
+                            <label class="boleto-dest active" data-dest="contas-pagar" onclick="NR.setBoletoDest('contas-pagar')" style="flex:1;min-width:180px;cursor:pointer;border:2px solid var(--blue);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;background:rgba(59,130,246,.1)"><input type="radio" name="bl-dest" checked style="width:16px;height:16px"><div><b>Contas a Pagar</b><br><span style="font-size:.78rem;color:var(--text3)">Vira um boleto a pagar</span></div></label>
+                            <label class="boleto-dest" data-dest="acerto" onclick="NR.setBoletoDest('acerto')" style="flex:1;min-width:180px;cursor:pointer;border:2px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px"><input type="radio" name="bl-dest" style="width:16px;height:16px"><div><b>Acerto</b><br><span style="font-size:.78rem;color:var(--text3)">Lança como saída no acerto</span></div></label>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+                        <button class="btn btn-outline" onclick="NR.closeBoleto()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.salvarBoleto()"><i class="fas fa-check"></i> Confirmar e Lançar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- MENU CONTEXTO AUDITORIA -->
     <div id="ctxMenuAudit" style="display:none;position:fixed;z-index:10000;background:var(--bg2);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);padding:4px 0;min-width:180px">
         <button id="ctxMenuAuditBtn" style="display:flex;align-items:center;gap:8px;width:100%;padding:10px 16px;background:none;border:none;color:var(--text);cursor:pointer;font-size:13px;text-align:left" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
@@ -1078,6 +1135,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=62"></script>
+    <script src="app.js?v=66"></script>
 </body>
 </html>
