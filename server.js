@@ -774,15 +774,26 @@ app.post('/api/notas-recebidas/:id/lancar', (req, res) => {
     const item = {
       id: uid(), vencimento: p.vencimento, descricao: p.descricao, valor: p.valor,
       categoria: b.categoria || 'Outros', fornecedor: b.fornecedor || nota.emitente,
+      tipo_nota: b.tipo_nota || '',
       recorrente: !!b.recorrente, boleto_chegou: !!b.boleto_chegou, a_chegar: !!b.a_chegar,
       grupo_parcela: grupo,
     };
     db.addContaPagar(req.emp, item);
     criadas++;
   }
+  // Também lançar como nota de entrada no Controle Fiscal
+  let fiscal = false;
+  if (b.fiscal_entrada) {
+    db.addFiscal(req.emp, {
+      id: uid(), data: nota.data_emissao || new Date().toISOString().split('T')[0],
+      nota_entrada: nota.valor || 0, nota_saida: 0,
+      observacao: 'NF-e ' + (nota.numero || '') + ' - ' + nota.emitente,
+    });
+    fiscal = true;
+  }
   db.updateNotaRecebida(req.emp, req.params.id, { status: 'lancada' });
-  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'Lançou NF-e ' + (nota.numero || nota.chave) + ' de ' + nota.emitente + ' em ' + criadas + ' parcela(s)');
-  res.json({ ok: true, criadas });
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'Lançou NF-e ' + (nota.numero || nota.chave) + ' de ' + nota.emitente + ' em ' + criadas + ' parcela(s)' + (fiscal ? ' + nota entrada fiscal' : ''));
+  res.json({ ok: true, criadas, fiscal });
 });
 
 // === CLEAR ALL (admin only) ===

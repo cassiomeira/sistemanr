@@ -2204,9 +2204,12 @@ function openLancarNota(id){
     +(dups.length?' — '+dups.length+' parcela(s) vindas do XML da nota':'');
   document.getElementById('ln-cat').value='';
   document.getElementById('ln-forn').value=n.emitente||'';
+  document.getElementById('ln-nota').value='';
   document.getElementById('ln-recorrente').checked=true;
   document.getElementById('ln-boleto').checked=dups.length>0;
   document.getElementById('ln-achegar').checked=false;
+  document.getElementById('ln-fiscal').checked=false;
+  document.getElementById('ln-fiscal-valor').textContent=fmt(n.valor||0);
   renderLancarNotaParcelas();
   // Verificar possível duplicidade com contas já lançadas
   let simBox=document.getElementById('lancarNotaSimilares');
@@ -2246,12 +2249,14 @@ async function confirmarLancarNota(){
     parcelas:lancarNotaParcelas,
     categoria:document.getElementById('ln-cat').value,
     fornecedor:document.getElementById('ln-forn').value,
+    tipo_nota:document.getElementById('ln-nota').value,
     recorrente:document.getElementById('ln-recorrente').checked,
     boleto_chegou:document.getElementById('ln-boleto').checked,
-    a_chegar:document.getElementById('ln-achegar').checked
+    a_chegar:document.getElementById('ln-achegar').checked,
+    fiscal_entrada:document.getElementById('ln-fiscal').checked
   });
   if(r&&r.error){toast('Erro: '+r.error,'error');return;}
-  toast((r.criadas||0)+' conta(s) lançada(s)!');
+  toast((r.criadas||0)+' conta(s) lançada(s)!'+(r.fiscal?' + nota de entrada fiscal':''));
   closeLancarNota();refreshAll();
 }
 async function ignorarNota(id,status){
@@ -2437,7 +2442,7 @@ async function detectarChatId(){
 
 // === BOLETO (BIPE / IMPORTAR PDF) ===
 let boletoDest='contas-pagar', boletoDados=null, boletoTimer=null;
-function openBoleto(modo){
+function openBoleto(modo,destino){
   boletoDados=null;
   document.getElementById('boleto-linha').value='';
   document.getElementById('boleto-bipe-status').textContent='';
@@ -2446,7 +2451,7 @@ function openBoleto(modo){
   document.getElementById('boleto-pdf-status').textContent='';
   document.getElementById('boleto-dados').style.display='none';
   document.getElementById('boleto-match').style.display='none';
-  setBoletoDest('contas-pagar');
+  setBoletoDest(destino==='acerto'?'acerto':'contas-pagar');
   let bipe=modo==='bipe';
   document.getElementById('boleto-entrada-bipe').style.display=bipe?'':'none';
   document.getElementById('boleto-entrada-pdf').style.display=bipe?'none':'';
