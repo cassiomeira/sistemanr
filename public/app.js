@@ -2204,11 +2204,11 @@ function openLancarNota(id){
     +(dups.length?' — '+dups.length+' parcela(s) vindas do XML da nota':'');
   document.getElementById('ln-cat').value='';
   document.getElementById('ln-forn').value=n.emitente||'';
-  document.getElementById('ln-nota').value='';
-  document.getElementById('ln-recorrente').checked=true;
+  document.getElementById('ln-nota').value='D';
+  document.getElementById('ln-recorrente').checked=false;
   document.getElementById('ln-boleto').checked=dups.length>0;
   document.getElementById('ln-achegar').checked=false;
-  document.getElementById('ln-fiscal').checked=false;
+  document.getElementById('ln-fiscal').checked=true;
   document.getElementById('ln-fiscal-valor').textContent=fmt(n.valor||0);
   renderLancarNotaParcelas();
   // Verificar possível duplicidade com contas já lançadas
@@ -2277,7 +2277,7 @@ function getNotasSel(){return [...document.querySelectorAll('.nfe-sel-cb:checked
 async function aprovarNotasSel(){
   let ids=getNotasSel();
   if(!ids.length){toast('Selecione ao menos uma nota','error');return;}
-  if(!confirm('Aprovar '+ids.length+' nota(s) e lançar em Contas a Pagar?\n\nAs parcelas serão criadas com os vencimentos e valores do XML de cada nota.'))return;
+  if(!confirm('Aprovar '+ids.length+' nota(s) e lançar em Contas a Pagar?\n\n• Parcelas com vencimentos e valores do XML de cada nota\n• Todas como D (Dentro) e NÃO recorrentes\n• Nota de entrada lançada automaticamente no Controle Fiscal'))return;
   let r=await api('POST','/api/notas-recebidas/aprovar-multi',{ids});
   if(r&&r.error){toast('Erro: '+r.error,'error');return;}
   let msg=r.aprovadas+' aprovada(s)';

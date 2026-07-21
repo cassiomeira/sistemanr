@@ -683,14 +683,20 @@ app.post('/api/notas-recebidas/aprovar-multi', (req, res) => {
       db.addContaPagar(req.emp, {
         id: uid(), vencimento: d.vencimento || nota.data_emissao, valor: d.valor,
         descricao: descBase + (dups.length > 1 ? ' ' + (i + 1) + '/' + dups.length : ''),
-        categoria: 'Outros', fornecedor: nota.emitente, recorrente: true,
+        categoria: 'Outros', fornecedor: nota.emitente, recorrente: false, tipo_nota: 'D',
         boleto_chegou: temBoleto, a_chegar: false, grupo_parcela: grupo,
       });
+    });
+    // Lançar automaticamente como nota de entrada no Controle Fiscal
+    db.addFiscal(req.emp, {
+      id: uid(), data: nota.data_emissao || new Date().toISOString().split('T')[0],
+      nota_entrada: nota.valor || 0, nota_saida: 0,
+      observacao: 'NF-e ' + (nota.numero || '') + ' - ' + nota.emitente,
     });
     db.updateNotaRecebida(req.emp, id, { status: 'lancada' });
     aprovadas++;
   }
-  if (aprovadas) db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'Aprovou ' + aprovadas + ' nota(s) NF-e em lote');
+  if (aprovadas) db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'Aprovou ' + aprovadas + ' nota(s) NF-e em lote (D, nota entrada fiscal)');
   res.json({ ok: true, aprovadas, semXml, duplicadas });
 });
 // Ignorar/restaurar várias
