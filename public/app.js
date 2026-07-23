@@ -1963,43 +1963,6 @@ async function renderFolha(){
     }).join('')+'</div>';
   }
 
-  // Comparação
-  let holMap={};holerites.forEach(h=>{if(h.colaborador_id)holMap[h.colaborador_id]=h;});
-  let compHtml=folhaColabs.map(c=>{
-    let temFolha=FOLHA_VALS[c.id]&&Object.keys(FOLHA_VALS[c.id]).length>0;
-    let h=holMap[c.id];
-    if(!temFolha&&!h)return '';
-    let salF=valorFolha(c.id,'vb_salario')+valorFolha(c.id,'vb_acerto');
-    let preF=valorFolha(c.id,'vb_premio');
-    if(!h){
-      // Sem holerite (sem registro): mostra só a folha
-      let salPre=salF+preF;
-      return '<tr style="opacity:.6"><td><b>'+c.nome+'</b></td><td>'+fmt(salF)+'</td><td>'+fmt(preF)+'</td><td>'+fmt(salPre)+'</td><td>-</td><td>-</td><td>-</td><td>-</td><td><span style="color:var(--text3)"><i class="fas fa-user-slash"></i> Sem holerite</span></td></tr>';
-    }
-    if(!temFolha){
-      return '<tr><td><b>'+c.nome+'</b></td><td>-</td><td>-</td><td>-</td><td>'+fmt(h.total_proventos||0)+'</td><td>'+fmt(h.total_descontos||0)+'</td><td style="color:var(--blue)">'+fmt(h.liquido)+'</td><td>-</td><td><span style="color:var(--amber)"><i class="fas fa-exclamation-circle"></i> Sem folha</span></td></tr>';
-    }
-    let salPre=salF+preF;
-    let liqH=h.liquido||0,provH=h.total_proventos||0,descH=h.total_descontos||0;
-    let dif=salPre-liqH;
-    let liqOk=Math.abs(dif)<=0.05;
-    // Tooltips com os itens detalhados do holerite
-    let provItens=[],descItens=[];
-    try{provItens=JSON.parse(h.proventos_json||'[]');}catch(e){}
-    try{descItens=JSON.parse(h.descontos_json||'[]');}catch(e){}
-    let provTip=provItens.map(p=>p.descricao+': '+fmt(p.valor)).join('&#10;')||'Sem detalhes';
-    let descTip=descItens.map(d=>d.descricao+': '+fmt(d.valor)).join('&#10;')||'Sem detalhes';
-    function cc(ok,v){return '<td style="color:var(--'+(ok?'green':'red')+');font-weight:'+(ok?'normal':'bold')+'">'+fmt(v)+'</td>';}
-    return '<tr><td><b>'+c.nome+'</b></td><td>'+fmt(salF)+'</td><td>'+fmt(preF)+'</td>'+cc(liqOk,salPre)+
-      '<td style="color:var(--green);cursor:help;text-decoration:underline dotted" title="'+provTip+'">'+fmt(provH)+'</td>'+
-      '<td style="color:var(--red);cursor:help;text-decoration:underline dotted" title="'+descTip+'">'+fmt(descH)+'</td>'+
-      cc(liqOk,liqH)+
-      '<td style="color:var(--'+(liqOk?'text3':'red')+')">'+(liqOk?'-':fmt(dif))+'</td>'+
-      '<td>'+(liqOk?'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> OK</span>':'<span style="color:var(--red)"><i class="fas fa-exclamation-triangle"></i> Diverge</span>')+'</td></tr>';
-  }).filter(Boolean).join('');
-  if(!compHtml)compHtml='<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:20px">Preencha a folha e importe holerites para comparar</td></tr>';
-  document.getElementById('compararGrid').innerHTML=compHtml;
-
   // Lista de Colaboradores
   document.getElementById('colabsFullList').innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Cad.</th><th>Nome</th><th>Grupo</th><th>Verbas</th><th>CPF</th><th>Cargo</th><th>Sal.Base</th><th>Admissão</th><th>Com.%</th><th>CLT</th><th>Folha</th><th>Ativo</th><th></th></tr></thead><tbody>'+
     colabs.map(c=>{
@@ -2049,17 +2012,6 @@ async function delVerbaCfg(id,nome){
 
 // === PAGAMENTO AUXILIAR ===
 let FOLHA_AUX={},HOLERITES_MES=[];
-// Salário do auxiliar: salário base + salário família − INSS (do holerite do mês).
-// Sem holerite (colaborador sem registro), usa a folha: verba Salário − INSS.
-function salarioAuxDoColab(colabId){
-  let h=HOLERITES_MES.find(x=>x.colaborador_id===colabId);
-  if(h){
-    let salFam=0;
-    try{salFam=JSON.parse(h.proventos_json||'[]').filter(p=>/fam[ií]lia/i.test(p.descricao||'')).reduce((s,p)=>s+(p.valor||0),0);}catch(e){}
-    return Math.round(((h.salario_base||0)+salFam-(h.inss||0))*100)/100;
-  }
-  return Math.round((valorFolha(colabId,'vb_salario')-valorFolha(colabId,'vb_fgts'))*100)/100;
-}
 function auxColunas(){
   try{let c=JSON.parse(CFG.aux_colunas||'null');if(Array.isArray(c)&&c.length)return c;}catch(e){}
   return ['Prêmio','Valloo','Adicional'];
@@ -2070,16 +2022,31 @@ function renderPagamentoAux(){
   if(!box)return;
   let cols=auxColunas();
   document.getElementById('auxColunasChips').innerHTML=cols.map(c=>'<span class="tag-item" style="display:inline-flex;align-items:center;gap:5px;margin-right:4px"><span>'+c+'</span><button class="tag-remove" onclick="NR.delAuxColuna(\''+c.replace(/'/g,"\\'")+'\')"><i class="fas fa-times"></i></button></span>').join('');
+  let relSel=document.getElementById('aux-rel-coluna');
+  if(relSel){
+    let cur=relSel.value;
+    let ops=['Salário',...cols];
+    if(!cur)cur=ops.includes('Prêmio')?'Prêmio':ops[0];
+    relSel.innerHTML=ops.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('');
+  }
   let colabs=(COLABS||[]).filter(c=>c.ativo&&c.na_folha!==0&&totalColabFolha(c)>0);
   if(!colabs.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-random" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum colaborador com valores na Folha Mensal deste mês.</div>';return;}
   let totG={sal:0,dist:0,total:0,falta:0};let totCols={};cols.forEach(c=>totCols[c]=0);
   let linhas=colabs.map(c=>{
-    let salario=salarioAuxDoColab(c.id);
+    let salario=valorAux(c.id,'Salário');
+    let h=HOLERITES_MES.find(x=>x.colaborador_id===c.id);
+    let liq=h?Math.round((h.liquido||0)*100)/100:null;
+    let divergente=liq!==null&&Math.abs(salario-liq)>0.01;
     let totalFolha=totalColabFolha(c);
     let somaAux=cols.reduce((s,col)=>s+valorAux(c.id,col),0);
     let distribuido=Math.round((salario+somaAux)*100)/100;
     let falta=Math.round((totalFolha-distribuido)*100)/100;
     totG.sal+=salario;totG.dist+=distribuido;totG.total+=totalFolha;totG.falta+=falta;
+    let salCell='<td><input type="number" step="0.01" value="'+(salario||0)+'" style="width:90px;background:var(--bg3);border:1px solid '+(divergente?'var(--red)':'var(--border)')+';border-radius:4px;color:var(--text);padding:2px 4px;font-size:.8rem;text-align:right" onchange="NR.setFolhaAuxVal('+c.id+',\'Salário\',this.value)"></td>';
+    let liqCell;
+    if(liq===null)liqCell='<td style="text-align:center;color:var(--text3)" title="Sem holerite importado neste mês">—</td>';
+    else if(divergente)liqCell='<td style="text-align:right;white-space:nowrap;background:rgba(239,68,68,.10)"><span style="color:var(--red);font-weight:bold" title="Diferente do salário preenchido!">'+fmt(liq)+'</span> <button class="btn btn-sm" style="background:var(--amber);color:#000;padding:2px 7px" title="Autorizar: substituir o salário preenchido pelo líquido do holerite" onclick="NR.aplicarLiqHolerite('+c.id+','+liq+')"><i class="fas fa-check"></i> Usar</button></td>';
+    else liqCell='<td style="text-align:right;color:var(--green)" title="Confere com o salário preenchido"><i class="fas fa-check-circle"></i> '+fmt(liq)+'</td>';
     let cells=cols.map(col=>{
       let v=valorAux(c.id,col);totCols[col]+=v;
       return '<td><input type="number" step="0.01" value="'+(v||0)+'" style="width:84px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:.8rem;text-align:right" onchange="NR.setFolhaAuxVal('+c.id+',\''+col.replace(/'/g,"\\'")+'\',this.value)"></td>';
@@ -2089,18 +2056,53 @@ function renderPagamentoAux(){
     else if(falta>0)faltaCell='<td style="color:var(--amber);font-weight:bold;text-align:right">'+fmt(falta)+'</td>';
     else faltaCell='<td style="color:var(--red);font-weight:bold;text-align:right" title="Passou do total!">'+fmt(falta)+'</td>';
     return '<tr><td style="white-space:nowrap"><b>'+c.nome+'</b></td>'
-      +'<td style="text-align:right;color:var(--text2)" title="Salário base + salário família − INSS (do holerite do mês)">'+fmt(salario)+'</td>'
+      +salCell+liqCell
       +cells
       +'<td style="text-align:right;color:var(--text2)">'+fmt(distribuido)+'</td>'
       +'<td style="text-align:right;color:var(--green);font-weight:bold" title="Total herdado da Folha Mensal">'+fmt(totalFolha)+'</td>'
       +faltaCell+'</tr>';
   }).join('');
-  box.innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th><th style="text-align:right" title="Salário base + salário família − INSS, puxados do holerite do mês (sem holerite, usa a folha)">Salário 🔗</th>'
+  box.innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th><th style="text-align:right" title="Preenchido pela importação do holerite (líquido) ou manualmente">Salário</th><th style="text-align:right" title="Líquido do holerite importado — se divergir do salário, aparece o botão para autorizar a troca">Líq. Holerite 🔍</th>'
     +cols.map(c=>'<th>'+c+'</th>').join('')
     +'<th style="text-align:right">Distribuído</th><th style="text-align:right;color:var(--green)">Total Folha 🔗</th><th style="text-align:right;color:var(--amber)">Falta</th></tr></thead><tbody>'+linhas+'</tbody>'
-    +'<tfoot><tr style="font-weight:bold;background:var(--bg3)"><td>TOTAIS</td><td style="text-align:right">'+fmt(totG.sal)+'</td>'
+    +'<tfoot><tr style="font-weight:bold;background:var(--bg3)"><td>TOTAIS</td><td style="text-align:right">'+fmt(totG.sal)+'</td><td></td>'
     +cols.map(c=>'<td style="text-align:right">'+fmt(totCols[c])+'</td>').join('')
     +'<td style="text-align:right">'+fmt(totG.dist)+'</td><td style="text-align:right;color:var(--green)">'+fmt(totG.total)+'</td><td style="text-align:right;color:var(--'+(Math.abs(totG.falta)<0.01?'green':'amber')+')">'+fmt(totG.falta)+'</td></tr></tfoot></table></div>';
+}
+async function aplicarLiqHolerite(colabId,liq){
+  await setFolhaAuxVal(colabId,'Salário',liq);
+  toast('Salário atualizado pelo líquido do holerite: '+fmt(liq));
+}
+function gerarRelatorioAux(){
+  let coluna=document.getElementById('aux-rel-coluna').value;
+  if(!coluna){toast('Selecione a coluna','error');return;}
+  let lista=(COLABS||[]).filter(c=>c.ativo&&c.na_folha!==0)
+    .map(c=>({nome:c.nome,valor:valorAux(c.id,coluna)}))
+    .filter(x=>x.valor>0)
+    .sort((a,b)=>a.nome.localeCompare(b.nome));
+  if(!lista.length){toast('Nenhum valor preenchido em "'+coluna+'" neste mês','error');return;}
+  let total=lista.reduce((s,x)=>s+x.valor,0);
+  let sel=document.getElementById('empresaSelector');
+  let empNome=(CFG.recibo_empresa||'').trim()||(sel&&sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'')||document.getElementById('empresaNome').textContent;
+  let [ano,mesN]=gM().split('-').map(Number);
+  let mesRef=MESES_NOME[mesN-1]+' de '+ano;
+  let hoje=new Date();
+  let linhas=lista.map((x,i)=>'<tr><td style="text-align:center">'+(i+1)+'</td><td>'+x.nome+'</td><td style="text-align:right">'+fmt(x.valor)+'</td></tr>').join('');
+  let html='<h2 style="margin:0 0 2px">'+empNome+'</h2>'
+    +'<h3 style="margin:0 0 4px">Relatório de '+coluna+' — '+mesRef+'</h3>'
+    +'<p style="color:#555;margin:0 0 16px;font-size:12px">Gerado em '+hoje.toLocaleDateString('pt-BR')+' às '+hoje.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+' — Pagamento Auxiliar</p>'
+    +'<table><thead><tr><th style="width:36px;text-align:center">#</th><th>Colaborador</th><th style="text-align:right;width:130px">'+coluna+'</th></tr></thead><tbody>'+linhas+'</tbody>'
+    +'<tfoot><tr><td></td><td><b>TOTAL — '+lista.length+' colaborador'+(lista.length>1?'es':'')+'</b></td><td style="text-align:right"><b>'+fmt(total)+'</b></td></tr></tfoot></table>';
+  let w=window.open('','','width=800,height=900');
+  w.document.write('<html><head><title>Relatório '+coluna+' '+gM()+'</title><style>'
+    +'body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;padding:28px;font-size:13px}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'th,td{border:1px solid #bbb;padding:6px 10px;text-align:left;font-size:12px}'
+    +'th{background:#eee}'
+    +'tfoot td{border-top:2px solid #000;background:#f7f7f7}'
+    +'</style></head><body>'+html+'</body></html>');
+  w.document.close();
+  setTimeout(()=>w.print(),400);
 }
 async function setFolhaAuxVal(colabId,coluna,valor){
   await api('PUT','/api/folha-aux',{colaborador_id:colabId,mes:gM(),coluna:coluna,valor:parseFloat(valor)||0});
@@ -2110,6 +2112,7 @@ async function setFolhaAuxVal(colabId,coluna,valor){
 async function addAuxColuna(){
   let nome=document.getElementById('aux-nova-coluna').value.trim();
   if(!nome){toast('Digite o nome da coluna','error');return;}
+  if(/^sal[aá]rio$/i.test(nome)){toast('A coluna Salário já é fixa','error');return;}
   let cols=auxColunas();
   if(cols.includes(nome)){toast('Essa coluna já existe','error');return;}
   cols.push(nome);
@@ -3021,6 +3024,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
 checkAuth();
 })();

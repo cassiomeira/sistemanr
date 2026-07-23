@@ -653,7 +653,6 @@
                         <button class="btn btn-sm folha-tab active" data-tab="folha-tab-grid" onclick="NR.switchFolhaTab(this)"><i class="fas fa-table"></i> Folha Mensal</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-aux" onclick="NR.switchFolhaTab(this)"><i class="fas fa-random"></i> Pagamento Auxiliar</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-holerites" onclick="NR.switchFolhaTab(this)"><i class="fas fa-file-pdf"></i> Holerites</button>
-                        <button class="btn btn-sm folha-tab" data-tab="folha-tab-comparar" onclick="NR.switchFolhaTab(this)"><i class="fas fa-balance-scale"></i> Comparar</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-emprestimos" onclick="NR.switchFolhaTab(this)"><i class="fas fa-hand-holding-usd"></i> Empréstimos <span id="emp-badge" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px"></span></button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-colabs" onclick="NR.switchFolhaTab(this)"><i class="fas fa-users"></i> Colaboradores</button>
                     </div>
@@ -673,22 +672,16 @@
                             <span id="auxColunasChips"></span>
                             <input type="text" id="aux-nova-coluna" placeholder="Nova coluna (ex: Pix)" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.82rem;width:160px">
                             <button class="btn btn-outline btn-sm" onclick="NR.addAuxColuna()"><i class="fas fa-plus"></i></button>
+                            <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+                                <select id="aux-rel-coluna" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.82rem"></select>
+                                <button class="btn btn-primary btn-sm" onclick="NR.gerarRelatorioAux()"><i class="fas fa-file-pdf"></i> Gerar Relatório</button>
+                            </span>
                         </div>
                         <div id="pagamentoAuxGrid"></div>
                     </div>
                     <!-- Tab: Holerites -->
                     <div id="folha-tab-holerites" class="folha-tab-content" style="display:none">
                         <div id="holeritesList"></div>
-                    </div>
-                    <!-- Tab: Comparar -->
-                    <div id="folha-tab-comparar" class="folha-tab-content" style="display:none">
-                        <p style="margin-bottom:12px;color:var(--text3);font-size:.85rem">Regra: <b>Salário + Prêmio</b> (folha) deve bater com o <b>Líquido</b> do holerite — é isso que define o status. Valloo e Adicional são por fora. INSS é informativo: <span style="color:var(--green)">verde = bate</span>, <span style="color:var(--amber)">âmbar = diferente</span>.</p>
-                        <div style="overflow-x:auto">
-                            <table class="data-table" style="font-size:.82rem"><thead><tr>
-                                <th>Colaborador</th><th>Salário</th><th>Prêmio</th><th>Sal+Prêmio</th>
-                                <th>Proventos Holerite</th><th>Descontos Holerite</th><th>Líquido Holerite</th><th>Dif.</th><th>Status</th>
-                            </tr></thead><tbody id="compararGrid"></tbody></table>
-                        </div>
                     </div>
                     <!-- Tab: Empréstimos -->
                     <div id="folha-tab-emprestimos" class="folha-tab-content" style="display:none">
@@ -1250,6 +1243,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=82"></script>
+    <script src="app.js?v=85"></script>
 </body>
 </html>

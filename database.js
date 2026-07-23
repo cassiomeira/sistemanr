@@ -766,6 +766,10 @@ module.exports = {
   delFolhaColabMes(slug, colaboradorId, mes) { run(slug, 'DELETE FROM folha_valores WHERE colaborador_id=? AND mes=?', [colaboradorId, mes]); },
   // -- Pagamento Auxiliar --
   getFolhaAux(slug, mes) { return query(slug, 'SELECT * FROM folha_aux WHERE mes=?', [mes]); },
+  getFolhaAuxValor(slug, colaboradorId, mes, coluna) {
+    const r = query(slug, 'SELECT valor FROM folha_aux WHERE colaborador_id=? AND mes=? AND coluna=?', [colaboradorId, mes, coluna]);
+    return r.length ? r[0].valor : null;
+  },
   setFolhaAuxValor(slug, colaboradorId, mes, coluna, valor) {
     run(slug, 'DELETE FROM folha_aux WHERE colaborador_id=? AND mes=? AND coluna=?', [colaboradorId, mes, coluna]);
     if (valor) run(slug, 'INSERT INTO folha_aux (id,colaborador_id,mes,coluna,valor) VALUES (?,?,?,?,?)', ['fa_' + colaboradorId + '_' + mes + '_' + coluna.replace(/\W/g, ''), colaboradorId, mes, coluna, valor]);

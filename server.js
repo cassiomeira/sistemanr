@@ -566,23 +566,20 @@ app.post('/api/holerites/upload', upload.array('pdfs', 50), async (req, res) => 
             try { db.upsertEmprestimoHolerite(req.emp, parsed.colaborador_id, e, mes); } catch (er) { console.error('Erro upsert empréstimo:', er.message); }
           }
         }
-        // Pré-preencher a folha do mês com os valores do holerite (sem sobrescrever o que já foi lançado)
-        if (parsed.colaborador_id) {
+        // Atualizar o Pagamento Auxiliar (a Folha Mensal NÃO é alterada pela importação):
+        // se o Salário do mês está vazio, herda o do MÊS ANTERIOR — assim o novo líquido do
+        // holerite (coluna Líq. Holerite) é comparado com ele e qualquer alteração fica visível
+        // para o usuário autorizar. Primeira vez (sem mês anterior), usa o próprio líquido.
+        if (parsed.colaborador_id && (parsed.liquido || 0) > 0) {
           try {
-            const colab = db.getColaboradorById(req.emp, parsed.colaborador_id);
-            if (colab) {
-              let verbasC = [];
-              try { verbasC = JSON.parse(colab.verbas_json || '[]'); } catch (e) {}
-              let mudou = false;
-              if ((parsed.total_proventos || 0) > 0 && !verbasC.includes('vb_salario')) { verbasC.push('vb_salario'); mudou = true; }
-              if ((parsed.total_descontos || 0) > 0 && !verbasC.includes('vb_fgts')) { verbasC.push('vb_fgts'); mudou = true; }
-              if (mudou) db.updateColaborador(req.emp, colab.id, { verbas_json: JSON.stringify(verbasC) });
-              if ((parsed.total_proventos || 0) > 0 && db.getFolhaValor(req.emp, colab.id, mes, 'vb_salario') === null)
-                db.setFolhaValor(req.emp, colab.id, mes, 'vb_salario', parsed.total_proventos);
-              if ((parsed.total_descontos || 0) > 0 && db.getFolhaValor(req.emp, colab.id, mes, 'vb_fgts') === null)
-                db.setFolhaValor(req.emp, colab.id, mes, 'vb_fgts', parsed.total_descontos);
+            if (db.getFolhaAuxValor(req.emp, parsed.colaborador_id, mes, 'Salário') === null) {
+              const [a, m] = mes.split('-').map(Number);
+              const d = new Date(a, m - 2, 1);
+              const mesAnterior = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+              const anterior = db.getFolhaAuxValor(req.emp, parsed.colaborador_id, mesAnterior, 'Salário');
+              db.setFolhaAuxValor(req.emp, parsed.colaborador_id, mes, 'Salário', anterior !== null ? anterior : parsed.liquido);
             }
-          } catch (e) { console.error('Erro pré-preenchendo folha:', e.message); }
+          } catch (e) { console.error('Erro atualizando pagamento auxiliar:', e.message); }
         }
         results.push({ ok: true, nome: parsed.nome, file: file.originalname });
       }
