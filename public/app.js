@@ -1882,6 +1882,7 @@ async function renderFolha(){
   let [verbas,valores,holerites,emprestimos,auxVals]=await Promise.all([api('GET','/api/verbas'),api('GET','/api/folha-valores?mes='+mes),api('GET','/api/holerites?mes='+mes),api('GET','/api/emprestimos'),api('GET','/api/folha-aux?mes='+mes)]);
   VERBAS=verbas||[];
   EMPRESTIMOS=emprestimos||[];
+  HOLERITES_MES=holerites||[];
   FOLHA_AUX={};
   (auxVals||[]).forEach(v=>{(FOLHA_AUX[v.colaborador_id]=FOLHA_AUX[v.colaborador_id]||{})[v.coluna]=v.valor;});
   FOLHA_VALS={};
@@ -2047,7 +2048,18 @@ async function delVerbaCfg(id,nome){
 }
 
 // === PAGAMENTO AUXILIAR ===
-let FOLHA_AUX={};
+let FOLHA_AUX={},HOLERITES_MES=[];
+// Salário do auxiliar: salário base + salário família − INSS (do holerite do mês).
+// Sem holerite (colaborador sem registro), usa a folha: verba Salário − INSS.
+function salarioAuxDoColab(colabId){
+  let h=HOLERITES_MES.find(x=>x.colaborador_id===colabId);
+  if(h){
+    let salFam=0;
+    try{salFam=JSON.parse(h.proventos_json||'[]').filter(p=>/fam[ií]lia/i.test(p.descricao||'')).reduce((s,p)=>s+(p.valor||0),0);}catch(e){}
+    return Math.round(((h.salario_base||0)+salFam-(h.inss||0))*100)/100;
+  }
+  return Math.round((valorFolha(colabId,'vb_salario')-valorFolha(colabId,'vb_fgts'))*100)/100;
+}
 function auxColunas(){
   try{let c=JSON.parse(CFG.aux_colunas||'null');if(Array.isArray(c)&&c.length)return c;}catch(e){}
   return ['Prêmio','Valloo','Adicional'];
@@ -2062,7 +2074,7 @@ function renderPagamentoAux(){
   if(!colabs.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-random" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum colaborador com valores na Folha Mensal deste mês.</div>';return;}
   let totG={sal:0,dist:0,total:0,falta:0};let totCols={};cols.forEach(c=>totCols[c]=0);
   let linhas=colabs.map(c=>{
-    let salario=valorFolha(c.id,'vb_salario');
+    let salario=salarioAuxDoColab(c.id);
     let totalFolha=totalColabFolha(c);
     let somaAux=cols.reduce((s,col)=>s+valorAux(c.id,col),0);
     let distribuido=Math.round((salario+somaAux)*100)/100;
@@ -2077,13 +2089,13 @@ function renderPagamentoAux(){
     else if(falta>0)faltaCell='<td style="color:var(--amber);font-weight:bold;text-align:right">'+fmt(falta)+'</td>';
     else faltaCell='<td style="color:var(--red);font-weight:bold;text-align:right" title="Passou do total!">'+fmt(falta)+'</td>';
     return '<tr><td style="white-space:nowrap"><b>'+c.nome+'</b></td>'
-      +'<td style="text-align:right;color:var(--text2)" title="Espelhado da Folha Mensal (verba Salário)">'+fmt(salario)+'</td>'
+      +'<td style="text-align:right;color:var(--text2)" title="Salário base + salário família − INSS (do holerite do mês)">'+fmt(salario)+'</td>'
       +cells
       +'<td style="text-align:right;color:var(--text2)">'+fmt(distribuido)+'</td>'
       +'<td style="text-align:right;color:var(--green);font-weight:bold" title="Total herdado da Folha Mensal">'+fmt(totalFolha)+'</td>'
       +faltaCell+'</tr>';
   }).join('');
-  box.innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th><th style="text-align:right" title="Vem da Folha Mensal">Salário 🔗</th>'
+  box.innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th><th style="text-align:right" title="Salário base + salário família − INSS, puxados do holerite do mês (sem holerite, usa a folha)">Salário 🔗</th>'
     +cols.map(c=>'<th>'+c+'</th>').join('')
     +'<th style="text-align:right">Distribuído</th><th style="text-align:right;color:var(--green)">Total Folha 🔗</th><th style="text-align:right;color:var(--amber)">Falta</th></tr></thead><tbody>'+linhas+'</tbody>'
     +'<tfoot><tr style="font-weight:bold;background:var(--bg3)"><td>TOTAIS</td><td style="text-align:right">'+fmt(totG.sal)+'</td>'
