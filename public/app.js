@@ -1879,9 +1879,11 @@ function iconeEmprestimo(colabId){
 }
 async function renderFolha(){
   let mes=gM();
-  let [verbas,valores,holerites,emprestimos]=await Promise.all([api('GET','/api/verbas'),api('GET','/api/folha-valores?mes='+mes),api('GET','/api/holerites?mes='+mes),api('GET','/api/emprestimos')]);
+  let [verbas,valores,holerites,emprestimos,auxVals]=await Promise.all([api('GET','/api/verbas'),api('GET','/api/folha-valores?mes='+mes),api('GET','/api/holerites?mes='+mes),api('GET','/api/emprestimos'),api('GET','/api/folha-aux?mes='+mes)]);
   VERBAS=verbas||[];
   EMPRESTIMOS=emprestimos||[];
+  FOLHA_AUX={};
+  (auxVals||[]).forEach(v=>{(FOLHA_AUX[v.colaborador_id]=FOLHA_AUX[v.colaborador_id]||{})[v.coluna]=v.valor;});
   FOLHA_VALS={};
   (valores||[]).forEach(v=>{(FOLHA_VALS[v.colaborador_id]=FOLHA_VALS[v.colaborador_id]||{})[v.verba_id]=v.valor;});
   let colabs=COLABS||await api('GET','/api/colaboradores');
@@ -1933,6 +1935,7 @@ async function renderFolha(){
   document.getElementById('folha-qtd-holerites').textContent=holerites.length;
   renderVerbasCfg();
   renderEmprestimos();
+  renderPagamentoAux();
 
   // Holerites
   if(!holerites.length){
@@ -2041,6 +2044,74 @@ async function delVerbaCfg(id,nome){
   if(!confirm('Excluir a verba "'+nome+'"? Os valores já lançados nela deixam de aparecer.'))return;
   await api('DELETE','/api/verbas/'+id);
   toast('Verba excluída!');renderFolha();
+}
+
+// === PAGAMENTO AUXILIAR ===
+let FOLHA_AUX={};
+function auxColunas(){
+  try{let c=JSON.parse(CFG.aux_colunas||'null');if(Array.isArray(c)&&c.length)return c;}catch(e){}
+  return ['Prêmio','Valloo','Adicional'];
+}
+function valorAux(colabId,coluna){return (FOLHA_AUX[colabId]&&FOLHA_AUX[colabId][coluna])||0;}
+function renderPagamentoAux(){
+  let box=document.getElementById('pagamentoAuxGrid');
+  if(!box)return;
+  let cols=auxColunas();
+  document.getElementById('auxColunasChips').innerHTML=cols.map(c=>'<span class="tag-item" style="display:inline-flex;align-items:center;gap:5px;margin-right:4px"><span>'+c+'</span><button class="tag-remove" onclick="NR.delAuxColuna(\''+c.replace(/'/g,"\\'")+'\')"><i class="fas fa-times"></i></button></span>').join('');
+  let colabs=(COLABS||[]).filter(c=>c.ativo&&c.na_folha!==0&&totalColabFolha(c)>0);
+  if(!colabs.length){box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-random" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum colaborador com valores na Folha Mensal deste mês.</div>';return;}
+  let totG={sal:0,dist:0,total:0,falta:0};let totCols={};cols.forEach(c=>totCols[c]=0);
+  let linhas=colabs.map(c=>{
+    let salario=valorFolha(c.id,'vb_salario');
+    let totalFolha=totalColabFolha(c);
+    let somaAux=cols.reduce((s,col)=>s+valorAux(c.id,col),0);
+    let distribuido=Math.round((salario+somaAux)*100)/100;
+    let falta=Math.round((totalFolha-distribuido)*100)/100;
+    totG.sal+=salario;totG.dist+=distribuido;totG.total+=totalFolha;totG.falta+=falta;
+    let cells=cols.map(col=>{
+      let v=valorAux(c.id,col);totCols[col]+=v;
+      return '<td><input type="number" step="0.01" value="'+(v||0)+'" style="width:84px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:.8rem;text-align:right" onchange="NR.setFolhaAuxVal('+c.id+',\''+col.replace(/'/g,"\\'")+'\',this.value)"></td>';
+    }).join('');
+    let faltaCell;
+    if(Math.abs(falta)<0.01)faltaCell='<td style="color:var(--green);font-weight:bold;text-align:right"><i class="fas fa-check-circle"></i> 0,00</td>';
+    else if(falta>0)faltaCell='<td style="color:var(--amber);font-weight:bold;text-align:right">'+fmt(falta)+'</td>';
+    else faltaCell='<td style="color:var(--red);font-weight:bold;text-align:right" title="Passou do total!">'+fmt(falta)+'</td>';
+    return '<tr><td style="white-space:nowrap"><b>'+c.nome+'</b></td>'
+      +'<td style="text-align:right;color:var(--text2)" title="Espelhado da Folha Mensal (verba Salário)">'+fmt(salario)+'</td>'
+      +cells
+      +'<td style="text-align:right;color:var(--text2)">'+fmt(distribuido)+'</td>'
+      +'<td style="text-align:right;color:var(--green);font-weight:bold" title="Total herdado da Folha Mensal">'+fmt(totalFolha)+'</td>'
+      +faltaCell+'</tr>';
+  }).join('');
+  box.innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th><th style="text-align:right" title="Vem da Folha Mensal">Salário 🔗</th>'
+    +cols.map(c=>'<th>'+c+'</th>').join('')
+    +'<th style="text-align:right">Distribuído</th><th style="text-align:right;color:var(--green)">Total Folha 🔗</th><th style="text-align:right;color:var(--amber)">Falta</th></tr></thead><tbody>'+linhas+'</tbody>'
+    +'<tfoot><tr style="font-weight:bold;background:var(--bg3)"><td>TOTAIS</td><td style="text-align:right">'+fmt(totG.sal)+'</td>'
+    +cols.map(c=>'<td style="text-align:right">'+fmt(totCols[c])+'</td>').join('')
+    +'<td style="text-align:right">'+fmt(totG.dist)+'</td><td style="text-align:right;color:var(--green)">'+fmt(totG.total)+'</td><td style="text-align:right;color:var(--'+(Math.abs(totG.falta)<0.01?'green':'amber')+')">'+fmt(totG.falta)+'</td></tr></tfoot></table></div>';
+}
+async function setFolhaAuxVal(colabId,coluna,valor){
+  await api('PUT','/api/folha-aux',{colaborador_id:colabId,mes:gM(),coluna:coluna,valor:parseFloat(valor)||0});
+  (FOLHA_AUX[colabId]=FOLHA_AUX[colabId]||{})[coluna]=parseFloat(valor)||0;
+  renderPagamentoAux();
+}
+async function addAuxColuna(){
+  let nome=document.getElementById('aux-nova-coluna').value.trim();
+  if(!nome){toast('Digite o nome da coluna','error');return;}
+  let cols=auxColunas();
+  if(cols.includes(nome)){toast('Essa coluna já existe','error');return;}
+  cols.push(nome);
+  await api('PUT','/api/config',{aux_colunas:JSON.stringify(cols)});
+  CFG.aux_colunas=JSON.stringify(cols);
+  document.getElementById('aux-nova-coluna').value='';
+  toast('Coluna adicionada!');renderPagamentoAux();
+}
+async function delAuxColuna(nome){
+  if(!confirm('Remover a coluna "'+nome+'"? Os valores lançados nela deixam de aparecer.'))return;
+  let cols=auxColunas().filter(c=>c!==nome);
+  await api('PUT','/api/config',{aux_colunas:JSON.stringify(cols)});
+  CFG.aux_colunas=JSON.stringify(cols);
+  toast('Coluna removida!');renderPagamentoAux();
 }
 
 // === EMPRÉSTIMOS ===
@@ -2938,6 +3009,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
 checkAuth();
 })();

@@ -474,6 +474,15 @@ app.delete('/api/folha-valores/:colabId/:mes', (req, res) => {
   db.delFolhaColabMes(req.emp, parseInt(req.params.colabId), req.params.mes);
   res.json({ ok: true });
 });
+// === PAGAMENTO AUXILIAR (distribuição do total da folha) ===
+app.get('/api/folha-aux', (req, res) => res.json(db.getFolhaAux(req.emp, req.query.mes)));
+app.put('/api/folha-aux', (req, res) => {
+  const b = req.body;
+  if (!b.colaborador_id || !b.mes || !b.coluna) return res.status(400).json({ error: 'Dados incompletos' });
+  db.setFolhaAuxValor(req.emp, parseInt(b.colaborador_id), b.mes, b.coluna, parseFloat(b.valor) || 0);
+  res.json({ ok: true });
+});
+
 app.post('/api/folha-valores/copiar-mes', (req, res) => {
   const destino = req.body.mes;
   if (!destino) return res.status(400).json({ error: 'Mês obrigatório' });

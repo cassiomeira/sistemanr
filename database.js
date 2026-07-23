@@ -302,6 +302,14 @@ function initDB(dbInstance) {
   }
   // Correção: a verba criada como "FGTS" na verdade é o desconto de INSS
   try { dbInstance.run("UPDATE verbas SET nome='INSS' WHERE id='vb_fgts' AND nome='FGTS'"); } catch(e) {}
+  // Pagamento Auxiliar: distribuição do total da folha em formas de pagamento
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS folha_aux (
+    id TEXT PRIMARY KEY,
+    colaborador_id INTEGER NOT NULL,
+    mes TEXT NOT NULL,
+    coluna TEXT NOT NULL,
+    valor REAL DEFAULT 0
+  )`);
   // Empréstimos consignados dos colaboradores (controle/lembrete)
   dbInstance.run(`CREATE TABLE IF NOT EXISTS emprestimos (
     id TEXT PRIMARY KEY,
@@ -756,6 +764,13 @@ module.exports = {
     if (valor) run(slug, 'INSERT INTO folha_valores (id,colaborador_id,mes,verba_id,valor) VALUES (?,?,?,?,?)', ['fv_' + colaboradorId + '_' + mes + '_' + verbaId, colaboradorId, mes, verbaId, valor]);
   },
   delFolhaColabMes(slug, colaboradorId, mes) { run(slug, 'DELETE FROM folha_valores WHERE colaborador_id=? AND mes=?', [colaboradorId, mes]); },
+  // -- Pagamento Auxiliar --
+  getFolhaAux(slug, mes) { return query(slug, 'SELECT * FROM folha_aux WHERE mes=?', [mes]); },
+  setFolhaAuxValor(slug, colaboradorId, mes, coluna, valor) {
+    run(slug, 'DELETE FROM folha_aux WHERE colaborador_id=? AND mes=? AND coluna=?', [colaboradorId, mes, coluna]);
+    if (valor) run(slug, 'INSERT INTO folha_aux (id,colaborador_id,mes,coluna,valor) VALUES (?,?,?,?,?)', ['fa_' + colaboradorId + '_' + mes + '_' + coluna.replace(/\W/g, ''), colaboradorId, mes, coluna, valor]);
+  },
+
   // Copia os valores de um mês para outro (sem sobrescrever o que já foi lançado no destino)
   copiarFolhaMes(slug, mesOrigem, mesDestino) {
     const origem = this.getFolhaValores(slug, mesOrigem);

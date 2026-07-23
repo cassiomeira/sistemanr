@@ -651,6 +651,7 @@
                     <!-- Tabs -->
                     <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border)">
                         <button class="btn btn-sm folha-tab active" data-tab="folha-tab-grid" onclick="NR.switchFolhaTab(this)"><i class="fas fa-table"></i> Folha Mensal</button>
+                        <button class="btn btn-sm folha-tab" data-tab="folha-tab-aux" onclick="NR.switchFolhaTab(this)"><i class="fas fa-random"></i> Pagamento Auxiliar</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-holerites" onclick="NR.switchFolhaTab(this)"><i class="fas fa-file-pdf"></i> Holerites</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-comparar" onclick="NR.switchFolhaTab(this)"><i class="fas fa-balance-scale"></i> Comparar</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-emprestimos" onclick="NR.switchFolhaTab(this)"><i class="fas fa-hand-holding-usd"></i> Empréstimos <span id="emp-badge" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px"></span></button>
@@ -663,6 +664,17 @@
                             <button class="btn btn-outline btn-sm" onclick="NR.copiarFolhaMesAnterior()" title="Copia salários, ajudas de custo etc. do mês passado — só preenche o que estiver vazio"><i class="fas fa-copy"></i> Copiar Mês Anterior</button>
                         </div>
                         <div id="folhaGrupos"></div>
+                    </div>
+                    <!-- Tab: Pagamento Auxiliar -->
+                    <div id="folha-tab-aux" class="folha-tab-content" style="display:none">
+                        <p style="margin-bottom:10px;color:var(--text3);font-size:.8rem"><i class="fas fa-info-circle"></i> Distribua o <b>Total da Folha</b> de cada colaborador nas formas de pagamento. O Salário vem espelhado da Folha Mensal; preencha as demais colunas até o <b>Falta</b> zerar (fica verde).</p>
+                        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+                            <span style="font-size:.82rem;color:var(--text2)">Colunas:</span>
+                            <span id="auxColunasChips"></span>
+                            <input type="text" id="aux-nova-coluna" placeholder="Nova coluna (ex: Pix)" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.82rem;width:160px">
+                            <button class="btn btn-outline btn-sm" onclick="NR.addAuxColuna()"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div id="pagamentoAuxGrid"></div>
                     </div>
                     <!-- Tab: Holerites -->
                     <div id="folha-tab-holerites" class="folha-tab-content" style="display:none">
@@ -1238,6 +1250,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=79"></script>
+    <script src="app.js?v=80"></script>
 </body>
 </html>
