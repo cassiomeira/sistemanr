@@ -129,10 +129,19 @@ app.get('/api/fiscal', (req, res) => res.json(db.getFiscal(req.emp, req.query.me
 app.post('/api/fiscal', (req, res) => {
   const item = { id: uid(), ...req.body };
   db.addFiscal(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Controle Fiscal', 'ID: ' + item.id + ' - Entrada: ' + (item.nota_entrada || 0) + ' Saída: ' + (item.nota_saida || 0) + (item.observacao ? ' - ' + item.observacao : ''));
   res.json({ ok: true, id: item.id });
 });
-app.put('/api/fiscal/:id', (req, res) => { db.updateFiscal(req.emp, req.params.id, req.body); res.json({ ok: true }); });
-app.delete('/api/fiscal/:id', (req, res) => { db.delFiscal(req.emp, req.params.id); res.json({ ok: true }); });
+app.put('/api/fiscal/:id', (req, res) => {
+  db.updateFiscal(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Controle Fiscal', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+app.delete('/api/fiscal/:id', (req, res) => {
+  db.delFiscal(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Controle Fiscal', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
 
 // === ACERTO FINANCEIRO ===
 app.get('/api/acerto', (req, res) => res.json(db.getAcerto(req.emp, req.query.mes)));
@@ -143,7 +152,11 @@ app.post('/api/acerto', (req, res) => {
   db.addAuditLog(req.emp, req.user.nome, 'criou', 'Acerto', 'ID: ' + item.id + ' - ' + b.descricao + ' - Entrada: ' + (b.entrada||0) + ' Saída: ' + (b.saida||0));
   res.json({ ok: true, id: item.id });
 });
-app.put('/api/acerto/:id', (req, res) => { db.updateAcerto(req.emp, req.params.id, req.body); res.json({ ok: true }); });
+app.put('/api/acerto/:id', (req, res) => {
+  db.updateAcerto(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Acerto', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
 app.delete('/api/acerto/:id', (req, res) => {
   db.delAcerto(req.emp, req.params.id);
   db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Acerto', 'ID: ' + req.params.id);
@@ -314,9 +327,22 @@ app.put('/api/acerto/:id/a-chegar', (req, res) => {
 });
 // === DROGARIA ===
 app.get('/api/drogaria', (req, res) => res.json(db.getLancamentos(req.emp, 'drogaria', req.query.mes)));
-app.post('/api/drogaria', (req, res) => { const item = { id: uid(), origem: 'drogaria', ...req.body }; db.addLancamento(req.emp, item); res.json({ ok: true, id: item.id }); });
-app.delete('/api/drogaria/:id', (req, res) => { db.delLancamento(req.emp, req.params.id); res.json({ ok: true }); });
-app.put('/api/drogaria/:id', (req, res) => { db.updateLancamento(req.emp, req.params.id, req.body); res.json({ ok: true }); });
+app.post('/api/drogaria', (req, res) => {
+  const item = { id: uid(), origem: 'drogaria', ...req.body };
+  db.addLancamento(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Drogaria', 'ID: ' + item.id + ' - ' + (item.descricao || '') + ' - R$ ' + (item.valor || 0));
+  res.json({ ok: true, id: item.id });
+});
+app.delete('/api/drogaria/:id', (req, res) => {
+  db.delLancamento(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Drogaria', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
+app.put('/api/drogaria/:id', (req, res) => {
+  db.updateLancamento(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Drogaria', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
 
 // === CHEQUES ===
 app.get('/api/cheques', (req, res) => res.json(db.getCheques(req.emp, req.query.mes)));
@@ -370,7 +396,11 @@ app.delete('/api/conta-dono/:id', (req, res) => {
   db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Conta Dono', 'ID: ' + req.params.id);
   res.json({ ok: true });
 });
-app.put('/api/conta-dono/:id', (req, res) => { db.updateContaDono(req.emp, req.params.id, req.body); res.json({ ok: true }); });
+app.put('/api/conta-dono/:id', (req, res) => {
+  db.updateContaDono(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Conta Dono', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
 
 // === COLABORADORES ===
 app.get('/api/colaboradores', (req, res) => res.json(db.getColaboradores(req.emp)));
@@ -400,6 +430,59 @@ app.put('/api/folha/:id', (req, res) => {
 app.delete('/api/folha/:id', (req, res) => {
   db.delFolha(req.emp, req.params.id);
   res.json({ ok: true });
+});
+
+// === EMPRÉSTIMOS DOS COLABORADORES ===
+app.get('/api/emprestimos', (req, res) => res.json(db.getEmprestimos(req.emp)));
+app.post('/api/emprestimos', (req, res) => {
+  const e = { id: uid(), ...req.body };
+  if (!e.colaborador_id) return res.status(400).json({ error: 'Colaborador obrigatório' });
+  db.addEmprestimo(req.emp, e);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Empréstimos', 'ID: ' + e.id + ' - ' + (e.descricao || 'Empréstimo') + ' - contrato ' + (e.contrato || '-'));
+  res.json({ ok: true, id: e.id });
+});
+app.put('/api/emprestimos/:id', (req, res) => {
+  db.updateEmprestimo(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Empréstimos', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+app.delete('/api/emprestimos/:id', (req, res) => {
+  db.delEmprestimo(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Empréstimos', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
+
+// === VERBAS (catálogo da folha) ===
+app.get('/api/verbas', (req, res) => res.json(db.getVerbas(req.emp)));
+app.post('/api/verbas', (req, res) => {
+  const v = { id: 'vb_' + uid(), nome: (req.body.nome || '').trim(), tipo: req.body.tipo === 'desconto' ? 'desconto' : 'provento' };
+  if (!v.nome) return res.status(400).json({ error: 'Nome obrigatório' });
+  db.addVerba(req.emp, v);
+  res.json({ ok: true, id: v.id });
+});
+app.delete('/api/verbas/:id', (req, res) => { db.delVerba(req.emp, req.params.id); res.json({ ok: true }); });
+
+// === FOLHA (valores por verba) ===
+app.get('/api/folha-valores', (req, res) => res.json(db.getFolhaValores(req.emp, req.query.mes)));
+app.put('/api/folha-valores', (req, res) => {
+  const b = req.body;
+  if (!b.colaborador_id || !b.mes || !b.verba_id) return res.status(400).json({ error: 'Dados incompletos' });
+  db.setFolhaValor(req.emp, parseInt(b.colaborador_id), b.mes, b.verba_id, parseFloat(b.valor) || 0);
+  res.json({ ok: true });
+});
+app.delete('/api/folha-valores/:colabId/:mes', (req, res) => {
+  db.delFolhaColabMes(req.emp, parseInt(req.params.colabId), req.params.mes);
+  res.json({ ok: true });
+});
+app.post('/api/folha-valores/copiar-mes', (req, res) => {
+  const destino = req.body.mes;
+  if (!destino) return res.status(400).json({ error: 'Mês obrigatório' });
+  const [a, m] = destino.split('-').map(Number);
+  const d = new Date(a, m - 2, 1);
+  const origem = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const copiados = db.copiarFolhaMes(req.emp, origem, destino);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Folha Pagamento', 'Copiou ' + copiados + ' valor(es) da folha de ' + origem + ' para ' + destino);
+  res.json({ ok: true, copiados, origem });
 });
 
 // === HOLERITES ===
@@ -468,6 +551,30 @@ app.post('/api/holerites/upload', upload.array('pdfs', 50), async (req, res) => 
           parsed.colaborador_id = colabId;
         }
         db.addHolerite(req.emp, parsed);
+        // Registrar/atualizar empréstimos consignados detectados no holerite
+        if (parsed.emprestimos && parsed.emprestimos.length && parsed.colaborador_id) {
+          for (const e of parsed.emprestimos) {
+            try { db.upsertEmprestimoHolerite(req.emp, parsed.colaborador_id, e, mes); } catch (er) { console.error('Erro upsert empréstimo:', er.message); }
+          }
+        }
+        // Pré-preencher a folha do mês com os valores do holerite (sem sobrescrever o que já foi lançado)
+        if (parsed.colaborador_id) {
+          try {
+            const colab = db.getColaboradorById(req.emp, parsed.colaborador_id);
+            if (colab) {
+              let verbasC = [];
+              try { verbasC = JSON.parse(colab.verbas_json || '[]'); } catch (e) {}
+              let mudou = false;
+              if ((parsed.total_proventos || 0) > 0 && !verbasC.includes('vb_salario')) { verbasC.push('vb_salario'); mudou = true; }
+              if ((parsed.total_descontos || 0) > 0 && !verbasC.includes('vb_fgts')) { verbasC.push('vb_fgts'); mudou = true; }
+              if (mudou) db.updateColaborador(req.emp, colab.id, { verbas_json: JSON.stringify(verbasC) });
+              if ((parsed.total_proventos || 0) > 0 && db.getFolhaValor(req.emp, colab.id, mes, 'vb_salario') === null)
+                db.setFolhaValor(req.emp, colab.id, mes, 'vb_salario', parsed.total_proventos);
+              if ((parsed.total_descontos || 0) > 0 && db.getFolhaValor(req.emp, colab.id, mes, 'vb_fgts') === null)
+                db.setFolhaValor(req.emp, colab.id, mes, 'vb_fgts', parsed.total_descontos);
+            }
+          } catch (e) { console.error('Erro pré-preenchendo folha:', e.message); }
+        }
         results.push({ ok: true, nome: parsed.nome, file: file.originalname });
       }
       if (!blocks.length) results.push({ ok: false, file: file.originalname, error: 'Nenhum holerite reconhecido no PDF' });
@@ -577,6 +684,28 @@ function parseHolerite(text) {
   const inssItem = result.descontos.find(d => /INSS/i.test(d.descricao));
   if (inssItem) result.inss = inssItem.valor;
 
+  // Empréstimos consignados: "Contrato: 000000105687889 | IF: 935 | 2/36 345,35"
+  result.emprestimos = [];
+  const reEmp = /Contrato:\s*(\d+)\s*\|\s*IF:\s*(\d+)\s*\|\s*(\d+)\/(\d+)\s*([\d.]+,\d{2})?/g;
+  const vistos = new Set();
+  let em;
+  while ((em = reEmp.exec(text)) !== null) {
+    if (vistos.has(em[1])) continue;
+    vistos.add(em[1]);
+    result.emprestimos.push({
+      contrato: em[1], banco: 'IF ' + em[2],
+      parcela_atual: parseInt(em[3]), total_parcelas: parseInt(em[4]),
+      valor_parcela: em[5] ? parseVal(em[5]) : 0,
+    });
+  }
+  if (result.emprestimos.length) {
+    const evEmp = result.descontos.find(d => /Empr[eé]stimo/i.test(d.descricao));
+    result.emprestimos.forEach(e => {
+      if (!e.valor_parcela && evEmp) e.valor_parcela = evEmp.valor;
+      if (evEmp) e.descricao = evEmp.descricao;
+    });
+  }
+
   // Total Líquido — valor vem ANTES do rótulo: "1.499,43	Total Líquido"
   let liqM = text.match(/([\d.]+,\d{2})\s*Total\s+L[ií]quido/i);
   if (!liqM) liqM = text.match(/Total\s+L[ií]quido\s*([\d.]+,\d{2})/i);
@@ -683,7 +812,7 @@ app.post('/api/notas-recebidas/aprovar-multi', (req, res) => {
       db.addContaPagar(req.emp, {
         id: uid(), vencimento: d.vencimento || nota.data_emissao, valor: d.valor,
         descricao: descBase + (dups.length > 1 ? ' ' + (i + 1) + '/' + dups.length : ''),
-        categoria: 'Outros', fornecedor: nota.emitente, recorrente: false, tipo_nota: 'D',
+        categoria: 'Fornecedor', fornecedor: nota.emitente, recorrente: false, tipo_nota: 'D',
         boleto_chegou: temBoleto, a_chegar: false, grupo_parcela: grupo,
       });
     });
@@ -779,7 +908,7 @@ app.post('/api/notas-recebidas/:id/lancar', (req, res) => {
   for (const p of parcelas) {
     const item = {
       id: uid(), vencimento: p.vencimento, descricao: p.descricao, valor: p.valor,
-      categoria: b.categoria || 'Outros', fornecedor: b.fornecedor || nota.emitente,
+      categoria: b.categoria || 'Fornecedor', fornecedor: b.fornecedor || nota.emitente,
       tipo_nota: b.tipo_nota || '',
       recorrente: !!b.recorrente, boleto_chegou: !!b.boleto_chegou, a_chegar: !!b.a_chegar,
       grupo_parcela: grupo,
@@ -837,16 +966,26 @@ app.delete('/api/clear/caixas', adminOnly, (req, res) => { db.clearCaixas(req.em
 app.get('/api/movimentacao', (req, res) => res.json(db.getMovimentacao(req.emp, req.query.mes)));
 app.post('/api/movimentacao', (req, res) => {
   const b = req.body;
-  db.addMovimentacao(req.emp, { id: uid(), data: b.data, descricao: b.descricao, entrada: b.entrada || 0, saida: b.saida || 0, diferenca: b.diferenca || 0 });
-  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Movimentação', b.descricao);
-  res.json({ ok: true });
+  const item = { id: uid(), data: b.data, descricao: b.descricao, entrada: b.entrada || 0, saida: b.saida || 0, diferenca: b.diferenca || 0 };
+  db.addMovimentacao(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Movimentação', 'ID: ' + item.id + ' - ' + (b.descricao || '') + ' - Entrada: ' + (b.entrada || 0) + ' Saída: ' + (b.saida || 0));
+  res.json({ ok: true, id: item.id });
 });
 app.put('/api/movimentacao/:id/diferenca', (req, res) => {
   db.updateMovimentacaoDiferenca(req.emp, req.params.id, parseFloat(req.body.diferenca) || 0);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Movimentação', 'ID: ' + req.params.id + ' - Diferença: ' + (parseFloat(req.body.diferenca) || 0));
   res.json({ ok: true });
 });
-app.put('/api/movimentacao/:id', (req, res) => { db.updateMovimentacao(req.emp, req.params.id, req.body); res.json({ ok: true }); });
-app.delete('/api/movimentacao/:id', (req, res) => { db.delMovimentacao(req.emp, req.params.id); res.json({ ok: true }); });
+app.put('/api/movimentacao/:id', (req, res) => {
+  db.updateMovimentacao(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Movimentação', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+app.delete('/api/movimentacao/:id', (req, res) => {
+  db.delMovimentacao(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Movimentação', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
 app.delete('/api/clear/movimentacao', adminOnly, (req, res) => { db.clearMovimentacao(req.emp); db.addAuditLog(req.emp, req.user.nome, 'limpou tudo', 'Movimentação', ''); res.json({ ok: true }); });
 app.get('/api/movimentacao/config', (req, res) => res.json(db.getMovConfig(req.emp, req.query.mes)));
 app.put('/api/movimentacao/config', (req, res) => {
@@ -916,6 +1055,60 @@ function getBackupConfig() {
     };
   } catch(e) { return {}; }
 }
+// === BACKUP COMPLETO (todas as empresas em um ZIP) ===
+const AdmZip = require('adm-zip');
+app.get('/api/backup-completo', adminOnly, async (req, res) => {
+  try {
+    const { zipPath, zipName } = await backup.createBackupZip();
+    res.download(zipPath, zipName);
+    db.addAuditLog(req.emp, req.user.nome, 'criou', 'Backup', 'Baixou backup completo ' + zipName);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/backup-completo/restaurar', adminOnly, upload.single('zip'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    const modo = req.body.modo || 'tudo';
+    const zip = new AdmZip(req.file.buffer);
+    const entries = zip.getEntries();
+    const dataDir = db.getDataDir();
+    let empresasRestauradas = [], extras = [];
+
+    if (modo === 'tudo') {
+      for (const en of entries) {
+        const nome = en.entryName;
+        if (nome.endsWith('.db') && nome !== 'usuarios.db' && !nome.includes('/')) {
+          db.replaceDB(nome.replace(/\.db$/, ''), en.getData());
+          empresasRestauradas.push(nome.replace(/\.db$/, ''));
+        } else if (nome === 'usuarios.db') {
+          fs.writeFileSync(path.join(dataDir, 'usuarios.db'), en.getData());
+          db.reloadUsersDB();
+          extras.push('usuários');
+        } else if (nome === 'empresas.json') {
+          fs.writeFileSync(path.join(dataDir, 'empresas.json'), en.getData());
+          extras.push('cadastro de empresas');
+        } else if (nome.startsWith('certs/') && nome.length > 6) {
+          const certsDir = path.join(dataDir, 'certs');
+          if (!fs.existsSync(certsDir)) fs.mkdirSync(certsDir, { recursive: true });
+          fs.writeFileSync(path.join(certsDir, path.basename(nome)), en.getData());
+          extras.push('certificado ' + path.basename(nome));
+        }
+      }
+      if (!empresasRestauradas.length) return res.status(422).json({ error: 'Nenhum banco de empresa encontrado no ZIP' });
+    } else {
+      // Restaurar apenas uma empresa específica de dentro do ZIP
+      const alvo = entries.find(en => en.entryName === modo + '.db');
+      if (!alvo) return res.status(404).json({ error: 'Empresa "' + modo + '" não encontrada no ZIP. Bancos disponíveis: ' + entries.filter(e => e.entryName.endsWith('.db') && !e.entryName.includes('/')).map(e => e.entryName.replace('.db', '')).join(', ') });
+      db.replaceDB(modo, alvo.getData());
+      empresasRestauradas.push(modo);
+    }
+    db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Backup', 'Restaurou backup: ' + empresasRestauradas.join(', ') + (extras.length ? ' + ' + extras.join(', ') : ''));
+    res.json({ ok: true, empresas: empresasRestauradas, extras });
+  } catch (e) {
+    console.error('Erro restaurando backup completo:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/backup/status', adminOnly, (req, res) => res.json(backup.getBackupStatus()));
 app.post('/api/backup/manual', adminOnly, async (req, res) => {
   try {

@@ -253,6 +253,99 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN dependentes INTEGER DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN faixa REAL DEFAULT 0'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN na_folha INTEGER DEFAULT 1'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN rg TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN recibo_labels TEXT DEFAULT "{}"'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN grupo TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE colaboradores ADD COLUMN verbas_json TEXT DEFAULT "[]"'); } catch(e) {}
+  // Colaboradores de exemplo (comissões do painel) não entram na folha de pagamento
+  try { dbInstance.run("UPDATE colaboradores SET na_folha=0 WHERE nome LIKE 'Colaborador %' AND (cadastro='' OR cadastro IS NULL)"); } catch(e) {}
+  // Catálogo de verbas da folha (salários/comissões/descontos)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS verbas (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    tipo TEXT DEFAULT 'provento',
+    ordem INTEGER DEFAULT 0
+  )`);
+  // Valores da folha por colaborador/mês/verba
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS folha_valores (
+    id TEXT PRIMARY KEY,
+    colaborador_id INTEGER NOT NULL,
+    mes TEXT NOT NULL,
+    verba_id TEXT NOT NULL,
+    valor REAL DEFAULT 0
+  )`);
+  const verbaCount = dbInstance.exec("SELECT COUNT(*) FROM verbas")[0]?.values[0][0] || 0;
+  if (verbaCount === 0) {
+    const seed = [
+      ['vb_salario', 'Salário', 'provento', 1],
+      ['vb_acerto', 'Acerto do mês', 'provento', 2],
+      ['vb_premio', 'Prêmio', 'provento', 3],
+      ['vb_valloo', 'Valloo', 'provento', 4],
+      ['vb_adicional', 'Adicional', 'provento', 5],
+      ['vb_ajuda', 'Ajuda de custo', 'provento', 6],
+      ['vb_caixa', 'Caixa', 'provento', 7],
+      ['vb_metas', 'Metas', 'provento', 8],
+      ['vb_acima', 'Acima da meta', 'provento', 9],
+      ['vb_cartoes', 'Vendas cartões/à vista', 'provento', 10],
+      ['vb_montmoveis', 'Comissão montagem de móveis', 'provento', 11],
+      ['vb_montantenas', 'Comissão montagem de antenas', 'provento', 12],
+      ['vb_extradrog', 'Extra Drogaria', 'provento', 13],
+      ['vb_comgeral', 'Comissão geral', 'provento', 14],
+      ['vb_supervisao', 'Supervisão', 'provento', 15],
+      ['vb_horaextra', 'Hora extra', 'provento', 16],
+      ['vb_bonus', 'Bônus', 'provento', 17],
+      ['vb_outros', 'Outros', 'provento', 18],
+      ['vb_estorno', 'Estorno', 'desconto', 90],
+      ['vb_fgts', 'INSS', 'desconto', 91],
+    ];
+    for (const v of seed) dbInstance.run('INSERT INTO verbas (id,nome,tipo,ordem) VALUES (?,?,?,?)', v);
+  }
+  // Correção: a verba criada como "FGTS" na verdade é o desconto de INSS
+  try { dbInstance.run("UPDATE verbas SET nome='INSS' WHERE id='vb_fgts' AND nome='FGTS'"); } catch(e) {}
+  // Empréstimos consignados dos colaboradores (controle/lembrete)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS emprestimos (
+    id TEXT PRIMARY KEY,
+    colaborador_id INTEGER NOT NULL,
+    descricao TEXT DEFAULT 'Empréstimo Crédito do Trabalhador',
+    contrato TEXT DEFAULT '',
+    banco TEXT DEFAULT '',
+    valor_parcela REAL DEFAULT 0,
+    total_parcelas INTEGER DEFAULT 0,
+    parcela_atual INTEGER DEFAULT 0,
+    mes_referencia TEXT DEFAULT '',
+    status TEXT DEFAULT 'ativo',
+    observacao TEXT DEFAULT '',
+    data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  // Migração única: folha_pagamento (colunas fixas) -> folha_valores (flexível)
+  const jaMigrou = dbInstance.exec("SELECT COUNT(*) FROM configuracoes WHERE chave='folha_migrada_v2'")[0]?.values[0][0] || 0;
+  if (!jaMigrou) {
+    try {
+      const mapa = { salario: 'vb_salario', premio: 'vb_premio', valloo: 'vb_valloo', adicional: 'vb_adicional', ajuda_custos: 'vb_ajuda', com_caixa: 'vb_caixa', extra: 'vb_acima', mont_cart: 'vb_cartoes', metas: 'vb_metas', outros: 'vb_outros', fgts: 'vb_fgts', desconto: 'vb_estorno' };
+      const rows = dbInstance.exec('SELECT id, colaborador_id, mes, salario, premio, valloo, adicional, ajuda_custos, com_caixa, extra, mont_cart, metas, outros, fgts, desconto FROM folha_pagamento');
+      const verbasPorColab = {};
+      if (rows[0]) {
+        const cols = rows[0].columns;
+        for (const vals of rows[0].values) {
+          const r = {}; cols.forEach((c, i) => r[c] = vals[i]);
+          for (const [campo, verbaId] of Object.entries(mapa)) {
+            const v = parseFloat(r[campo]) || 0;
+            if (v !== 0) {
+              const fvId = 'fv_' + r.id + '_' + campo;
+              dbInstance.run('INSERT OR IGNORE INTO folha_valores (id,colaborador_id,mes,verba_id,valor) VALUES (?,?,?,?,?)', [fvId, r.colaborador_id, r.mes, verbaId, v]);
+              (verbasPorColab[r.colaborador_id] = verbasPorColab[r.colaborador_id] || new Set()).add(verbaId);
+            }
+          }
+        }
+      }
+      // Preencher verbas_json dos colaboradores que ainda não têm
+      for (const [colabId, setV] of Object.entries(verbasPorColab)) {
+        const cur = dbInstance.exec('SELECT verbas_json FROM colaboradores WHERE id=' + parseInt(colabId))[0]?.values[0][0] || '[]';
+        if (!cur || cur === '[]') dbInstance.run('UPDATE colaboradores SET verbas_json=? WHERE id=?', [JSON.stringify([...setV]), parseInt(colabId)]);
+      }
+      dbInstance.run("INSERT OR REPLACE INTO configuracoes (chave,valor) VALUES ('folha_migrada_v2','1')");
+    } catch (e) { console.error('Erro migração folha v2:', e.message); }
+  }
   // Notas recebidas via SEFAZ (emitidas contra o CNPJ)
   dbInstance.run(`CREATE TABLE IF NOT EXISTS notas_recebidas (
     id TEXT PRIMARY KEY,
@@ -324,13 +417,17 @@ function scalar(slug, sql, params) { const r = getDB(slug).db.exec(sql, params);
 function getDbPath(slug) { return getDB(slug).path; }
 function replaceDB(slug, buffer) {
   const e = getDB(slug);
-  fs.writeFileSync(e.path, buffer);
-  e.db = new SQL.Database(buffer);
+  const inst = new SQL.Database(buffer);
+  initDB(inst); // aplica migrações no banco restaurado (pode vir de versão antiga)
+  e.db = inst;
+  fs.writeFileSync(e.path, Buffer.from(inst.export()));
 }
 
 module.exports = {
   getDbPath,
   replaceDB,
+  reloadUsersDB() { initUsersDB(); },
+  getDataDir() { return dataDir; },
   run_raw: run,
   async init() {
     SQL = await initSqlJs();
@@ -607,18 +704,19 @@ module.exports = {
   // -- Colaboradores --
   getColaboradores(slug) { return query(slug, 'SELECT * FROM colaboradores ORDER BY nome'); },
   addColaborador(slug, data) {
-    run(slug, 'INSERT INTO colaboradores (nome,percentual,cpf,cargo,cbo,data_admissao,salario_base,departamento,registrado,ativo,cadastro,dependentes,faixa) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [data.nome, data.percentual||0, data.cpf||'', data.cargo||'', data.cbo||'', data.data_admissao||'', data.salario_base||0, data.departamento||'', data.registrado!==undefined?data.registrado?1:0:1, data.ativo!==undefined?data.ativo?1:0:1, data.cadastro||'', data.dependentes||0, data.faixa||0]);
+    run(slug, 'INSERT INTO colaboradores (nome,percentual,cpf,cargo,cbo,data_admissao,salario_base,departamento,registrado,ativo,cadastro,dependentes,faixa,rg) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [data.nome, data.percentual||0, data.cpf||'', data.cargo||'', data.cbo||'', data.data_admissao||'', data.salario_base||0, data.departamento||'', data.registrado!==undefined?data.registrado?1:0:1, data.ativo!==undefined?data.ativo?1:0:1, data.cadastro||'', data.dependentes||0, data.faixa||0, data.rg||'']);
     const r = query(slug, 'SELECT MAX(id) as id FROM colaboradores');
     return r[0] ? r[0].id : null;
   },
   updateColaborador(slug, id, fields) {
-    const allowed = ['nome','percentual','cpf','cargo','cbo','data_admissao','salario_base','departamento','registrado','ativo','cadastro','dependentes','faixa','na_folha'];
+    const allowed = ['nome','percentual','cpf','cargo','cbo','data_admissao','salario_base','departamento','registrado','ativo','cadastro','dependentes','faixa','na_folha','rg','recibo_labels','grupo','verbas_json'];
     const sets = [], vals = [];
     for (const [k,v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k+'=?'); vals.push(v); } }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE colaboradores SET '+sets.join(',')+' WHERE id=?', vals); }
   },
   delColaborador(slug, id) { run(slug, 'DELETE FROM colaboradores WHERE id=?', [id]); },
+  getColaboradorById(slug, id) { const r = query(slug, 'SELECT * FROM colaboradores WHERE id=?', [id]); return r[0] || null; },
   findColaboradorByNome(slug, nome) {
     const rows = query(slug, 'SELECT * FROM colaboradores WHERE UPPER(TRIM(nome))=UPPER(TRIM(?))', [nome]);
     return rows[0] || null;
@@ -638,6 +736,76 @@ module.exports = {
     if (sets.length) { vals.push(id); run(slug, 'UPDATE folha_pagamento SET '+sets.join(',')+' WHERE id=?', vals); }
   },
   delFolha(slug, id) { run(slug, 'DELETE FROM folha_pagamento WHERE id=?', [id]); },
+
+  // -- Verbas (catálogo da folha) --
+  getVerbas(slug) { return query(slug, 'SELECT * FROM verbas ORDER BY ordem, nome'); },
+  addVerba(slug, v) {
+    const max = scalar(slug, "SELECT COALESCE(MAX(ordem),0) FROM verbas WHERE tipo='provento'");
+    run(slug, 'INSERT INTO verbas (id,nome,tipo,ordem) VALUES (?,?,?,?)', [v.id, v.nome, v.tipo || 'provento', v.tipo === 'desconto' ? 95 : max + 1]);
+  },
+  delVerba(slug, id) { run(slug, 'DELETE FROM verbas WHERE id=?', [id]); },
+
+  // -- Folha (valores flexíveis por verba) --
+  getFolhaValores(slug, mes) { return query(slug, 'SELECT * FROM folha_valores WHERE mes=?', [mes]); },
+  getFolhaValor(slug, colaboradorId, mes, verbaId) {
+    const r = query(slug, 'SELECT valor FROM folha_valores WHERE colaborador_id=? AND mes=? AND verba_id=?', [colaboradorId, mes, verbaId]);
+    return r.length ? r[0].valor : null;
+  },
+  setFolhaValor(slug, colaboradorId, mes, verbaId, valor) {
+    run(slug, 'DELETE FROM folha_valores WHERE colaborador_id=? AND mes=? AND verba_id=?', [colaboradorId, mes, verbaId]);
+    if (valor) run(slug, 'INSERT INTO folha_valores (id,colaborador_id,mes,verba_id,valor) VALUES (?,?,?,?,?)', ['fv_' + colaboradorId + '_' + mes + '_' + verbaId, colaboradorId, mes, verbaId, valor]);
+  },
+  delFolhaColabMes(slug, colaboradorId, mes) { run(slug, 'DELETE FROM folha_valores WHERE colaborador_id=? AND mes=?', [colaboradorId, mes]); },
+  // Copia os valores de um mês para outro (sem sobrescrever o que já foi lançado no destino)
+  copiarFolhaMes(slug, mesOrigem, mesDestino) {
+    const origem = this.getFolhaValores(slug, mesOrigem);
+    const destino = this.getFolhaValores(slug, mesDestino);
+    const jaTem = new Set(destino.map(v => v.colaborador_id + '|' + v.verba_id));
+    let n = 0;
+    for (const v of origem) {
+      if (jaTem.has(v.colaborador_id + '|' + v.verba_id)) continue;
+      this.setFolhaValor(slug, v.colaborador_id, mesDestino, v.verba_id, v.valor);
+      n++;
+    }
+    return n;
+  },
+
+  // -- Empréstimos --
+  getEmprestimos(slug) { return query(slug, 'SELECT e.*, c.nome as colab_nome FROM emprestimos e JOIN colaboradores c ON e.colaborador_id=c.id ORDER BY e.status, c.nome'); },
+  addEmprestimo(slug, e) {
+    run(slug, 'INSERT INTO emprestimos (id,colaborador_id,descricao,contrato,banco,valor_parcela,total_parcelas,parcela_atual,mes_referencia,status,observacao) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      [e.id, e.colaborador_id, e.descricao || 'Empréstimo', e.contrato || '', e.banco || '', e.valor_parcela || 0, e.total_parcelas || 0, e.parcela_atual || 0, e.mes_referencia || '', e.status || 'ativo', e.observacao || '']);
+  },
+  updateEmprestimo(slug, id, fields) {
+    const allowed = ['descricao', 'contrato', 'banco', 'valor_parcela', 'total_parcelas', 'parcela_atual', 'mes_referencia', 'status', 'observacao', 'colaborador_id'];
+    const sets = [], vals = [];
+    for (const [k, v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k + '=?'); vals.push(v); } }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE emprestimos SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  delEmprestimo(slug, id) { run(slug, 'DELETE FROM emprestimos WHERE id=?', [id]); },
+  // Cadastra/atualiza automaticamente a partir do holerite importado
+  upsertEmprestimoHolerite(slug, colaboradorId, e, mes) {
+    const exist = query(slug, 'SELECT * FROM emprestimos WHERE contrato=? AND colaborador_id=?', [e.contrato, colaboradorId])[0];
+    if (exist) {
+      const upd = { mes_referencia: mes };
+      if (e.parcela_atual > (exist.parcela_atual || 0)) upd.parcela_atual = e.parcela_atual;
+      if (e.valor_parcela) upd.valor_parcela = e.valor_parcela;
+      if (e.total_parcelas) upd.total_parcelas = e.total_parcelas;
+      const atual = upd.parcela_atual || exist.parcela_atual || 0;
+      const total = upd.total_parcelas || exist.total_parcelas || 0;
+      if (total && atual >= total) upd.status = 'quitado';
+      this.updateEmprestimo(slug, exist.id, upd);
+      return exist.id;
+    }
+    const id = 'em_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+    this.addEmprestimo(slug, {
+      id, colaborador_id: colaboradorId, descricao: e.descricao || 'Empréstimo Crédito do Trabalhador',
+      contrato: e.contrato, banco: e.banco || '', valor_parcela: e.valor_parcela || 0,
+      total_parcelas: e.total_parcelas || 0, parcela_atual: e.parcela_atual || 0,
+      mes_referencia: mes, status: 'ativo',
+    });
+    return id;
+  },
 
   // -- Holerites --
   getHolerites(slug, mes) { return query(slug, 'SELECT * FROM holerites WHERE mes=? ORDER BY nome', [mes]); },

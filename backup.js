@@ -61,10 +61,16 @@ function createBackupZip() {
     archive.on('error', reject);
     archive.pipe(output);
     // Adicionar todos os .db e .json da pasta data (exceto backups_temp)
-    const files = fs.readdirSync(DATA_DIR).filter(f => 
+    const files = fs.readdirSync(DATA_DIR).filter(f =>
       (f.endsWith('.db') || f.endsWith('.json')) && f !== 'backups_temp'
     );
     files.forEach(f => archive.file(path.join(DATA_DIR, f), { name: f }));
+
+    // Incluir certificados digitais NF-e (necessários para restauração completa)
+    const certsDir = path.join(DATA_DIR, 'certs');
+    if (fs.existsSync(certsDir)) {
+      fs.readdirSync(certsDir).forEach(f => archive.file(path.join(certsDir, f), { name: 'certs/' + f }));
+    }
 
     // Gerar e incluir planilhas .xlsx para cada empresa
     const xlsxFiles = [];
@@ -246,4 +252,4 @@ async function runBackup(getConfigFn) {
   return status;
 }
 
-module.exports = { runBackup, getBackupStatus };
+module.exports = { runBackup, getBackupStatus, createBackupZip };

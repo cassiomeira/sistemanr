@@ -637,6 +637,7 @@
                     <div style="display:flex;gap:8px;align-items:center">
                         <button class="btn btn-outline btn-sm" onclick="NR.openCadColab()"><i class="fas fa-user-plus"></i> Cadastrar Colaborador</button>
                         <button class="btn btn-primary btn-sm" onclick="NR.openImportHolerite()"><i class="fas fa-file-pdf"></i> Importar Holerites</button>
+                        <button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.printRecibosMes()"><i class="fas fa-print"></i> Imprimir Recibos</button>
                     </div>
                 </div>
                 <div style="padding:0 24px 16px">
@@ -652,22 +653,16 @@
                         <button class="btn btn-sm folha-tab active" data-tab="folha-tab-grid" onclick="NR.switchFolhaTab(this)"><i class="fas fa-table"></i> Folha Mensal</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-holerites" onclick="NR.switchFolhaTab(this)"><i class="fas fa-file-pdf"></i> Holerites</button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-comparar" onclick="NR.switchFolhaTab(this)"><i class="fas fa-balance-scale"></i> Comparar</button>
+                        <button class="btn btn-sm folha-tab" data-tab="folha-tab-emprestimos" onclick="NR.switchFolhaTab(this)"><i class="fas fa-hand-holding-usd"></i> Empréstimos <span id="emp-badge" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px"></span></button>
                         <button class="btn btn-sm folha-tab" data-tab="folha-tab-colabs" onclick="NR.switchFolhaTab(this)"><i class="fas fa-users"></i> Colaboradores</button>
                     </div>
                     <!-- Tab: Folha Mensal -->
                     <div id="folha-tab-grid" class="folha-tab-content">
-                        <div style="overflow-x:auto">
-                            <table class="data-table" style="font-size:.82rem"><thead><tr>
-                                <th>Colaborador</th><th>Salário</th><th>Prêmio</th><th>Valloo</th><th>Adicional</th>
-                                <th>Aj.Custos</th><th>Com.Caixa</th><th>Extra</th><th>Mont/Cart</th><th>Metas</th>
-                                <th>Outros</th><th>FGTS</th><th>Desconto</th><th style="color:var(--green)">TOTAL</th><th></th>
-                            </tr></thead><tbody id="folhaGrid"></tbody>
-                            <tfoot><tr style="font-weight:bold;background:var(--bg3)">
-                                <td>TOTAIS</td><td id="fg-t-sal">0</td><td id="fg-t-pre">0</td><td id="fg-t-val">0</td><td id="fg-t-adi">0</td>
-                                <td id="fg-t-ajc">0</td><td id="fg-t-ccx">0</td><td id="fg-t-ext">0</td><td id="fg-t-mct">0</td><td id="fg-t-met">0</td>
-                                <td id="fg-t-out">0</td><td id="fg-t-fgt">0</td><td id="fg-t-dsc">0</td><td id="fg-t-tot" style="color:var(--green)">0</td><td></td>
-                            </tr></tfoot></table>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+                            <p style="color:var(--text3);font-size:.8rem"><i class="fas fa-info-circle"></i> Cada colaborador mostra apenas as verbas configuradas no cadastro dele. Organize por grupos: Montador, Vendedor, Administrativo, Supervisor.</p>
+                            <button class="btn btn-outline btn-sm" onclick="NR.copiarFolhaMesAnterior()" title="Copia salários, ajudas de custo etc. do mês passado — só preenche o que estiver vazio"><i class="fas fa-copy"></i> Copiar Mês Anterior</button>
                         </div>
+                        <div id="folhaGrupos"></div>
                     </div>
                     <!-- Tab: Holerites -->
                     <div id="folha-tab-holerites" class="folha-tab-content" style="display:none">
@@ -682,6 +677,14 @@
                                 <th>Proventos Holerite</th><th>Descontos Holerite</th><th>Líquido Holerite</th><th>Dif.</th><th>Status</th>
                             </tr></thead><tbody id="compararGrid"></tbody></table>
                         </div>
+                    </div>
+                    <!-- Tab: Empréstimos -->
+                    <div id="folha-tab-emprestimos" class="folha-tab-content" style="display:none">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+                            <p style="color:var(--text3);font-size:.82rem"><i class="fas fa-magic" style="color:var(--blue)"></i> Empréstimos consignados são detectados e atualizados <b>automaticamente</b> ao importar os holerites (contrato, banco e parcela atual). O desconto já vem no líquido do holerite — aqui é controle e lembrete.</p>
+                            <button class="btn btn-primary btn-sm" onclick="NR.openCadEmp()"><i class="fas fa-plus"></i> Cadastrar Manual</button>
+                        </div>
+                        <div id="emprestimosList"></div>
                     </div>
                     <!-- Tab: Colaboradores -->
                     <div id="folha-tab-colabs" class="folha-tab-content" style="display:none">
@@ -699,6 +702,7 @@
                         <div class="form-group" style="grid-column:span 2"><label>Nome Completo *</label><input type="text" id="cc-nome" required></div>
                         <div class="form-group"><label>Nº Cadastro</label><input type="text" id="cc-cadastro" placeholder="Ex: 80"></div>
                         <div class="form-group"><label>CPF</label><input type="text" id="cc-cpf" placeholder="000.000.000-00"></div>
+                        <div class="form-group"><label>RG</label><input type="text" id="cc-rg" placeholder="MG-00.000.000"></div>
                         <div class="form-group"><label>CBO</label><input type="text" id="cc-cbo" placeholder="Ex: 411005"></div>
                         <div class="form-group"><label>Cargo / Função</label><input type="text" id="cc-cargo" placeholder="Ex: Auxiliar Administrativo"></div>
                         <div class="form-group"><label>Departamento</label><input type="text" id="cc-depto" placeholder="Ex: 000.000.999"></div>
@@ -707,14 +711,40 @@
                         <div class="form-group"><label>Dependentes</label><input type="number" id="cc-dependentes" min="0" value="0"></div>
                         <div class="form-group"><label>Faixa IRRF</label><input type="number" id="cc-faixa" step="0.01" min="0" value="0"></div>
                         <div class="form-group"><label>Comissão (%)</label><input type="number" id="cc-pct" step="0.01" min="0" value="0"></div>
+                        <div class="form-group"><label>Grupo</label><select id="cc-grupo"><option value="">—</option><option value="Montador">Montador</option><option value="Vendedor">Vendedor</option><option value="Administrativo">Administrativo</option><option value="Supervisor">Supervisor</option></select></div>
                         <div class="form-group" style="display:flex;align-items:end;gap:16px;padding-bottom:4px">
                             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cc-registrado" checked style="width:16px;height:16px"> CLT</label>
                             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cc-ativo" checked style="width:16px;height:16px"> Ativo</label>
+                        </div>
+                        <div class="form-group" style="grid-column:span 3">
+                            <label><i class="fas fa-list-check"></i> Verbas que este colaborador recebe (salários/comissões que aparecem na folha e no recibo)</label>
+                            <div id="cc-verbas" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-top:8px;max-height:220px;overflow-y:auto;padding:10px;background:var(--bg3);border-radius:8px"></div>
                         </div>
                     </form>
                     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
                         <button class="btn btn-outline" onclick="NR.closeCadColab()">Cancelar</button>
                         <button class="btn btn-primary" onclick="NR.salvarCadColab()"><i class="fas fa-check"></i> Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- MODAL CADASTRO EMPRÉSTIMO -->
+        <div class="modal-overlay" id="modalCadEmp" style="display:none">
+            <div class="modal-card" style="max-width:560px">
+                <div class="modal-header"><h3 id="cadEmpTitulo"><i class="fas fa-hand-holding-usd" style="color:var(--amber)"></i> Cadastrar Empréstimo</h3><button class="modal-close" onclick="NR.closeCadEmp()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+                        <div class="form-group" style="grid-column:span 2"><label>Colaborador *</label><select id="em-colab"></select></div>
+                        <div class="form-group" style="grid-column:span 2"><label>Descrição</label><input type="text" id="em-desc" value="Empréstimo Crédito do Trabalhador"></div>
+                        <div class="form-group"><label>Nº do Contrato</label><input type="text" id="em-contrato"></div>
+                        <div class="form-group"><label>Banco / IF</label><input type="text" id="em-banco" placeholder="Ex: IF 935"></div>
+                        <div class="form-group"><label>Valor da Parcela (R$)</label><input type="number" id="em-valor" step="0.01" min="0"></div>
+                        <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Parcela Atual</label><input type="number" id="em-atual" min="0" style="width:100%"></div><div><label>Total Parcelas</label><input type="number" id="em-total" min="1" style="width:100%"></div></div>
+                        <div class="form-group" style="grid-column:span 2"><label>Observação</label><input type="text" id="em-obs"></div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-outline" onclick="NR.closeCadEmp()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.salvarCadEmp()"><i class="fas fa-check"></i> Salvar</button>
                     </div>
                 </div>
             </div>
@@ -778,6 +808,25 @@
                     <button class="btn btn-outline btn-sm" onclick="NR.testarTelegram()"><i class="fas fa-paper-plane"></i> Enviar Teste</button>
                 </div>
             </div>
+            <div class="panel" style="margin-bottom:20px">
+                <h3><i class="fas fa-list-check" style="color:var(--blue)"></i> Verbas da Folha de Pagamento</h3>
+                <p class="config-desc">Tipos de salário/comissão/desconto disponíveis. No cadastro de cada colaborador você marca quais ele recebe.</p>
+                <div id="verbasCfgList" style="display:flex;flex-wrap:wrap;gap:8px;margin:14px 0"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <input type="text" id="vb-nome" placeholder="Nova verba (ex: Comissão entregas)" style="flex:1;min-width:220px;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+                    <select id="vb-tipo" style="padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text)"><option value="provento">Provento (+)</option><option value="desconto">Desconto (−)</option></select>
+                    <button class="btn btn-primary btn-sm" onclick="NR.addVerbaCfg()"><i class="fas fa-plus"></i> Adicionar</button>
+                </div>
+            </div>
+            <div class="panel" style="margin-bottom:20px">
+                <h3><i class="fas fa-receipt" style="color:var(--green)"></i> Recibos de Pagamento</h3>
+                <p class="config-desc">Dados usados no cabeçalho dos recibos da Folha de Pagamento.</p>
+                <div class="form-grid mt-20" style="grid-template-columns:2fr 1fr">
+                    <div class="form-group"><label>Nome da empresa no recibo</label><input type="text" id="rc-empresa" placeholder="Ex: CASA NUNES ROCHA LTDA"></div>
+                    <div class="form-group"><label>Cidade</label><input type="text" id="rc-cidade" placeholder="Ex: CARBONITA"></div>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="NR.salvarReciboCfg()"><i class="fas fa-check"></i> Salvar</button>
+            </div>
             <div class="panel">
                 <h3><i class="fas fa-sliders-h"></i> Percentuais de Distribuição</h3>
                 <p class="config-desc">Distribuição do lucro total. Comissões são calculadas separadamente sobre o lucro da Loja.</p>
@@ -811,6 +860,32 @@
                     <button class="btn btn-outline" onclick="NR.backupDB()"><i class="fas fa-download"></i> Baixar Banco de Dados</button>
                     <button class="btn btn-outline" onclick="document.getElementById('uploadDb').click()"><i class="fas fa-upload"></i> Restaurar Banco de Dados</button>
                     <input type="file" id="uploadDb" accept=".db" style="display:none" onchange="NR.restoreDB(this)">
+                </div>
+                <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
+                    <p class="config-desc"><b>Backup Completo</b>: um único ZIP com os bancos de <b>todas as empresas</b>, usuários, cadastro de empresas e certificados NF-e. Na restauração você escolhe: tudo de uma vez ou só uma empresa.</p>
+                    <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+                        <button class="btn btn-primary" onclick="NR.baixarBackupCompleto()"><i class="fas fa-file-archive"></i> Baixar Backup Completo</button>
+                        <button class="btn btn-outline" onclick="document.getElementById('uploadZipCompleto').click()"><i class="fas fa-history"></i> Restaurar Backup Completo</button>
+                        <input type="file" id="uploadZipCompleto" accept=".zip" style="display:none" onchange="NR.abrirRestauraCompleto(this)">
+                    </div>
+                </div>
+            </div>
+            <!-- MODAL RESTAURAR BACKUP COMPLETO -->
+            <div class="modal-overlay" id="modalRestauraCompleto" style="display:none">
+                <div class="modal-card" style="max-width:520px">
+                    <div class="modal-header"><h3><i class="fas fa-history" style="color:var(--amber)"></i> Restaurar Backup Completo</h3><button class="modal-close" onclick="NR.closeRestauraCompleto()"><i class="fas fa-times"></i></button></div>
+                    <div style="padding:0 24px 24px">
+                        <p id="restCompArquivo" style="margin-bottom:12px;color:var(--text2);font-size:.88rem"></p>
+                        <div style="margin-bottom:14px;padding:10px 14px;background:rgba(239,68,68,.1);border:1px solid var(--red);border-radius:8px;font-size:.83rem;color:var(--text2)"><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i> A restauração <b>substitui os dados atuais</b> pelos do backup. O que foi lançado depois do backup será perdido no que for restaurado.</div>
+                        <label style="display:block;margin-bottom:8px;font-weight:600;color:var(--text2)">O que restaurar?</label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer"><input type="radio" name="rest-modo" value="tudo" checked style="width:16px;height:16px"> <b>Tudo</b> — todas as empresas + usuários + certificados (igualzinho era)</label>
+                        <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer"><input type="radio" name="rest-modo" value="empresa" style="width:16px;height:16px"> Só uma empresa:</label>
+                        <select id="rest-empresa" style="width:100%;padding:9px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);margin-bottom:14px"></select>
+                        <div style="display:flex;gap:10px;justify-content:flex-end">
+                            <button class="btn btn-outline" onclick="NR.closeRestauraCompleto()">Cancelar</button>
+                            <button class="btn btn-danger" style="background:var(--red);color:#fff" onclick="NR.confirmarRestauraCompleto()"><i class="fas fa-history"></i> Restaurar</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -1055,6 +1130,25 @@
             </div>
         </div>
     </div>
+    <!-- MODAL CONFERIR RECIBO -->
+    <div class="modal-overlay" id="modalRecibo" style="display:none">
+        <div class="modal-card" style="max-width:580px">
+            <div class="modal-header"><h3><i class="fas fa-receipt" style="color:var(--green)"></i> Conferir Recibo</h3><button class="modal-close" onclick="NR.closeRecibo()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px">
+                <p id="reciboColabNome" style="margin-bottom:8px;font-weight:600;font-size:1rem"></p>
+                <p style="margin-bottom:12px;color:var(--text3);font-size:.8rem"><i class="fas fa-lightbulb" style="color:var(--amber)"></i> Edite o nome das verbas do jeito que deve sair no recibo (ex: "Comissão montagem de móveis"). Os nomes ficam <b>salvos para este colaborador</b> e saem automáticos nos próximos meses. Valor negativo = desconto.</p>
+                <table class="data-table" style="font-size:.85rem"><thead><tr><th>Verba</th><th style="width:110px">Valor</th><th style="width:40px"></th></tr></thead><tbody id="reciboLinhas"></tbody></table>
+                <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="NR.addLinhaRecibo()"><i class="fas fa-plus"></i> Adicionar Linha</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px">
+                    <b style="font-size:1.05rem">TOTAL: <span id="reciboTotal" style="color:var(--green)">R$ 0,00</span></b>
+                    <div style="display:flex;gap:10px">
+                        <button class="btn btn-outline" onclick="NR.closeRecibo()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.imprimirReciboModal()"><i class="fas fa-print"></i> Imprimir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- MODAL BOLETO (BIPE / PDF) -->
     <div class="modal-overlay" id="modalBoleto" style="display:none">
         <div class="modal-card" style="max-width:600px">
@@ -1144,6 +1238,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=68"></script>
+    <script src="app.js?v=79"></script>
 </body>
 </html>

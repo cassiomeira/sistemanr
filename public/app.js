@@ -1857,33 +1857,82 @@ function switchFolhaTab(btn){
   document.getElementById(btn.dataset.tab).style.display='';
 }
 
+let VERBAS=[],FOLHA_VALS={};
+function verbasDoColab(c){let v=[];try{v=JSON.parse(c.verbas_json||'[]');}catch(e){}return v;}
+function valorFolha(colabId,verbaId){return (FOLHA_VALS[colabId]&&FOLHA_VALS[colabId][verbaId])||0;}
+function totalColabFolha(c){
+  let t=0;
+  for(const vb of VERBAS){
+    let v=valorFolha(c.id,vb.id);
+    if(!v)continue;
+    t+=vb.tipo==='desconto'?-v:v;
+  }
+  return Math.round(t*100)/100;
+}
+let EMPRESTIMOS=[];
+function iconeEmprestimo(colabId){
+  let emps=EMPRESTIMOS.filter(e=>e.colaborador_id===colabId&&e.status==='ativo');
+  if(!emps.length)return '';
+  let tip=emps.map(e=>(e.descricao||'Empréstimo')+' — parcela '+parcelaProjetadaEmp(e)+'/'+(e.total_parcelas||0)+' — '+fmt(e.valor_parcela||0)).join('&#10;');
+  return '<span title="'+tip.replace(/"/g,'&quot;')+'" style="cursor:help;font-size:1.35rem;vertical-align:middle;line-height:1">💳</span>'
+    +(emps.length>1?'<span style="background:var(--amber);color:#000;border-radius:10px;font-size:12px;font-weight:700;padding:2px 7px;margin-left:3px;vertical-align:middle">×'+emps.length+'</span>':'')+' ';
+}
 async function renderFolha(){
   let mes=gM();
-  let [folha,holerites]=await Promise.all([api('GET','/api/folha?mes='+mes),api('GET','/api/holerites?mes='+mes)]);
+  let [verbas,valores,holerites,emprestimos]=await Promise.all([api('GET','/api/verbas'),api('GET','/api/folha-valores?mes='+mes),api('GET','/api/holerites?mes='+mes),api('GET','/api/emprestimos')]);
+  VERBAS=verbas||[];
+  EMPRESTIMOS=emprestimos||[];
+  FOLHA_VALS={};
+  (valores||[]).forEach(v=>{(FOLHA_VALS[v.colaborador_id]=FOLHA_VALS[v.colaborador_id]||{})[v.verba_id]=v.valor;});
   let colabs=COLABS||await api('GET','/api/colaboradores');
-  // Grid da folha
-  let tots={sal:0,pre:0,val:0,adi:0,ajc:0,ccx:0,ext:0,mct:0,met:0,out:0,fgt:0,dsc:0,tot:0};
-  let folhaMap={};folha.forEach(f=>folhaMap[f.colaborador_id]=f);
   let folhaColabs=colabs.filter(c=>c.ativo&&c.na_folha!==0);
-  let gridHtml=folhaColabs.map(c=>{
-    let f=folhaMap[c.id];
-    let cid=c.id;
-    if(!f){
-      return '<tr><td>'+c.nome+'</td>'+Array(12).fill('<td>-</td>').join('')+'<td>-</td><td><button class="btn btn-sm btn-primary" onclick="NR.addFolhaColab('+cid+')"><i class="fas fa-plus"></i></button></td></tr>';
-    }
-    let t=(f.salario||0)+(f.premio||0)+(f.valloo||0)+(f.adicional||0)+(f.ajuda_custos||0)+(f.com_caixa||0)+(f.extra||0)+(f.mont_cart||0)+(f.metas||0)+(f.outros||0)-(f.desconto||0);
-    tots.sal+=f.salario||0;tots.pre+=f.premio||0;tots.val+=f.valloo||0;tots.adi+=f.adicional||0;
-    tots.ajc+=f.ajuda_custos||0;tots.ccx+=f.com_caixa||0;tots.ext+=f.extra||0;tots.mct+=f.mont_cart||0;
-    tots.met+=f.metas||0;tots.out+=f.outros||0;tots.fgt+=f.fgts||0;tots.dsc+=f.desconto||0;tots.tot+=t;
-    let fields=['salario','premio','valloo','adicional','ajuda_custos','com_caixa','extra','mont_cart','metas','outros','fgts','desconto'];
-    let cells=fields.map(k=>'<td><input type="number" step="0.01" value="'+(f[k]||0)+'" style="width:70px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:.8rem;text-align:right" onchange="NR.updateFolhaField(\''+f.id+'\',\''+k+'\',this.value)"></td>').join('');
-    return '<tr><td style="white-space:nowrap"><b>'+c.nome+'</b></td>'+cells+'<td style="color:var(--green);font-weight:bold">'+fmt(t)+'</td><td><button class="btn btn-sm btn-danger" onclick="NR.delFolhaItem(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
-  }).join('');
-  document.getElementById('folhaGrid').innerHTML=gridHtml;
-  ['sal','pre','val','adi','ajc','ccx','ext','mct','met','out','fgt','dsc','tot'].forEach(k=>document.getElementById('fg-t-'+k).textContent=fmt(tots[k]));
+  // Agrupar por grupo
+  let ordemGrupos=['Montador','Vendedor','Supervisor','Administrativo'];
+  let grupos={};
+  folhaColabs.forEach(c=>{
+    let g=c.grupo||'Sem grupo';
+    (grupos[g]=grupos[g]||[]).push(c);
+  });
+  let nomesGrupos=[...ordemGrupos.filter(g=>grupos[g]),...Object.keys(grupos).filter(g=>!ordemGrupos.includes(g)).sort()];
+  let iconeGrupo={'Montador':'fa-couch','Vendedor':'fa-shopping-bag','Supervisor':'fa-user-tie','Administrativo':'fa-briefcase','Sem grupo':'fa-users'};
+  let totalGeral=0;
+  let html='';
+  for(const g of nomesGrupos){
+    let lista=grupos[g];
+    // Colunas do grupo: união das verbas dos colaboradores (na ordem do catálogo)
+    let usadas=new Set();
+    lista.forEach(c=>verbasDoColab(c).forEach(v=>usadas.add(v)));
+    let cols=VERBAS.filter(vb=>usadas.has(vb.id));
+    let totGrupo=0;
+    let linhas=lista.map(c=>{
+      let minhas=new Set(verbasDoColab(c));
+      let cells=cols.map(vb=>{
+        if(!minhas.has(vb.id))return '<td style="text-align:center;color:var(--text3)">—</td>';
+        let v=valorFolha(c.id,vb.id);
+        return '<td><input type="number" step="0.01" value="'+(v||0)+'" style="width:78px;background:var(--bg3);border:1px solid '+(vb.tipo==='desconto'?'var(--red)':'var(--border)')+';border-radius:4px;color:var(--text);padding:2px 4px;font-size:.8rem;text-align:right" onchange="NR.setFolhaVal('+c.id+',\''+vb.id+'\',this.value)"></td>';
+      }).join('');
+      let t=totalColabFolha(c);
+      totGrupo+=t;
+      let cfg=minhas.size?'':'<span title="Sem verbas configuradas - edite o colaborador" style="color:var(--amber)"><i class="fas fa-exclamation-triangle"></i></span> ';
+      return '<tr><td style="white-space:nowrap">'+cfg+iconeEmprestimo(c.id)+'<b>'+c.nome+'</b></td>'+cells+'<td style="color:var(--green);font-weight:bold;text-align:right">'+fmt(t)+'</td>'
+        +'<td style="white-space:nowrap"><button class="btn btn-sm btn-outline" title="Imprimir recibo" onclick="NR.printReciboFolha('+c.id+')"><i class="fas fa-print"></i></button> '
+        +'<button class="btn btn-sm btn-outline" title="Editar cadastro/verbas" onclick="NR.editColab('+c.id+')"><i class="fas fa-user-cog"></i></button> '
+        +'<button class="btn btn-sm btn-danger" title="Limpar valores do mês" onclick="NR.limparFolhaColab('+c.id+',\''+c.nome.replace(/'/g,"\\'")+'\')"><i class="fas fa-eraser"></i></button> '
+        +'<button class="btn btn-sm btn-outline" title="Tirar da Folha de Pagamento (continua nas comissões; volta pela aba Colaboradores)" onclick="NR.tirarDaFolha('+c.id+',\''+c.nome.replace(/'/g,"\\'")+'\')"><i class="fas fa-user-slash"></i></button></td></tr>';
+    }).join('');
+    totalGeral+=totGrupo;
+    html+='<div style="margin-bottom:22px"><h4 style="margin-bottom:8px;color:var(--text2)"><i class="fas '+(iconeGrupo[g]||'fa-users')+'"></i> '+g+' <span style="font-size:.8rem;color:var(--text3)">('+lista.length+')</span><span style="float:right;color:var(--green)">'+fmt(totGrupo)+'</span></h4>'
+      +'<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th>'
+      +cols.map(vb=>'<th style="'+(vb.tipo==='desconto'?'color:var(--red)':'')+'">'+vb.nome+(vb.tipo==='desconto'?' (−)':'')+'</th>').join('')
+      +'<th style="color:var(--green);text-align:right">TOTAL</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div></div>';
+  }
+  if(!html)html='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-users" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum colaborador na folha. Cadastre ou importe holerites.</div>';
+  document.getElementById('folhaGrupos').innerHTML=html;
   document.getElementById('folha-qtd-colabs').textContent=folhaColabs.length;
-  document.getElementById('folha-total').textContent=fmt(tots.tot);
+  document.getElementById('folha-total').textContent=fmt(totalGeral);
   document.getElementById('folha-qtd-holerites').textContent=holerites.length;
+  renderVerbasCfg();
+  renderEmprestimos();
 
   // Holerites
   if(!holerites.length){
@@ -1913,17 +1962,20 @@ async function renderFolha(){
   // Comparação
   let holMap={};holerites.forEach(h=>{if(h.colaborador_id)holMap[h.colaborador_id]=h;});
   let compHtml=folhaColabs.map(c=>{
-    let f=folhaMap[c.id],h=holMap[c.id];
-    if(!f&&!h)return '';
+    let temFolha=FOLHA_VALS[c.id]&&Object.keys(FOLHA_VALS[c.id]).length>0;
+    let h=holMap[c.id];
+    if(!temFolha&&!h)return '';
+    let salF=valorFolha(c.id,'vb_salario')+valorFolha(c.id,'vb_acerto');
+    let preF=valorFolha(c.id,'vb_premio');
     if(!h){
       // Sem holerite (sem registro): mostra só a folha
-      let salPre=(f.salario||0)+(f.premio||0);
-      return '<tr style="opacity:.6"><td><b>'+c.nome+'</b></td><td>'+fmt(f.salario||0)+'</td><td>'+fmt(f.premio||0)+'</td><td>'+fmt(salPre)+'</td><td>-</td><td>-</td><td>-</td><td>-</td><td><span style="color:var(--text3)"><i class="fas fa-user-slash"></i> Sem holerite</span></td></tr>';
+      let salPre=salF+preF;
+      return '<tr style="opacity:.6"><td><b>'+c.nome+'</b></td><td>'+fmt(salF)+'</td><td>'+fmt(preF)+'</td><td>'+fmt(salPre)+'</td><td>-</td><td>-</td><td>-</td><td>-</td><td><span style="color:var(--text3)"><i class="fas fa-user-slash"></i> Sem holerite</span></td></tr>';
     }
-    if(!f){
+    if(!temFolha){
       return '<tr><td><b>'+c.nome+'</b></td><td>-</td><td>-</td><td>-</td><td>'+fmt(h.total_proventos||0)+'</td><td>'+fmt(h.total_descontos||0)+'</td><td style="color:var(--blue)">'+fmt(h.liquido)+'</td><td>-</td><td><span style="color:var(--amber)"><i class="fas fa-exclamation-circle"></i> Sem folha</span></td></tr>';
     }
-    let salF=f.salario||0,preF=f.premio||0,salPre=salF+preF;
+    let salPre=salF+preF;
     let liqH=h.liquido||0,provH=h.total_proventos||0,descH=h.total_descontos||0;
     let dif=salPre-liqH;
     let liqOk=Math.abs(dif)<=0.05;
@@ -1945,30 +1997,175 @@ async function renderFolha(){
   document.getElementById('compararGrid').innerHTML=compHtml;
 
   // Lista de Colaboradores
-  document.getElementById('colabsFullList').innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Cad.</th><th>Nome</th><th>CPF</th><th>CBO</th><th>Cargo</th><th>Depto</th><th>Sal.Base</th><th>Admissão</th><th>Dep.</th><th>Faixa</th><th>Com.%</th><th>CLT</th><th>Folha</th><th>Ativo</th><th></th></tr></thead><tbody>'+
-    colabs.map(c=>'<tr style="'+(c.ativo?'':'opacity:.5')+'"><td>'+(c.cadastro||'-')+'</td><td><b>'+c.nome+'</b></td><td>'+(c.cpf||'-')+'</td><td>'+(c.cbo||'-')+'</td><td>'+(c.cargo||'-')+'</td><td>'+(c.departamento||'-')+'</td><td>'+fmt(c.salario_base||0)+'</td><td>'+(c.data_admissao||'-')+'</td><td>'+(c.dependentes||0)+'</td><td>'+(c.faixa||0)+'</td><td>'+(c.percentual||0)+'%</td><td>'+(c.registrado?'<i class="fas fa-check" style="color:var(--green)"></i>':'<i class="fas fa-times" style="color:var(--red)"></i>')+'</td><td><button class="btn btn-sm '+(c.na_folha!==0?'btn-primary':'btn-outline')+'" title="'+(c.na_folha!==0?'Aparece na folha - clique para remover':'Fora da folha - clique para incluir')+'" onclick="NR.toggleNaFolha('+c.id+','+(c.na_folha!==0?0:1)+')">'+(c.na_folha!==0?'<i class="fas fa-check"></i>':'<i class="fas fa-minus"></i>')+'</button></td><td>'+(c.ativo?'<i class="fas fa-check" style="color:var(--green)"></i>':'<span style="color:var(--red)"><i class="fas fa-times"></i></span>')+'</td><td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="NR.editColab('+c.id+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="NR.delC('+c.id+')"><i class="fas fa-trash"></i></button></td></tr>').join('')+
+  document.getElementById('colabsFullList').innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Cad.</th><th>Nome</th><th>Grupo</th><th>Verbas</th><th>CPF</th><th>Cargo</th><th>Sal.Base</th><th>Admissão</th><th>Com.%</th><th>CLT</th><th>Folha</th><th>Ativo</th><th></th></tr></thead><tbody>'+
+    colabs.map(c=>{
+      let nv=verbasDoColab(c).length;
+      return '<tr style="'+(c.ativo?'':'opacity:.5')+'"><td>'+(c.cadastro||'-')+'</td><td>'+iconeEmprestimo(c.id)+'<b>'+c.nome+'</b></td><td>'+(c.grupo||'<span style="color:var(--amber)">—</span>')+'</td><td>'+(nv?nv+' verba(s)':'<span style="color:var(--amber)"><i class="fas fa-exclamation-triangle"></i> configurar</span>')+'</td><td>'+(c.cpf||'-')+'</td><td>'+(c.cargo||'-')+'</td><td>'+fmt(c.salario_base||0)+'</td><td>'+(c.data_admissao||'-')+'</td><td>'+(c.percentual||0)+'%</td><td>'+(c.registrado?'<i class="fas fa-check" style="color:var(--green)"></i>':'<i class="fas fa-times" style="color:var(--red)"></i>')+'</td><td><button class="btn btn-sm '+(c.na_folha!==0?'btn-primary':'btn-outline')+'" title="'+(c.na_folha!==0?'Aparece na folha - clique para remover':'Fora da folha - clique para incluir')+'" onclick="NR.toggleNaFolha('+c.id+','+(c.na_folha!==0?0:1)+')">'+(c.na_folha!==0?'<i class="fas fa-check"></i>':'<i class="fas fa-minus"></i>')+'</button></td><td>'+(c.ativo?'<i class="fas fa-check" style="color:var(--green)"></i>':'<span style="color:var(--red)"><i class="fas fa-times"></i></span>')+'</td><td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="NR.editColab('+c.id+')"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="NR.delC('+c.id+')"><i class="fas fa-trash"></i></button></td></tr>';
+    }).join('')+
     '</tbody></table></div>';
 }
 
-async function addFolhaColab(colabId){
-  let mes=gM();
-  await api('POST','/api/folha',{colaborador_id:colabId,mes:mes});
-  toast('Linha adicionada!');renderFolha();
-}
-async function updateFolhaField(id,field,value){
-  let body={};body[field]=parseFloat(value)||0;
-  await api('PUT','/api/folha/'+id,body);
+async function setFolhaVal(colabId,verbaId,valor){
+  await api('PUT','/api/folha-valores',{colaborador_id:colabId,mes:gM(),verba_id:verbaId,valor:parseFloat(valor)||0});
+  (FOLHA_VALS[colabId]=FOLHA_VALS[colabId]||{})[verbaId]=parseFloat(valor)||0;
   renderFolha();
 }
-async function delFolhaItem(id){
-  if(!confirm('Remover esta linha da folha?'))return;
-  await api('DELETE','/api/folha/'+id);toast('Removido!');renderFolha();
+async function copiarFolhaMesAnterior(){
+  if(!confirm('Copiar os valores da folha do mês anterior para '+gM()+'?\n\nSó preenche o que estiver vazio — valores já lançados neste mês não são alterados.'))return;
+  let r=await api('POST','/api/folha-valores/copiar-mes',{mes:gM()});
+  if(r&&r.error){toast('Erro: '+r.error,'error');return;}
+  toast(r.copiados+' valor(es) copiado(s) de '+r.origem+'!');
+  renderFolha();
+}
+async function limparFolhaColab(colabId,nome){
+  if(!confirm('Limpar todos os valores de '+nome+' neste mês?'))return;
+  await api('DELETE','/api/folha-valores/'+colabId+'/'+gM());
+  toast('Valores limpos!');renderFolha();
+}
+// Catálogo de verbas (Configurações)
+function renderVerbasCfg(){
+  let box=document.getElementById('verbasCfgList');
+  if(!box)return;
+  box.innerHTML=VERBAS.map(vb=>'<span class="tag-item" style="display:inline-flex;align-items:center;gap:6px'+(vb.tipo==='desconto'?';border:1px solid var(--red)':'')+'">'
+    +(vb.tipo==='desconto'?'<i class="fas fa-minus-circle" style="color:var(--red)"></i>':'<i class="fas fa-plus-circle" style="color:var(--green)"></i>')
+    +'<span>'+vb.nome+'</span><button class="tag-remove" onclick="NR.delVerbaCfg(\''+vb.id+'\',\''+vb.nome.replace(/'/g,"\\'")+'\')"><i class="fas fa-times"></i></button></span>').join('');
+}
+async function addVerbaCfg(){
+  let nome=document.getElementById('vb-nome').value.trim();
+  if(!nome){toast('Digite o nome da verba','error');return;}
+  await api('POST','/api/verbas',{nome:nome,tipo:document.getElementById('vb-tipo').value});
+  document.getElementById('vb-nome').value='';
+  toast('Verba adicionada!');renderFolha();
+}
+async function delVerbaCfg(id,nome){
+  if(!confirm('Excluir a verba "'+nome+'"? Os valores já lançados nela deixam de aparecer.'))return;
+  await api('DELETE','/api/verbas/'+id);
+  toast('Verba excluída!');renderFolha();
 }
 
+// === EMPRÉSTIMOS ===
+// Projeta a parcela para o mês selecionado (consignado desconta todo mês).
+// A última confirmação real vem da importação do holerite (mes_referencia).
+function parcelaProjetadaEmp(e){
+  if(!e.mes_referencia||!e.total_parcelas)return e.parcela_atual||0;
+  let [ra,rm]=e.mes_referencia.split('-').map(Number);
+  let [sa,sm]=gM().split('-').map(Number);
+  let diff=(sa*12+sm)-(ra*12+rm);
+  return Math.max(0,Math.min(e.total_parcelas,(e.parcela_atual||0)+diff));
+}
+function previsaoTerminoEmp(e){
+  let base=(e.mes_referencia||gM());
+  let [a,m]=base.split('-').map(Number);
+  let restam=Math.max(0,(e.total_parcelas||0)-(e.parcela_atual||0));
+  let d=new Date(a,(m-1)+restam,1);
+  return MESES_NOME[d.getMonth()]+'/'+d.getFullYear();
+}
+function renderEmprestimos(){
+  let box=document.getElementById('emprestimosList');
+  if(!box)return;
+  let ativos=EMPRESTIMOS.filter(e=>e.status==='ativo');
+  let badge=document.getElementById('emp-badge');
+  if(badge){if(ativos.length){badge.textContent=ativos.length;badge.style.display='inline';}else badge.style.display='none';}
+  if(!EMPRESTIMOS.length){
+    box.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-hand-holding-usd" style="font-size:2rem;display:block;margin-bottom:8px"></i>Nenhum empréstimo registrado. Eles entram sozinhos ao importar holerites com consignado, ou cadastre manual.</div>';
+    return;
+  }
+  box.innerHTML='<div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Colaborador</th><th>Descrição</th><th>Contrato</th><th>Banco</th><th>Parcela</th><th>Progresso</th><th>Valor Parcela</th><th>Falta Pagar</th><th>Término Previsto</th><th>Status</th><th></th></tr></thead><tbody>'+
+    EMPRESTIMOS.map(e=>{
+      let quitado=e.status==='quitado';
+      let proj=quitado?(e.total_parcelas||0):parcelaProjetadaEmp(e);
+      let ehProjecao=!quitado&&proj!==(e.parcela_atual||0);
+      let pct=e.total_parcelas?Math.min(100,Math.round((proj/e.total_parcelas)*100)):0;
+      let restante=Math.max(0,((e.total_parcelas||0)-proj))*(e.valor_parcela||0);
+      let refBR=e.mes_referencia?e.mes_referencia.split('-').reverse().join('/'):'-';
+      let parcelaCell=ehProjecao
+        ?'<span title="Projeção para o mês selecionado. Última confirmação real (holerite): '+(e.parcela_atual||0)+'/'+(e.total_parcelas||0)+' em '+refBR+'. Importe o holerite do mês para confirmar." style="cursor:help;color:var(--amber)"><b>~'+proj+'/'+(e.total_parcelas||0)+'</b></span>'
+        :'<b>'+proj+'/'+(e.total_parcelas||0)+'</b>';
+      let statusCell;
+      if(quitado)statusCell='<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Quitado</span>';
+      else if(proj>=(e.total_parcelas||0)&&e.total_parcelas)statusCell='<span style="color:var(--amber)" title="Pela projeção, termina neste mês - confirme pelo holerite"><i class="fas fa-flag-checkered"></i> Terminando</span>';
+      else statusCell='<span style="color:var(--blue)"><i class="fas fa-sync-alt"></i> Ativo</span>';
+      return '<tr style="'+(quitado?'opacity:.55':'')+'"><td><b>'+(e.colab_nome||'')+'</b></td><td>'+(e.descricao||'-')+'</td><td style="font-size:11px">'+(e.contrato||'-')+'</td><td>'+(e.banco||'-')+'</td>'
+        +'<td style="white-space:nowrap">'+parcelaCell+'</td>'
+        +'<td><div style="background:var(--bg3);border-radius:6px;height:10px;width:110px;overflow:hidden"><div style="width:'+pct+'%;background:'+(quitado?'var(--green)':'var(--blue)')+';height:100%"></div></div></td>'
+        +'<td>'+fmt(e.valor_parcela||0)+'</td><td style="color:var(--amber);font-weight:600">'+fmt(restante)+'</td>'
+        +'<td>'+(quitado?'-':previsaoTerminoEmp(e))+'</td>'
+        +'<td>'+statusCell+'</td>'
+        +'<td style="white-space:nowrap"><button class="btn btn-sm btn-outline" title="Editar" onclick="NR.editEmp(\''+e.id+'\')"><i class="fas fa-edit"></i></button> '
+        +(quitado?'':'<button class="btn btn-sm" style="background:var(--green);color:#fff" title="Marcar como quitado" onclick="NR.quitarEmp(\''+e.id+'\')"><i class="fas fa-check"></i></button> ')
+        +'<button class="btn btn-sm btn-danger" title="Excluir" onclick="NR.delEmp(\''+e.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function preencherSelectColabEmp(sel){
+  document.getElementById('em-colab').innerHTML=(COLABS||[]).filter(c=>c.ativo).map(c=>'<option value="'+c.id+'"'+(sel===c.id?' selected':'')+'>'+c.nome+'</option>').join('');
+}
+function openCadEmp(){
+  preencherSelectColabEmp(null);
+  document.getElementById('em-desc').value='Empréstimo Crédito do Trabalhador';
+  ['em-contrato','em-banco','em-valor','em-atual','em-total','em-obs'].forEach(id=>document.getElementById(id).value='');
+  delete document.getElementById('modalCadEmp').dataset.editId;
+  document.getElementById('cadEmpTitulo').innerHTML='<i class="fas fa-hand-holding-usd" style="color:var(--amber)"></i> Cadastrar Empréstimo';
+  document.getElementById('modalCadEmp').style.display='flex';
+}
+function closeCadEmp(){document.getElementById('modalCadEmp').style.display='none';}
+function editEmp(id){
+  let e=EMPRESTIMOS.find(x=>x.id===id);if(!e)return;
+  preencherSelectColabEmp(e.colaborador_id);
+  document.getElementById('em-desc').value=e.descricao||'';
+  document.getElementById('em-contrato').value=e.contrato||'';
+  document.getElementById('em-banco').value=e.banco||'';
+  document.getElementById('em-valor').value=e.valor_parcela||'';
+  document.getElementById('em-atual').value=e.parcela_atual||'';
+  document.getElementById('em-total').value=e.total_parcelas||'';
+  document.getElementById('em-obs').value=e.observacao||'';
+  document.getElementById('modalCadEmp').dataset.editId=id;
+  document.getElementById('cadEmpTitulo').innerHTML='<i class="fas fa-edit"></i> Editar Empréstimo';
+  document.getElementById('modalCadEmp').style.display='flex';
+}
+async function salvarCadEmp(){
+  let dados={
+    colaborador_id:parseInt(document.getElementById('em-colab').value),
+    descricao:document.getElementById('em-desc').value.trim()||'Empréstimo',
+    contrato:document.getElementById('em-contrato').value.trim(),
+    banco:document.getElementById('em-banco').value.trim(),
+    valor_parcela:parseFloat(document.getElementById('em-valor').value)||0,
+    parcela_atual:parseInt(document.getElementById('em-atual').value)||0,
+    total_parcelas:parseInt(document.getElementById('em-total').value)||0,
+    observacao:document.getElementById('em-obs').value.trim()
+  };
+  if(!dados.colaborador_id){toast('Selecione o colaborador','error');return;}
+  if(dados.total_parcelas&&dados.parcela_atual>=dados.total_parcelas)dados.status='quitado';
+  let editId=document.getElementById('modalCadEmp').dataset.editId;
+  if(editId)await api('PUT','/api/emprestimos/'+editId,dados);
+  else await api('POST','/api/emprestimos',dados);
+  toast(editId?'Empréstimo atualizado!':'Empréstimo cadastrado!');
+  closeCadEmp();renderFolha();
+}
+async function quitarEmp(id){
+  if(!confirm('Marcar este empréstimo como quitado?'))return;
+  await api('PUT','/api/emprestimos/'+id,{status:'quitado'});
+  toast('Empréstimo quitado!');renderFolha();
+}
+async function delEmp(id){
+  if(!confirm('Excluir este empréstimo do controle?'))return;
+  await api('DELETE','/api/emprestimos/'+id);
+  toast('Excluído!');renderFolha();
+}
+
+function renderVerbasChecklist(selecionadas){
+  let sel=new Set(selecionadas||[]);
+  document.getElementById('cc-verbas').innerHTML=VERBAS.map(vb=>
+    '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.83rem">'
+    +'<input type="checkbox" class="cc-verba-cb" value="'+vb.id+'" '+(sel.has(vb.id)?'checked':'')+' style="width:15px;height:15px">'
+    +(vb.tipo==='desconto'?'<span style="color:var(--red)">'+vb.nome+' (−)</span>':'<span>'+vb.nome+'</span>')+'</label>'
+  ).join('')||'<span style="color:var(--text3);font-size:.8rem">Nenhuma verba cadastrada (Configurações → Verbas da Folha)</span>';
+}
 function openCadColab(){
   document.getElementById('formCadColab').reset();
   document.getElementById('cc-registrado').checked=true;
   document.getElementById('cc-ativo').checked=true;
+  document.getElementById('cc-grupo').value='';
+  renderVerbasChecklist([]);
   delete document.getElementById('modalCadColab').dataset.editId;
   document.getElementById('modalCadColab').querySelector('h3').innerHTML='<i class="fas fa-user-plus"></i> Cadastrar Colaborador';
   document.getElementById('modalCadColab').style.display='flex';
@@ -1979,6 +2176,7 @@ function getColabFormData(){
     nome:document.getElementById('cc-nome').value.trim(),
     cadastro:document.getElementById('cc-cadastro').value.trim(),
     cpf:document.getElementById('cc-cpf').value.trim(),
+    rg:document.getElementById('cc-rg').value.trim(),
     cbo:document.getElementById('cc-cbo').value.trim(),
     cargo:document.getElementById('cc-cargo').value.trim(),
     departamento:document.getElementById('cc-depto').value.trim(),
@@ -1988,7 +2186,9 @@ function getColabFormData(){
     faixa:parseFloat(document.getElementById('cc-faixa').value)||0,
     percentual:parseFloat(document.getElementById('cc-pct').value)||0,
     registrado:document.getElementById('cc-registrado').checked?1:0,
-    ativo:document.getElementById('cc-ativo').checked?1:0
+    ativo:document.getElementById('cc-ativo').checked?1:0,
+    grupo:document.getElementById('cc-grupo').value,
+    verbas_json:JSON.stringify([...document.querySelectorAll('.cc-verba-cb:checked')].map(cb=>cb.value))
   };
 }
 async function salvarCadColab(){
@@ -2010,6 +2210,7 @@ function editColab(id){
   document.getElementById('cc-nome').value=c.nome||'';
   document.getElementById('cc-cadastro').value=c.cadastro||'';
   document.getElementById('cc-cpf').value=c.cpf||'';
+  document.getElementById('cc-rg').value=c.rg||'';
   document.getElementById('cc-cbo').value=c.cbo||'';
   document.getElementById('cc-cargo').value=c.cargo||'';
   document.getElementById('cc-depto').value=c.departamento||'';
@@ -2020,6 +2221,8 @@ function editColab(id){
   document.getElementById('cc-pct').value=c.percentual||0;
   document.getElementById('cc-registrado').checked=!!c.registrado;
   document.getElementById('cc-ativo').checked=c.ativo!==0;
+  document.getElementById('cc-grupo').value=c.grupo||'';
+  renderVerbasChecklist(verbasDoColab(c));
   document.getElementById('modalCadColab').dataset.editId=id;
   document.getElementById('modalCadColab').querySelector('h3').innerHTML='<i class="fas fa-user-edit"></i> Editar Colaborador';
   document.getElementById('modalCadColab').style.display='flex';
@@ -2076,6 +2279,10 @@ async function toggleNaFolha(id,v){
   toast(v?'Incluído na folha':'Removido da folha');
   COLABS=await api('GET','/api/colaboradores');
   renderFolha();
+}
+async function tirarDaFolha(id,nome){
+  if(!confirm('Tirar '+nome+' da Folha de Pagamento?\n\nEle continua no sistema (comissões, pagamentos etc.) — só sai da folha. Para voltar, use o botão da coluna "Folha" na aba Colaboradores.'))return;
+  await toggleNaFolha(id,0);
 }
 
 // === NOTAS CNPJ (NF-e SEFAZ) ===
@@ -2202,7 +2409,7 @@ function openLancarNota(id){
   document.getElementById('lancarNotaInfo').innerHTML='<b>'+n.emitente+'</b> — NF '+(n.numero||'-')+' — Total: <b style="color:var(--green)">'+fmt(n.valor)+'</b>'
     +(n.forma_pagamento?'<br><i class="fas fa-credit-card" style="color:var(--blue)"></i> Pagamento: <b>'+n.forma_pagamento+'</b>':'')
     +(dups.length?' — '+dups.length+' parcela(s) vindas do XML da nota':'');
-  document.getElementById('ln-cat').value='';
+  document.getElementById('ln-cat').value='Fornecedor';
   document.getElementById('ln-forn').value=n.emitente||'';
   document.getElementById('ln-nota').value='D';
   document.getElementById('ln-recorrente').checked=false;
@@ -2409,6 +2616,10 @@ function fillTelegramCfg(){
   if(ch&&document.activeElement!==ch)ch.value=CFG.tg_chat_id||'';
   document.getElementById('tg-notif-notas').checked=CFG.tg_notif_notas==='1';
   document.getElementById('tg-notif-boletos').checked=CFG.tg_notif_boletos==='1';
+  let re=document.getElementById('rc-empresa');
+  if(re&&document.activeElement!==re)re.value=CFG.recibo_empresa||'';
+  let rc=document.getElementById('rc-cidade');
+  if(rc&&document.activeElement!==rc)rc.value=CFG.recibo_cidade||'';
 }
 async function salvarTelegram(){
   await api('PUT','/api/config',{
@@ -2438,6 +2649,194 @@ async function detectarChatId(){
     document.getElementById('tg-chatid').value=chat.id;
     toast('Chat ID detectado: '+chat.id+' ('+(chat.first_name||chat.title||'')+')');
   }catch(e){toast('Erro ao consultar Telegram','error');}
+}
+
+// === RECIBOS DE PAGAMENTO (FOLHA) ===
+function extenso(v){
+  v=Math.round((v||0)*100)/100;
+  const u=['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  const dz=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  const ct=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  function ate999(n){
+    if(n===0)return'';
+    if(n===100)return'cem';
+    let s='';const ch=Math.floor(n/100),r=n%100;
+    if(ch)s+=ct[ch];
+    if(r){if(s)s+=' e ';if(r<20)s+=u[r];else{s+=dz[Math.floor(r/10)];if(r%10)s+=' e '+u[r%10];}}
+    return s;
+  }
+  const intg=Math.floor(v),cent=Math.round((v-intg)*100);
+  let partes=[];
+  const mi=Math.floor(intg/1000000),ml=Math.floor((intg%1000000)/1000),rs=intg%1000;
+  if(mi)partes.push(ate999(mi)+(mi===1?' milhão':' milhões'));
+  if(ml)partes.push(ml===1?'mil':ate999(ml)+' mil');
+  if(rs)partes.push(ate999(rs));
+  let s;
+  if(!partes.length)s='zero';
+  else if(partes.length===1)s=partes[0];
+  else{
+    let ult=partes.pop();
+    s=partes.join(', ')+((rs&&(rs<100||rs%100===0))?' e ':', ')+ult;
+  }
+  if(mi&&!ml&&!rs)s+=' de';
+  s+=(intg===1?' real':' reais');
+  if(cent)s+=' e '+ate999(cent)+(cent===1?' centavo':' centavos');
+  return s;
+}
+const MESES_NOME=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+// Monta as linhas do recibo a partir das verbas do colaborador com valor no mês
+function linhasDoRecibo(c){
+  let out=[];
+  for(const vb of VERBAS){
+    let v=valorFolha(c.id,vb.id);
+    if(!v)continue;
+    out.push({campo:vb.id,label:vb.nome,valor:Math.round((vb.tipo==='desconto'?-v:v)*100)/100});
+  }
+  return out;
+}
+function montarReciboHtml(linhas,c){
+  let total=Math.round(linhas.reduce((s,l)=>s+(l.valor||0),0)*100)/100;
+  let det='';
+  linhas.forEach(l=>{
+    let neg=l.valor<0;
+    det+='<tr><td>'+l.label+(neg?' (−)':'')+'</td><td style="text-align:right">'+(neg?'−':'')+fmt(Math.abs(l.valor))+'</td></tr>';
+  });
+  det+='<tr class="tot"><td><b>TOTAL</b></td><td style="text-align:right"><b>'+fmt(total)+'</b></td></tr>';
+  let sel=document.getElementById('empresaSelector');
+  let empNome=(CFG.recibo_empresa||'').trim()||(sel&&sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:'')||document.getElementById('empresaNome').textContent;
+  let cidade=((CFG.recibo_cidade||'').trim()||'CARBONITA').toUpperCase();
+  let [ano,mesN]=gM().split('-').map(Number);
+  let mesRef=MESES_NOME[mesN-1]+' de '+ano;
+  let hoje=new Date();
+  let dataStr=cidade+', '+hoje.getDate()+' DE '+MESES_NOME[hoje.getMonth()].toUpperCase()+' DE '+hoje.getFullYear();
+  return '<div class="recibo">'
+    +'<div class="rec-head"><b>RECIBO</b><span class="rec-val">'+fmt(total)+'</span></div>'
+    +'<p class="rec-texto">Recebi da <b>'+empNome+'</b>, a importância de <b>'+fmt(total)+'</b> ('+extenso(total)+'), referente ao pagamento salarial do mês de <b>'+mesRef+'</b>.</p>'
+    +'<p class="rec-data">'+dataStr+'</p>'
+    +'<div class="rec-ass">_____________________________________________<br><b>'+(c?c.nome:'')+'</b>'
+    +(c&&c.cpf?'<br>CPF '+c.cpf:'')+(c&&c.rg?'<br>RG '+c.rg:'')+'</div>'
+    +'<table class="rec-det">'+det+'</table>'
+    +'</div>';
+}
+function abrirJanelaRecibos(html){
+  let w=window.open('','','width=820,height=900');
+  w.document.write('<html><head><title>Recibos de Pagamento</title><style>'
+    +'body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;padding:24px;font-size:13px}'
+    +'.recibo{max-width:700px;margin:0 auto 18px;padding:14px 6px 18px;page-break-inside:avoid;border-bottom:2px dashed #999}'
+    +'.rec-head{display:flex;justify-content:space-between;font-size:15px;margin-bottom:10px}'
+    +'.rec-val{font-weight:bold}'
+    +'.rec-texto{line-height:1.5;margin-bottom:14px;text-align:justify}'
+    +'.rec-data{margin:14px 0 26px;font-weight:600}'
+    +'.rec-ass{text-align:center;margin-bottom:14px;line-height:1.5}'
+    +'.rec-det{width:60%;margin:0 auto;border-collapse:collapse;font-size:12px}'
+    +'.rec-det td{padding:2px 8px;border-bottom:1px solid #ddd}'
+    +'.rec-det .tot td{border-top:2px solid #000;border-bottom:none;padding-top:5px}'
+    +'@media print{.recibo{margin-bottom:10px}}'
+    +'</style></head><body>'+html+'</body></html>');
+  w.document.close();
+  setTimeout(()=>w.print(),400);
+}
+let reciboLinhasArr=[],reciboColabId=null;
+function printReciboFolha(colabId){
+  let c=COLABS.find(x=>x.id===colabId);
+  if(!c){toast('Colaborador não encontrado','error');return;}
+  reciboColabId=c.id;
+  reciboLinhasArr=linhasDoRecibo(c);
+  if(!reciboLinhasArr.length)reciboLinhasArr=[{campo:'',label:'Salário',valor:0}];
+  document.getElementById('reciboColabNome').textContent=c.nome;
+  renderReciboLinhas();
+  document.getElementById('modalRecibo').style.display='flex';
+}
+function renderReciboLinhas(){
+  document.getElementById('reciboLinhas').innerHTML=reciboLinhasArr.map((l,i)=>
+    '<tr><td><input type="text" class="inline-input" value="'+l.label.replace(/"/g,'&quot;')+'" style="width:100%" onchange="NR.setLinhaRecibo('+i+',\'label\',this.value)"></td>'
+    +'<td><input type="number" class="inline-input" value="'+l.valor+'" step="0.01" style="width:100px;text-align:right" onchange="NR.setLinhaRecibo('+i+',\'valor\',this.value)"></td>'
+    +'<td><button class="btn btn-sm btn-danger" onclick="NR.delLinhaRecibo('+i+')"><i class="fas fa-times"></i></button></td></tr>'
+  ).join('');
+  atualizarTotalRecibo();
+}
+function atualizarTotalRecibo(){
+  let t=Math.round(reciboLinhasArr.reduce((s,l)=>s+(l.valor||0),0)*100)/100;
+  document.getElementById('reciboTotal').textContent=fmt(t);
+}
+function setLinhaRecibo(i,campo,valor){
+  if(campo==='valor')reciboLinhasArr[i].valor=parseFloat(valor)||0;
+  else reciboLinhasArr[i].label=valor;
+  atualizarTotalRecibo();
+}
+function addLinhaRecibo(){reciboLinhasArr.push({campo:'',label:'',valor:0});renderReciboLinhas();}
+function delLinhaRecibo(i){reciboLinhasArr.splice(i,1);renderReciboLinhas();}
+function closeRecibo(){document.getElementById('modalRecibo').style.display='none';}
+function imprimirReciboModal(){
+  let c=COLABS.find(x=>x.id===reciboColabId);
+  abrirJanelaRecibos(montarReciboHtml(reciboLinhasArr.filter(l=>l.valor!==0||l.label),c));
+  closeRecibo();
+}
+function printRecibosMes(){
+  let itens=(COLABS||[]).filter(c=>c.ativo&&c.na_folha!==0).map(c=>({linhas:linhasDoRecibo(c),c}))
+    .filter(x=>x.linhas.length&&x.linhas.reduce((s,l)=>s+l.valor,0)>0);
+  if(!itens.length){toast('Nenhum colaborador com valores na folha deste mês','error');return;}
+  let html=itens.map(x=>montarReciboHtml(x.linhas,x.c)).join('');
+  abrirJanelaRecibos(html);
+}
+async function salvarReciboCfg(){
+  await api('PUT','/api/config',{
+    recibo_empresa:document.getElementById('rc-empresa').value.trim(),
+    recibo_cidade:document.getElementById('rc-cidade').value.trim()
+  });
+  toast('Configuração dos recibos salva!');
+  CFG.recibo_empresa=document.getElementById('rc-empresa').value.trim();
+  CFG.recibo_cidade=document.getElementById('rc-cidade').value.trim();
+}
+
+// === BACKUP COMPLETO ===
+let restCompFile=null;
+async function baixarBackupCompleto(){
+  toast('Gerando backup completo... aguarde','info');
+  try{
+    let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
+    let r=await fetch('/api/backup-completo',{headers:hdrs});
+    if(!r.ok){let e=await r.json().catch(()=>({}));toast('Erro: '+(e.error||r.status),'error');return;}
+    let blob=await r.blob();
+    let a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='backup_completo_'+new Date().toISOString().split('T')[0]+'.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Backup completo baixado! Guarde em local seguro (contém todos os dados e certificados).');
+  }catch(e){toast('Erro ao gerar backup','error');}
+}
+function abrirRestauraCompleto(input){
+  if(!input.files[0])return;
+  restCompFile=input.files[0];
+  input.value='';
+  document.getElementById('restCompArquivo').innerHTML='<i class="fas fa-file-archive"></i> Arquivo: <b>'+restCompFile.name+'</b> ('+(restCompFile.size/1024/1024).toFixed(1)+' MB)';
+  let sel=document.getElementById('empresaSelector');
+  document.getElementById('rest-empresa').innerHTML=sel?[...sel.options].map(o=>'<option value="'+o.value+'">'+o.text+'</option>').join(''):'';
+  document.querySelector('input[name="rest-modo"][value="tudo"]').checked=true;
+  document.getElementById('modalRestauraCompleto').style.display='flex';
+}
+function closeRestauraCompleto(){document.getElementById('modalRestauraCompleto').style.display='none';restCompFile=null;}
+async function confirmarRestauraCompleto(){
+  if(!restCompFile){toast('Nenhum arquivo selecionado','error');return;}
+  let modo=document.querySelector('input[name="rest-modo"]:checked').value;
+  let alvo=modo==='tudo'?'tudo':document.getElementById('rest-empresa').value;
+  let msg=modo==='tudo'
+    ?'Restaurar TODAS as empresas, usuários e certificados do backup?\n\nOs dados atuais serão substituídos pelos do backup.'
+    :'Restaurar somente a empresa "'+alvo+'" do backup?\n\nOs dados atuais dela serão substituídos.';
+  if(!confirm(msg))return;
+  if(!confirm('Confirma mesmo? Esta ação não tem desfazer.'))return;
+  let fd=new FormData();
+  fd.append('zip',restCompFile);
+  fd.append('modo',alvo);
+  try{
+    let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
+    let r=await fetch('/api/backup-completo/restaurar',{method:'POST',headers:hdrs,body:fd});
+    let data=await r.json();
+    if(data.error){toast('Erro: '+data.error,'error');return;}
+    toast('Restaurado: '+data.empresas.join(', ')+(data.extras&&data.extras.length?' + '+data.extras.join(', '):'')+'. Recarregando...');
+    setTimeout(()=>location.reload(),2000);
+  }catch(e){toast('Erro na restauração','error');}
 }
 
 // === BOLETO (BIPE / IMPORTAR PDF) ===
@@ -2539,6 +2938,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,addFolhaColab,updateFolhaField,delFolhaItem,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
 checkAuth();
 })();
