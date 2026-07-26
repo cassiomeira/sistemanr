@@ -58,6 +58,7 @@
             <li><a href="#" class="nav-link" data-section="conta-dono" id="nav-conta-dono"><i class="fas fa-user-tie"></i><span>Conta do Celso</span></a></li>
             <li><a href="#" class="nav-link" data-section="distribuicao" id="nav-distribuicao"><i class="fas fa-percentage"></i><span>Distribuição</span></a></li>
             <li><a href="#" class="nav-link" data-section="notas-nfe" id="nav-notas-nfe"><i class="fas fa-file-download"></i><span>Notas CNPJ</span><span class="badge-count" id="badge-nfe" style="display:none;background:var(--blue);color:#fff;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
+            <li><a href="#" class="nav-link" data-section="licitacoes" id="nav-licitacoes"><i class="fas fa-gavel"></i><span>Licitações</span><span class="badge-count" id="badge-licit" style="display:none;background:var(--green);color:#fff;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
             <li><a href="#" class="nav-link" data-section="fornecedores-cad" id="nav-fornecedores-cad"><i class="fas fa-address-book"></i><span>Fornecedores</span></a></li>
             <li><a href="#" class="nav-link" data-section="folha" id="nav-folha"><i class="fas fa-file-invoice-dollar"></i><span>Folha Pagamento</span></a></li>
             <li><a href="#" class="nav-link" data-section="colaboradores" id="nav-colaboradores"><i class="fas fa-users"></i><span>Comissionados</span></a></li>
@@ -585,6 +586,47 @@
             </div>
         </div>
 
+        <!-- LICITAÇÕES (PNCP) -->
+        <section class="content-section" id="section-licitacoes">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-gavel"></i> Licitações — Cidades Monitoradas</h3>
+                    <button class="btn btn-primary btn-sm" id="btnLicitConsultar" onclick="NR.licitConsultar()"><i class="fas fa-sync-alt"></i> Consultar Agora</button>
+                </div>
+                <div style="padding:0 24px 16px">
+                    <p style="margin-bottom:12px;color:var(--text3);font-size:.82rem"><i class="fas fa-info-circle"></i> Fonte oficial: <b>PNCP</b> (Portal Nacional de Contratações Públicas). O sistema consulta automaticamente 3x ao dia (07:30, 13:30 e 19:30) as cidades configuradas e avisa no painel e no Telegram.</p>
+                    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+                        <span style="font-size:.82rem;color:var(--text2)">Cidades:</span>
+                        <span id="licitCidadesChips"></span>
+                        <input type="text" id="licit-cidade-nome" list="licit-cidade-list" placeholder="Digite e escolha a cidade..." autocomplete="off" onfocus="NR.carregarCidadesUF()" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.82rem;width:190px">
+                        <datalist id="licit-cidade-list"></datalist>
+                        <input type="text" id="licit-cidade-uf" placeholder="UF" maxlength="2" value="MG" onchange="NR.carregarCidadesUF(true)" style="padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.82rem;width:52px;text-transform:uppercase">
+                        <button class="btn btn-outline btn-sm" onclick="NR.addLicitCidade()"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <div class="summary-badges" style="margin-bottom:12px">
+                        <span class="badge badge-green">Novas: <b id="licit-qtd-novas">0</b></span>
+                        <span class="badge badge-blue">Monitorando: <b id="licit-qtd-cidades">0</b> cidade(s)</span>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+                        <input type="text" id="licit-busca" placeholder="🔍 Palavra-chave: internet, móveis, uniformes, transporte..." oninput="NR.renderLicitacoes(true)" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;flex:1;min-width:220px;max-width:380px">
+                        <select id="licit-filtro-cidade" onchange="NR.renderLicitacoes(true)" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem"><option value="">Todas as cidades</option></select>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="licit-mostrar-todas" style="width:16px;height:16px" onchange="NR.renderLicitacoes(true)"> Mostrar vistas/ignoradas</label>
+                        <span id="licit-sel-count" style="font-size:.82rem;color:var(--text3)"></span>
+                        <div id="licit-sel-actions" style="display:none;gap:8px;margin-left:auto">
+                            <button class="btn btn-sm btn-outline" onclick="NR.marcarLicitSel('vista')"><i class="fas fa-eye"></i> Marcar Vistas</button>
+                            <button class="btn btn-sm btn-outline" onclick="NR.marcarLicitSel('ignorada')"><i class="fas fa-eye-slash"></i> Ignorar</button>
+                            <button class="btn btn-sm btn-outline" onclick="NR.marcarLicitSel('nova')"><i class="fas fa-undo"></i> Voltar p/ Novas</button>
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto">
+                        <table class="data-table" style="font-size:.82rem"><thead><tr>
+                            <th style="width:34px"><input type="checkbox" id="licit-sel-all" style="width:16px;height:16px" onchange="NR.toggleAllLicit(this.checked)"></th>
+                            <th>Publicação</th><th>Cidade</th><th>Órgão</th><th>Objeto</th><th>Modalidade</th><th>Valor Estimado</th><th title="Início do recebimento de propostas">Abertura</th><th title="Prazo FINAL para enviar proposta — depois desta data não dá mais para participar">Prazo Propostas ⏰</th><th>Situação</th><th>Ações</th>
+                        </tr></thead><tbody id="licitacoesGrid"></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </section>
         <!-- FORNECEDORES (CADASTRO) -->
         <section class="content-section" id="section-fornecedores-cad">
             <div class="panel">
@@ -806,6 +848,7 @@
                     <div class="form-group" style="grid-column:span 2;display:flex;gap:18px;flex-wrap:wrap">
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="tg-notif-notas" style="width:16px;height:16px"> Avisar notas novas contra o CNPJ</label>
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="tg-notif-boletos" style="width:16px;height:16px"> Avisar boletos vencendo (08:00, hoje e amanhã)</label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="tg-notif-licit" style="width:16px;height:16px"> Avisar licitações novas nas cidades monitoradas</label>
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;margin-top:8px">
@@ -1135,6 +1178,38 @@
             </div>
         </div>
     </div>
+    <!-- MODAL ANÁLISE DE EDITAL -->
+    <div class="modal-overlay" id="modalAnalise" style="display:none">
+        <div class="modal-card" style="max-width:760px">
+            <div class="modal-header"><h3><i class="fas fa-magic" style="color:#a78bfa"></i> Análise do Edital</h3><button class="modal-close" onclick="NR.closeAnalise()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto">
+                <p id="analiseInfo" style="margin-bottom:10px;color:var(--text2);font-size:.88rem"></p>
+                <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+                    <a id="analiseEditalBtn" class="btn btn-primary btn-sm" href="#" target="_blank"><i class="fas fa-file-pdf"></i> Baixar Edital</a>
+                    <button class="btn btn-outline btn-sm" onclick="NR.reanalisarLicit()" title="Baixa e lê o edital de novo, refazendo o checklist automático"><i class="fas fa-sync-alt"></i> Analisar Novamente</button>
+                    <span id="analiseDatas" style="font-size:.82rem;color:var(--text3)"></span>
+                </div>
+                <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:14px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                        <b><i class="fas fa-list-check" style="color:var(--green)"></i> Checklist de Documentos</b>
+                        <span id="analiseDocsProg" style="font-size:.85rem;color:var(--text2)"></span>
+                    </div>
+                    <div id="analiseDocsList"></div>
+                    <div style="display:flex;gap:8px;margin-top:10px">
+                        <input type="text" id="analise-novo-doc" placeholder="Adicionar documento manual..." style="flex:1;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                        <button class="btn btn-outline btn-sm" onclick="NR.addDocAnalise()"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <p style="margin-top:8px;font-size:.75rem;color:var(--text3)"><i class="fas fa-info-circle"></i> Lista extraída automaticamente do edital — <b>confira sempre com o texto oficial</b>, pode haver documento que a leitura não capturou.</p>
+                </div>
+                <details style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:600;color:var(--text2);padding:8px 0"><i class="fas fa-file-signature" style="color:var(--blue)"></i> Como apresentar a Proposta (trecho do edital)</summary>
+                    <pre id="analiseProposta" style="white-space:pre-wrap;font-family:inherit;font-size:.8rem;color:var(--text2);background:var(--bg3);border-radius:8px;padding:12px;max-height:300px;overflow-y:auto"></pre>
+                </details>
+                <details><summary style="cursor:pointer;font-weight:600;color:var(--text2);padding:8px 0"><i class="fas fa-clipboard-list" style="color:var(--amber)"></i> Trecho da Habilitação (texto oficial)</summary>
+                    <pre id="analiseHabilitacao" style="white-space:pre-wrap;font-family:inherit;font-size:.8rem;color:var(--text2);background:var(--bg3);border-radius:8px;padding:12px;max-height:300px;overflow-y:auto"></pre>
+                </details>
+            </div>
+        </div>
+    </div>
     <!-- MODAL CONFERIR RECIBO -->
     <div class="modal-overlay" id="modalRecibo" style="display:none">
         <div class="modal-card" style="max-width:580px">
@@ -1243,6 +1318,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=85"></script>
+    <script src="app.js?v=92"></script>
 </body>
 </html>

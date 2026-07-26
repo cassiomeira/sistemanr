@@ -881,16 +881,91 @@ app.post('/api/boleto/importar-pdf', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// === LICITAÇÕES (PNCP) ===
+const licitacoes = require('./licitacoes');
+app.get('/api/licitacoes', (req, res) => res.json(db.getLicitacoes(req.emp)));
+app.put('/api/licitacoes/:id', (req, res) => {
+  db.updateLicitacao(req.emp, req.params.id, { status: req.body.status });
+  res.json({ ok: true });
+});
+app.put('/api/licitacoes-multi', (req, res) => {
+  const ids = req.body.ids || [];
+  const status = ['nova', 'vista', 'ignorada'].includes(req.body.status) ? req.body.status : 'vista';
+  for (const id of ids) db.updateLicitacao(req.emp, id, { status });
+  res.json({ ok: true, count: ids.length });
+});
+app.post('/api/licitacoes/consultar', async (req, res) => {
+  try { res.json(await licitacoes.consultarLicitacoes(req.emp)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Análise do edital (varinha mágica)
+app.post('/api/licitacoes/:id/analisar', async (req, res) => {
+  try {
+    const lic = db.getLicitacaoById(req.emp, req.params.id);
+    if (!lic) return res.status(404).json({ error: 'Licitação não encontrada' });
+    const r = await licitacoes.analisarEdital(req.emp, lic, !!(req.body && req.body.force));
+    if (r.ok) db.addAuditLog(req.emp, req.user.nome, 'criou', 'Licitações', 'Analisou edital de ' + lic.municipio + ': ' + (lic.objeto || '').substring(0, 80));
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/licitacoes/:id/analise', (req, res) => {
+  const lic = db.getLicitacaoById(req.emp, req.params.id);
+  if (!lic) return res.status(404).json({ error: 'Licitação não encontrada' });
+  let analise = null;
+  try { analise = JSON.parse(lic.analise_json || 'null'); } catch (e) {}
+  res.json({ analise, docs: db.getLicitDocs(req.emp, req.params.id) });
+});
+app.post('/api/licitacoes/:id/docs', (req, res) => {
+  const documento = (req.body.documento || '').trim();
+  if (!documento) return res.status(400).json({ error: 'Documento vazio' });
+  const d = { id: uid(), licitacao_id: req.params.id, documento, origem: 'manual', ordem: 99 };
+  db.addLicitDoc(req.emp, d);
+  res.json({ ok: true, id: d.id });
+});
+app.put('/api/licitacoes/docs/:docId', (req, res) => {
+  db.updateLicitDoc(req.emp, req.params.docId, req.body.pronto ? 1 : 0);
+  res.json({ ok: true });
+});
+app.delete('/api/licitacoes/docs/:docId', (req, res) => {
+  db.delLicitDoc(req.emp, req.params.docId);
+  res.json({ ok: true });
+});
+
+app.get('/api/licitacoes/cidades', (req, res) => res.json(licitacoes.getCidades(req.emp)));
+app.post('/api/licitacoes/cidades', async (req, res) => {
+  try {
+    const { nome, uf, ibge } = req.body;
+    if (!nome || !uf) return res.status(400).json({ error: 'Informe cidade e UF' });
+    // Se o navegador já mandou o código IBGE (resolvido pela lista oficial), usa direto
+    const cidade = (ibge && /^\d{7}$/.test(String(ibge)))
+      ? { nome, uf: uf.toUpperCase(), ibge: String(ibge) }
+      : await licitacoes.resolverIbge(nome, uf);
+    const lista = licitacoes.getCidades(req.emp);
+    if (lista.some(c => c.ibge === cidade.ibge)) return res.status(409).json({ error: 'Cidade já monitorada' });
+    lista.push(cidade);
+    db.updateConfig(req.emp, 'licit_cidades', JSON.stringify(lista));
+    db.addAuditLog(req.emp, req.user.nome, 'criou', 'Licitações', 'Monitorando ' + cidade.nome + '/' + cidade.uf + ' (IBGE ' + cidade.ibge + ')');
+    res.json({ ok: true, cidade });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/licitacoes/cidades/:ibge', (req, res) => {
+  const lista = licitacoes.getCidades(req.emp).filter(c => c.ibge !== req.params.ibge);
+  db.updateConfig(req.emp, 'licit_cidades', JSON.stringify(lista));
+  res.json({ ok: true });
+});
+
 // === ALERTAS (dashboard) ===
 app.get('/api/alertas', (req, res) => {
   const hoje = new Date();
   const amanha = new Date(hoje.getTime() + 86400000);
   const f = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const notasNovas = db.getNotasRecebidas(req.emp).filter(n => n.status === 'nova').length;
+  const licitacoesNovas = db.getLicitacoes(req.emp).filter(l => l.status === 'nova').length;
   const vencendo = db.getContasVencendo(req.emp, f(hoje), f(amanha));
   const hojeStr = f(hoje);
   res.json({
     notasNovas,
+    licitacoesNovas,
     boletosHoje: vencendo.filter(c => c.vencimento === hojeStr),
     boletosAmanha: vencendo.filter(c => c.vencimento !== hojeStr),
   });
@@ -1186,4 +1261,9 @@ db.init().then(() => {
     telegram.notificarTodasEmpresas().catch(e => console.error('Erro Telegram:', e.message));
   });
   console.log('⏰ Aviso Telegram de boletos: 08:00');
+  cron.schedule('30 7,13,19 * * *', () => {
+    console.log('⏰ Consulta de licitações (PNCP)...');
+    licitacoes.consultarTodasEmpresas().catch(e => console.error('Erro licitações:', e.message));
+  });
+  console.log('⏰ Consulta de licitações: 07:30, 13:30, 19:30');
 }).catch(err => { console.error('Erro ao iniciar banco:', err); process.exit(1); });

@@ -310,6 +310,35 @@ function initDB(dbInstance) {
     coluna TEXT NOT NULL,
     valor REAL DEFAULT 0
   )`);
+  // Licitações monitoradas via PNCP
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS licitacoes (
+    id TEXT PRIMARY KEY,
+    numero_controle TEXT UNIQUE,
+    municipio TEXT DEFAULT '',
+    uf TEXT DEFAULT '',
+    orgao TEXT DEFAULT '',
+    objeto TEXT DEFAULT '',
+    modalidade TEXT DEFAULT '',
+    valor_estimado REAL DEFAULT 0,
+    data_publicacao TEXT DEFAULT '',
+    data_abertura TEXT DEFAULT '',
+    data_encerramento TEXT DEFAULT '',
+    link TEXT DEFAULT '',
+    status TEXT DEFAULT 'nova',
+    data_captura DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try { dbInstance.run('ALTER TABLE licitacoes ADD COLUMN analise_json TEXT DEFAULT ""'); } catch(e) {}
+  // Checklist de documentos por licitação (gerado pela análise do edital + manuais)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS licitacao_docs (
+    id TEXT PRIMARY KEY,
+    licitacao_id TEXT NOT NULL,
+    documento TEXT NOT NULL,
+    link TEXT DEFAULT '',
+    fonte_nome TEXT DEFAULT '',
+    origem TEXT DEFAULT 'auto',
+    pronto INTEGER DEFAULT 0,
+    ordem INTEGER DEFAULT 0
+  )`);
   // Empréstimos consignados dos colaboradores (controle/lembrete)
   dbInstance.run(`CREATE TABLE IF NOT EXISTS emprestimos (
     id TEXT PRIMARY KEY,
@@ -788,6 +817,30 @@ module.exports = {
     }
     return n;
   },
+
+  // -- Licitações --
+  getLicitacoes(slug) { return query(slug, 'SELECT * FROM licitacoes ORDER BY data_publicacao DESC, data_captura DESC LIMIT 500'); },
+  getLicitacaoByControle(slug, nc) { const r = query(slug, 'SELECT id FROM licitacoes WHERE numero_controle=?', [nc]); return r[0] || null; },
+  getLicitacaoById(slug, id) { const r = query(slug, 'SELECT * FROM licitacoes WHERE id=?', [id]); return r[0] || null; },
+  addLicitacao(slug, l) {
+    run(slug, 'INSERT INTO licitacoes (id,numero_controle,municipio,uf,orgao,objeto,modalidade,valor_estimado,data_publicacao,data_abertura,data_encerramento,link,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [l.id, l.numero_controle, l.municipio || '', l.uf || '', l.orgao || '', l.objeto || '', l.modalidade || '', l.valor_estimado || 0, l.data_publicacao || '', l.data_abertura || '', l.data_encerramento || '', l.link || '', l.status || 'nova']);
+  },
+  updateLicitacao(slug, id, fields) {
+    const allowed = ['status', 'analise_json'];
+    const sets = [], vals = [];
+    for (const [k, v] of Object.entries(fields)) { if (allowed.includes(k)) { sets.push(k + '=?'); vals.push(v); } }
+    if (sets.length) { vals.push(id); run(slug, 'UPDATE licitacoes SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  // Checklist de documentos da licitação
+  getLicitDocs(slug, licitacaoId) { return query(slug, 'SELECT * FROM licitacao_docs WHERE licitacao_id=? ORDER BY ordem, documento', [licitacaoId]); },
+  addLicitDoc(slug, d) {
+    run(slug, 'INSERT INTO licitacao_docs (id,licitacao_id,documento,link,fonte_nome,origem,pronto,ordem) VALUES (?,?,?,?,?,?,?,?)',
+      [d.id, d.licitacao_id, d.documento, d.link || '', d.fonte_nome || '', d.origem || 'auto', d.pronto ? 1 : 0, d.ordem || 0]);
+  },
+  updateLicitDoc(slug, id, pronto) { run(slug, 'UPDATE licitacao_docs SET pronto=? WHERE id=?', [pronto ? 1 : 0, id]); },
+  delLicitDoc(slug, id) { run(slug, 'DELETE FROM licitacao_docs WHERE id=?', [id]); },
+  delLicitDocsAuto(slug, licitacaoId) { run(slug, "DELETE FROM licitacao_docs WHERE licitacao_id=? AND origem='auto'", [licitacaoId]); },
 
   // -- Empréstimos --
   getEmprestimos(slug) { return query(slug, 'SELECT e.*, c.nome as colab_nome FROM emprestimos e JOIN colaboradores c ON e.colaborador_id=c.id ORDER BY e.status, c.nome'); },

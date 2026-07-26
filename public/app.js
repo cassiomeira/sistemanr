@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','licitacoes':'Licitações','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','licitacoes':'fa-gavel','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -810,7 +810,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas(),renderLicitacoes()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -928,7 +928,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','licitacoes','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -2602,6 +2602,210 @@ async function baixarXmlNota(id){
   }catch(e){toast('Erro ao baixar XML','error');}
 }
 
+// === LICITAÇÕES (PNCP) ===
+let LICITACOES=[],LICIT_CIDADES=[];
+async function renderLicitacoes(semFetch){
+  if(!document.getElementById('licitacoesGrid'))return;
+  if(!semFetch){
+    try{[LICITACOES,LICIT_CIDADES]=await Promise.all([api('GET','/api/licitacoes'),api('GET','/api/licitacoes/cidades')]);}catch(e){LICITACOES=[];LICIT_CIDADES=[];}
+  }
+  let filtroAtual=document.getElementById('licit-filtro-cidade')?document.getElementById('licit-filtro-cidade').value:'';
+  document.getElementById('licitCidadesChips').innerHTML=(LICIT_CIDADES||[]).map(c=>{
+    let key=c.nome+'/'+c.uf;
+    let ativo=filtroAtual===key;
+    return '<span class="tag-item" style="display:inline-flex;align-items:center;gap:5px;margin-right:4px'+(ativo?';border:1px solid var(--blue);background:rgba(59,130,246,.18)':'')+'">'
+      +'<i class="fas fa-map-marker-alt" style="color:var(--blue)"></i>'
+      +'<span onclick="NR.filtrarPorCidade(\''+c.nome.replace(/'/g,"\\'")+'\',\''+c.uf+'\')" style="cursor:pointer" title="'+(ativo?'Clique para limpar o filtro':'Clique para filtrar a lista por '+c.nome)+'">'+c.nome+'/'+c.uf+'</span>'
+      +'<button class="tag-remove" onclick="NR.delLicitCidade(\''+c.ibge+'\',\''+c.nome.replace(/'/g,"\\'")+'\')"><i class="fas fa-times"></i></button></span>';
+  }).join('')||'<span style="color:var(--text3);font-size:.8rem">Nenhuma cidade — adicione ao lado</span>';
+  document.getElementById('licit-qtd-cidades').textContent=(LICIT_CIDADES||[]).length;
+  carregarCidadesUF();
+  let novas=(LICITACOES||[]).filter(l=>l.status==='nova').length;
+  document.getElementById('licit-qtd-novas').textContent=novas;
+  let badge=document.getElementById('badge-licit');
+  if(badge){if(novas){badge.textContent=novas;badge.style.display='inline';}else badge.style.display='none';}
+  let mostrarTodas=document.getElementById('licit-mostrar-todas').checked;
+  let lista=mostrarTodas?(LICITACOES||[]):(LICITACOES||[]).filter(l=>l.status==='nova');
+  // Filtro de cidade (mantém a seleção entre renderizações)
+  let filtroSel=document.getElementById('licit-filtro-cidade');
+  let filtroCidade=filtroSel.value;
+  let cidadesExistentes=[...new Set([...(LICITACOES||[]).map(l=>l.municipio+'/'+l.uf),...(LICIT_CIDADES||[]).map(c=>c.nome+'/'+c.uf)])].sort();
+  filtroSel.innerHTML='<option value="">Todas as cidades</option>'+cidadesExistentes.map(c=>'<option'+(c===filtroCidade?' selected':'')+'>'+c+'</option>').join('');
+  if(filtroCidade)lista=lista.filter(l=>(l.municipio+'/'+l.uf)===filtroCidade);
+  // Busca por palavras-chave (ignora acentos; todas as palavras precisam aparecer)
+  let busca=(document.getElementById('licit-busca').value||'').trim();
+  if(busca){
+    let nb=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+    let palavras=nb(busca).split(/\s+/).filter(Boolean);
+    lista=lista.filter(l=>{
+      let alvo=nb((l.objeto||'')+' '+(l.orgao||'')+' '+(l.modalidade||'')+' '+(l.municipio||''));
+      return palavras.every(p=>alvo.includes(p));
+    });
+  }
+  let statusLbl={'nova':'<span style="color:var(--green)"><i class="fas fa-star"></i> Nova</span>','vista':'<span style="color:var(--blue)"><i class="fas fa-eye"></i> Vista</span>','ignorada':'<span style="color:var(--text3)"><i class="fas fa-eye-slash"></i> Ignorada</span>'};
+  document.getElementById('licitacoesGrid').innerHTML=(lista&&lista.length)?lista.map(l=>{
+    let temAnalise=!!(l.analise_json&&l.analise_json.length>10);
+    let acoes='<button class="btn btn-sm" style="background:#7c5cd6;color:#fff" title="'+(temAnalise?'Ver análise do edital (checklist de documentos)':'Analisar edital: baixa o PDF, extrai proposta e monta o checklist de documentos')+'" onclick="NR.analisarLicit(\''+l.id+'\')"><i class="fas '+(temAnalise?'fa-clipboard-check':'fa-magic')+'"></i></button> ';
+    acoes+='<a class="btn btn-sm btn-primary" href="'+l.link+'" target="_blank" title="Abrir no portal de origem"><i class="fas fa-external-link-alt"></i></a> ';
+    if(l.status==='nova')acoes+='<button class="btn btn-sm btn-outline" title="Marcar como vista" onclick="NR.marcarLicit(\''+l.id+'\',\'vista\')"><i class="fas fa-eye"></i></button> <button class="btn btn-sm btn-outline" title="Ignorar" onclick="NR.marcarLicit(\''+l.id+'\',\'ignorada\')"><i class="fas fa-eye-slash"></i></button>';
+    else acoes+='<button class="btn btn-sm btn-outline" title="Voltar para novas" onclick="NR.marcarLicit(\''+l.id+'\',\'nova\')"><i class="fas fa-undo"></i></button>';
+    let objeto=(l.objeto||'').length>140?(l.objeto.substring(0,140)+'…'):(l.objeto||'-');
+    return '<tr'+(l.status!=='nova'?' style="opacity:.55"':'')+'><td><input type="checkbox" class="licit-cb" value="'+l.id+'" style="width:16px;height:16px" onchange="NR.updateLicitSel()"></td><td style="white-space:nowrap">'+fD(l.data_publicacao)+'</td><td><b>'+l.municipio+'</b>/'+l.uf+'</td><td style="font-size:11px">'+(l.orgao||'-')+'</td><td title="'+(l.objeto||'').replace(/"/g,'&quot;')+'">'+objeto+'</td><td>'+(l.modalidade||'-')+'</td><td style="white-space:nowrap">'+(l.valor_estimado?fmt(l.valor_estimado):'-')+'</td><td style="white-space:nowrap">'+(l.data_abertura?fD(l.data_abertura):'-')+'</td><td style="white-space:nowrap;font-weight:600">'+(l.data_encerramento?fD(l.data_encerramento):'-')+'</td><td>'+(statusLbl[l.status]||l.status)+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
+  }).join(''):'<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-gavel" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>'+(busca||filtroCidade?'Nenhuma licitação encontrada com esse filtro.':(mostrarTodas?'Nenhuma licitação capturada ainda.':'Nenhuma licitação nova.')+' Configure as cidades e clique em "Consultar Agora".')+'</td></tr>';
+  document.getElementById('licit-sel-all').checked=false;
+  updateLicitSel();
+}
+function toggleAllLicit(checked){document.querySelectorAll('.licit-cb').forEach(cb=>cb.checked=checked);updateLicitSel();}
+function updateLicitSel(){
+  let sel=document.querySelectorAll('.licit-cb:checked').length;
+  let el=document.getElementById('licit-sel-count');
+  let bar=document.getElementById('licit-sel-actions');
+  if(el)el.textContent=sel?sel+' selecionada(s)':'';
+  if(bar)bar.style.display=sel?'flex':'none';
+}
+// Análise de edital (varinha mágica)
+let analiseLicitId=null;
+async function analisarLicit(id){
+  analiseLicitId=id;
+  try{
+    let r=await api('GET','/api/licitacoes/'+id+'/analise');
+    if(r&&r.analise){abrirModalAnalise(r);return;}
+  }catch(e){}
+  toast('Baixando e lendo o edital no PNCP... aguarde uns segundos','info');
+  let a=await api('POST','/api/licitacoes/'+id+'/analisar',{});
+  if(a&&a.error){
+    toast('Erro: '+a.error,'error');
+    if(a.edital_url)window.open(a.edital_url,'_blank');
+    return;
+  }
+  let l=LICITACOES.find(x=>x.id===id);if(l)l.analise_json='{"ok":1}';
+  abrirModalAnalise(a);
+  renderLicitacoes(true);
+}
+function abrirModalAnalise(r){
+  let l=LICITACOES.find(x=>x.id===analiseLicitId)||{};
+  document.getElementById('analiseInfo').innerHTML='<b>'+(l.municipio||'')+'/'+(l.uf||'')+'</b> — '+(l.modalidade||'')+'<br>'+(l.objeto||'');
+  document.getElementById('analiseEditalBtn').href=(r.analise&&r.analise.edital_url)||l.link||'#';
+  document.getElementById('analiseDatas').innerHTML=(l.data_abertura?'Abertura: <b>'+fD(l.data_abertura)+'</b>':'')+(l.data_encerramento?' | Prazo propostas: <b style="color:var(--amber)">'+fD(l.data_encerramento)+'</b>':'');
+  document.getElementById('analiseProposta').textContent=(r.analise&&r.analise.proposta_trecho)||'Trecho da proposta não localizado no edital — abra o PDF pelo botão acima.';
+  document.getElementById('analiseHabilitacao').textContent=(r.analise&&r.analise.habilitacao_trecho)||'Seção de habilitação não localizada — confira no PDF.';
+  renderDocsAnalise(r.docs||[]);
+  document.getElementById('modalAnalise').style.display='flex';
+}
+function renderDocsAnalise(docs){
+  let prontos=docs.filter(d=>d.pronto).length;
+  document.getElementById('analiseDocsProg').innerHTML=docs.length?('<b style="color:var(--'+(prontos===docs.length?'green':'amber')+')">'+prontos+'/'+docs.length+'</b> prontos'):'';
+  document.getElementById('analiseDocsList').innerHTML=docs.length?docs.map(d=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">'
+    +'<input type="checkbox" '+(d.pronto?'checked':'')+' style="width:17px;height:17px;flex-shrink:0" onchange="NR.toggleDocPronto(\''+d.id+'\',this.checked)">'
+    +'<span style="flex:1;font-size:.85rem;'+(d.pronto?'text-decoration:line-through;color:var(--text3)':'')+'">'+d.documento
+    +(d.origem==='manual'?' <span style="font-size:10px;color:var(--text3)">(manual)</span>':'')+'</span>'
+    +(d.link?'<a href="'+d.link+'" target="_blank" class="btn btn-sm btn-outline" title="Emitir em: '+(d.fonte_nome||'site oficial')+'" style="white-space:nowrap"><i class="fas fa-external-link-alt"></i> Emitir</a>':(d.fonte_nome?'<span style="font-size:11px;color:var(--text3)">'+d.fonte_nome+'</span>':''))
+    +'<button class="btn btn-sm btn-danger" onclick="NR.delDocAnalise(\''+d.id+'\')"><i class="fas fa-times"></i></button>'
+    +'</div>'
+  ).join(''):'<p style="color:var(--text3);font-size:.85rem">Nenhum documento identificado automaticamente — adicione manualmente abaixo ou confira o edital.</p>';
+}
+async function atualizarDocsAnalise(){
+  let r=await api('GET','/api/licitacoes/'+analiseLicitId+'/analise');
+  renderDocsAnalise((r&&r.docs)||[]);
+}
+async function toggleDocPronto(docId,pronto){
+  await api('PUT','/api/licitacoes/docs/'+docId,{pronto:pronto?1:0});
+  atualizarDocsAnalise();
+}
+async function addDocAnalise(){
+  let doc=document.getElementById('analise-novo-doc').value.trim();
+  if(!doc){toast('Digite o nome do documento','error');return;}
+  await api('POST','/api/licitacoes/'+analiseLicitId+'/docs',{documento:doc});
+  document.getElementById('analise-novo-doc').value='';
+  atualizarDocsAnalise();
+}
+async function delDocAnalise(docId){
+  await api('DELETE','/api/licitacoes/docs/'+docId);
+  atualizarDocsAnalise();
+}
+async function reanalisarLicit(){
+  toast('Baixando e lendo o edital de novo...','info');
+  let a=await api('POST','/api/licitacoes/'+analiseLicitId+'/analisar',{force:true});
+  if(a&&a.error){toast('Erro: '+a.error,'error');return;}
+  abrirModalAnalise(a);
+  toast('Análise refeita!');
+}
+function closeAnalise(){document.getElementById('modalAnalise').style.display='none';}
+function filtrarPorCidade(nome,uf){
+  let sel=document.getElementById('licit-filtro-cidade');
+  let key=nome+'/'+uf;
+  sel.value=(sel.value===key)?'':key;
+  renderLicitacoes(true);
+}
+async function marcarLicitSel(status){
+  let ids=[...document.querySelectorAll('.licit-cb:checked')].map(cb=>cb.value);
+  if(!ids.length){toast('Selecione ao menos uma licitação','error');return;}
+  let lbl={'vista':'marcar como vistas','ignorada':'ignorar','nova':'voltar para novas'};
+  if(!confirm(ids.length+' licitação(ões): '+(lbl[status]||status)+'?'))return;
+  await api('PUT','/api/licitacoes-multi',{ids,status});
+  ids.forEach(id=>{let l=LICITACOES.find(x=>x.id===id);if(l)l.status=status;});
+  toast(ids.length+' licitação(ões) atualizada(s)');
+  renderLicitacoes(true);
+  renderAlertas();
+}
+async function licitConsultar(){
+  let btn=document.getElementById('btnLicitConsultar');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Consultando PNCP...';
+  try{
+    let r=await api('POST','/api/licitacoes/consultar',{});
+    if(r&&r.error)toast('Erro: '+r.error,'error');
+    else toast(r.novas+' licitação(ões) nova(s) encontrada(s)'+(r.erros?' ('+r.erros+' consultas falharam)':''));
+  }catch(e){toast('Erro ao consultar','error');}
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-sync-alt"></i> Consultar Agora';
+  renderLicitacoes();
+}
+let LICIT_MUNS={};
+async function carregarCidadesUF(limpar){
+  let uf=document.getElementById('licit-cidade-uf').value.trim().toUpperCase();
+  if(limpar)document.getElementById('licit-cidade-nome').value='';
+  if(uf.length!==2)return;
+  if(!LICIT_MUNS[uf]){
+    try{
+      let r=await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados/'+uf+'/municipios');
+      if(!r.ok)return;
+      LICIT_MUNS[uf]=await r.json();
+    }catch(e){return;}
+  }
+  document.getElementById('licit-cidade-list').innerHTML=(LICIT_MUNS[uf]||[]).map(m=>'<option value="'+m.nome.replace(/"/g,'&quot;')+'">').join('');
+}
+async function addLicitCidade(){
+  let nome=document.getElementById('licit-cidade-nome').value.trim();
+  let uf=document.getElementById('licit-cidade-uf').value.trim().toUpperCase();
+  if(!nome||!uf){toast('Informe a cidade e a UF','error');return;}
+  // Validar contra a lista oficial do IBGE (ignora acentos, hífens e apóstrofos)
+  let payload={nome,uf};
+  if(LICIT_MUNS[uf]){
+    let norm=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    let m=LICIT_MUNS[uf].find(x=>norm(x.nome)===norm(nome))||LICIT_MUNS[uf].find(x=>norm(x.nome).includes(norm(nome))&&norm(nome).length>=5);
+    if(!m){toast('Escolha a cidade na lista de sugestões (grafia oficial do IBGE)','error');return;}
+    // Envia o código IBGE já resolvido — o servidor não precisa consultar o IBGE de novo
+    payload={nome:m.nome,uf,ibge:String(m.id)};
+  }
+  let r=await api('POST','/api/licitacoes/cidades',payload);
+  if(r&&r.error){toast('Erro: '+r.error,'error');return;}
+  toast(r.cidade.nome+'/'+r.cidade.uf+' adicionada ao monitoramento!');
+  document.getElementById('licit-cidade-nome').value='';
+  renderLicitacoes();
+}
+async function delLicitCidade(ibge,nome){
+  if(!confirm('Parar de monitorar '+nome+'?'))return;
+  await api('DELETE','/api/licitacoes/cidades/'+ibge);
+  toast('Cidade removida do monitoramento');
+  renderLicitacoes();
+}
+async function marcarLicit(id,status){
+  await api('PUT','/api/licitacoes/'+id,{status});
+  let l=LICITACOES.find(x=>x.id===id);if(l)l.status=status;
+  renderLicitacoes(true);
+  renderAlertas();
+}
+
 // === FORNECEDORES (CADASTRO) ===
 let fornecedoresCad=[];
 async function renderFornecedoresCad(){
@@ -2680,6 +2884,7 @@ async function renderAlertas(){
     let a=await api('GET','/api/alertas');
     let cards=[];
     if(a.notasNovas)cards.push('<div onclick="document.getElementById(\'nav-notas-nfe\').click()" style="cursor:pointer;flex:1;min-width:220px;background:rgba(59,130,246,.12);border:1px solid var(--blue);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px"><i class="fas fa-file-download" style="font-size:1.4rem;color:var(--blue)"></i><div><b style="font-size:1.1rem">'+a.notasNovas+'</b> nota(s) fiscal(is) aguardando aprovação</div></div>');
+    if(a.licitacoesNovas)cards.push('<div onclick="document.getElementById(\'nav-licitacoes\').click()" style="cursor:pointer;flex:1;min-width:220px;background:rgba(16,185,129,.12);border:1px solid var(--green);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px"><i class="fas fa-gavel" style="font-size:1.4rem;color:var(--green)"></i><div><b style="font-size:1.1rem">'+a.licitacoesNovas+'</b> licitação(ões) nova(s) nas cidades monitoradas</div></div>');
     if(a.boletosHoje.length){
       let tot=a.boletosHoje.reduce((s,c)=>s+(c.valor||0),0);
       cards.push('<div onclick="document.getElementById(\'nav-contas-pagar\').click()" style="cursor:pointer;flex:1;min-width:220px;background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px"><i class="fas fa-exclamation-circle" style="font-size:1.4rem;color:var(--red)"></i><div><b style="font-size:1.1rem">'+a.boletosHoje.length+'</b> boleto(s) vencendo <b>HOJE</b> — '+fmt(tot)+'</div></div>');
@@ -2702,6 +2907,7 @@ function fillTelegramCfg(){
   if(ch&&document.activeElement!==ch)ch.value=CFG.tg_chat_id||'';
   document.getElementById('tg-notif-notas').checked=CFG.tg_notif_notas==='1';
   document.getElementById('tg-notif-boletos').checked=CFG.tg_notif_boletos==='1';
+  document.getElementById('tg-notif-licit').checked=CFG.tg_notif_licit==='1';
   let re=document.getElementById('rc-empresa');
   if(re&&document.activeElement!==re)re.value=CFG.recibo_empresa||'';
   let rc=document.getElementById('rc-cidade');
@@ -2712,7 +2918,8 @@ async function salvarTelegram(){
     tg_token:document.getElementById('tg-token').value.trim(),
     tg_chat_id:document.getElementById('tg-chatid').value.trim(),
     tg_notif_notas:document.getElementById('tg-notif-notas').checked?'1':'0',
-    tg_notif_boletos:document.getElementById('tg-notif-boletos').checked?'1':'0'
+    tg_notif_boletos:document.getElementById('tg-notif-boletos').checked?'1':'0',
+    tg_notif_licit:document.getElementById('tg-notif-licit').checked?'1':'0'
   });
   toast('Configuração do Telegram salva!');
 }
@@ -3024,6 +3231,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
 checkAuth();
 })();
