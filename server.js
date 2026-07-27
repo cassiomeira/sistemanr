@@ -875,6 +875,10 @@ app.get('/api/transparencia/sem-contrato', async (req, res) => {
   try { res.json(await transparencia.semContrato(req.emp, req.query.exercicio, parseInt(req.query.meses) || 24)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+app.get('/api/transparencia/resumo-fornecedor', async (req, res) => {
+  try { res.json(await transparencia.resumoFornecedor(req.emp, req.query.doc, req.query.exercicio)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/transparencia/produtos-fornecedor', async (req, res) => {
   try { res.json(await transparencia.produtosFornecedor(req.emp, req.query.doc, parseInt(req.query.meses) || 24)); }
   catch (e) { res.status(500).json({ error: e.message }); }
@@ -936,10 +940,11 @@ app.post('/api/boleto/importar-pdf', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum PDF enviado' });
     const pdf = await pdfParse(req.file.buffer);
-    const dados = boleto.parseBoletoPdf(pdf.text);
-    if (!dados.valor && !dados.linha) return res.status(422).json({ error: 'Não consegui ler os dados do boleto neste PDF. Pode ser um PDF só de imagem (escaneado).' });
-    const enr = boleto.enriquecer(req.emp, dados);
-    res.json(enr);
+    const lista = boleto.parseBoletosPdf(pdf.text);
+    if (!lista.length) return res.status(422).json({ error: 'Não consegui ler os dados do boleto neste PDF. Pode ser um PDF só de imagem (escaneado).' });
+    const boletos = lista.map(d => boleto.enriquecer(req.emp, d));
+    // Compatibilidade: mantém os campos do primeiro boleto na raiz da resposta
+    res.json({ ...boletos[0], boletos, total: boletos.length });
   } catch (e) {
     console.error('Erro importar boleto PDF:', e.message);
     res.status(500).json({ error: e.message });

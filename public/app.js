@@ -2932,6 +2932,45 @@ function renderTranspContratos(){
     +'<td style="white-space:nowrap;font-weight:600">'+fmt(c.valor)+'</td><td style="white-space:nowrap">'+(c.vigencia_fim?fD(c.vigencia_fim):'-')+'</td></tr>'
   ).join(''):'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">'+(busca?'Nada encontrado':'Clique em "Carregar"')+'</td></tr>';
 }
+// --- Resumo do fornecedor: com contrato x compra direta ---
+let resumoFornDoc='',resumoFornNome='';
+async function verResumoForn(doc,nome,exercicio){
+  resumoFornDoc=doc;resumoFornNome=nome||'';
+  let ex=exercicio||document.getElementById('transp-semctr-exercicio').value||'2026';
+  let body=document.getElementById('resumoFornBody');
+  document.getElementById('modalResumoForn').style.display='flex';
+  body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-spinner fa-spin" style="font-size:1.6rem"></i><br>Somando empenhos e verificando modalidade de cada um...<br><span style="font-size:.8rem">'+(ex==='todos'?'Todos os anos — pode levar 1-2 minutos':'Exercício '+ex)+'</span></div>';
+  let d=await api('GET','/api/transparencia/resumo-fornecedor?doc='+doc+'&exercicio='+ex).catch(()=>({error:'Falha na consulta'}));
+  if(d&&d.error){body.innerHTML='<p style="color:var(--red)">'+d.error+'</p>';return;}
+  let pc=d.pago?Math.round(d.pago_com_contrato/d.pago*100):0;
+  let pd=d.pago?100-pc:0;
+  body.innerHTML='<h4 style="margin:0 0 2px">'+(resumoFornNome||d.fornecedor||'')+'</h4>'
+    +'<p style="color:var(--text3);font-size:.8rem;margin-bottom:10px">'+fmtCnpj(d.documento||'')+' · período: <b>'+(ex==='todos'?d.exercicios.join(', '):ex)+'</b> '
+    +'<select onchange="NR.verResumoForn(\''+doc+'\',\''+(resumoFornNome||'').replace(/'/g,"\\'")+'\',this.value)" style="margin-left:8px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.8rem">'
+    +'<option value="'+(ex==='todos'?new Date().getFullYear():ex)+'">'+(ex==='todos'?'Ver 1 ano...':'Exercício '+ex)+'</option><option value="todos"'+(ex==='todos'?' selected':'')+'>Todos (6 anos)</option></select></p>'
+    // Cartões de totais
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">'
+    +'<div style="background:var(--bg3);border-radius:10px;padding:12px"><div style="font-size:.75rem;color:var(--text3)">TOTAL PAGO</div><div style="font-size:1.15rem;font-weight:700">'+fmt(d.pago)+'</div><div style="font-size:.72rem;color:var(--text3)">empenhado '+fmt(d.total)+'</div></div>'
+    +'<div style="background:rgba(16,185,129,.10);border:1px solid var(--green);border-radius:10px;padding:12px"><div style="font-size:.75rem;color:var(--green)">COM LICITAÇÃO/CONTRATO</div><div style="font-size:1.15rem;font-weight:700;color:var(--green)">'+fmt(d.pago_com_contrato)+'</div><div style="font-size:.72rem;color:var(--text3)">'+pc+'% do pago</div></div>'
+    +'<div style="background:rgba(245,158,11,.10);border:1px solid var(--amber);border-radius:10px;padding:12px"><div style="font-size:.75rem;color:var(--amber)">COMPRA DIRETA</div><div style="font-size:1.15rem;font-weight:700;color:var(--amber)">'+fmt(d.pago_compra_direta)+'</div><div style="font-size:.72rem;color:var(--text3)">'+pd+'% do pago</div></div>'
+    +'</div>'
+    // Barra visual
+    +(d.pago?'<div style="height:10px;border-radius:5px;overflow:hidden;display:flex;margin-bottom:16px"><div style="width:'+pc+'%;background:var(--green)"></div><div style="width:'+pd+'%;background:var(--amber)"></div></div>':'')
+    // Detalhe por ano
+    +d.anos.map(a=>{
+      if(a.erro)return '<div style="margin-bottom:10px;color:var(--red);font-size:.82rem">'+a.exercicio+': '+a.erro+'</div>';
+      if(!a.qtd_empenhos)return d.anos.length>1?'<div style="margin-bottom:6px;color:var(--text3);font-size:.8rem">'+a.exercicio+': sem movimentação</div>':'';
+      return '<div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:10px">'
+        +'<div style="margin-bottom:8px"><b>'+a.exercicio+'</b> · '+a.qtd_empenhos+' empenho(s) · pago <b>'+fmt(a.pago)+'</b> <span style="color:var(--green)">('+fmt(a.pago_com_contrato)+' c/ contrato</span> · <span style="color:var(--amber)">'+fmt(a.pago_compra_direta)+' direta)</span></div>'
+        +'<table class="data-table" style="font-size:.8rem"><thead><tr><th>Modalidade / Contrato</th><th style="text-align:right">Empenhos</th><th style="text-align:right">Empenhado</th><th style="text-align:right">Pago</th></tr></thead><tbody>'
+        +a.grupos.map(g=>'<tr><td>'+(g.direta?'<i class="fas fa-hand-holding-dollar" style="color:var(--amber)" title="Compra direta / dispensa"></i> ':'<i class="fas fa-file-contract" style="color:var(--green)" title="Com licitação/contrato"></i> ')+g.titulo+'</td>'
+          +'<td style="text-align:right">'+g.qtd+'</td><td style="text-align:right;white-space:nowrap">'+fmt(g.empenhado)+'</td><td style="text-align:right;white-space:nowrap;font-weight:600">'+fmt(g.pago)+'</td></tr>').join('')
+        +'</tbody></table></div>';
+    }).join('')
+    +'<p style="margin-top:6px;font-size:.75rem;color:var(--text3)"><i class="fas fa-database"></i> Fonte: empenhos do portal de transparência da cidade. "Compra direta" = empenhos cuja modalidade é "Não se Aplica"/dispensa, sem licitação nem contrato informados.</p>';
+}
+function closeResumoForn(){document.getElementById('modalResumoForn').style.display='none';}
+
 // --- Itens/produtos comprados de um fornecedor ---
 async function verItensFornecedor(doc,nome){
   let body=document.getElementById('itensBody');
@@ -2995,6 +3034,7 @@ function renderProdutosFornecedor(p,nome){
     +'<p style="color:var(--text3);font-size:.8rem;margin-bottom:10px">'+fmtCnpj(p.documento||'')+' · <b>'+p.qtd_contratos+'</b> contrato(s) · <b>'+p.total_produtos+'</b> produto(s) · total em itens <b style="color:var(--green)">'+fmt(p.valor_total_itens||0)+'</b></p>'
     +(p.qtd_sobrepreco?'<div style="background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.85rem"><b style="color:var(--red)"><i class="fas fa-triangle-exclamation"></i> '+p.qtd_sobrepreco+' produto(s) com preço mais de 30% acima do praticado</b> em outras compras do município — vale conferir a especificação antes de concluir.</div>'
       :(comRef.length?'<div style="background:rgba(16,185,129,.10);border:1px solid var(--green);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.85rem"><i class="fas fa-circle-check" style="color:var(--green)"></i> Nenhum produto muito acima da média nas comparações possíveis.</div>':''))
+    +((p.qtd_sem_preco||0)>0?'<div style="background:rgba(245,158,11,.10);border:1px solid var(--amber);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.85rem"><i class="fas fa-eye-slash" style="color:var(--amber)"></i> <b>'+p.qtd_sem_preco+' produto(s) sem preço</b>: o município não publicou no PNCP nem o valor estimado nem o resultado homologado desta licitação — é uma falha de transparência da prefeitura, não do sistema. O valor total pago ao fornecedor aparece nos <b>🧾 pagamentos</b> e no <b>📊 resumo</b>.</div>':'')
     +'<div style="overflow-x:auto"><table class="data-table" style="font-size:.8rem"><thead><tr><th>Produto</th><th>Qtd</th><th>Un.</th><th style="text-align:right">Preço pago</th><th style="text-align:right" title="Preço mediano do mesmo produto em outras compras do município">Média município</th><th style="text-align:right">Diferença</th><th style="text-align:right">Total</th></tr></thead><tbody>'
     +p.produtos.map(x=>{
       let r=x.referencia;
@@ -3108,18 +3148,22 @@ async function carregarSemContrato(){
     let d=await api('GET','/api/transparencia/sem-contrato?exercicio='+ex+'&meses=36');
     if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('semctr-resumo').textContent='';return;}
     SEM_CONTRATO=d.fornecedores||[];
-    document.getElementById('semctr-resumo').innerHTML='<b>'+d.qtd_sem_contrato+'</b> de '+d.qtd_fornecedores_pagos+' pagos · <b style="color:var(--amber)">'+fmt(d.valor_sem_contrato)+'</b> sem contrato'
-      +(d.qtd_acima_limite?' · <b style="color:var(--red)">'+d.qtd_acima_limite+' acima do limite ('+fmt(d.excedente_total||0)+' excedido)</b>':'')
+    document.getElementById('semctr-resumo').innerHTML='<b style="color:var(--amber)">'+fmt(d.valor_descoberto||0)+'</b> descoberto em <b>'+d.qtd_descoberto+'</b> fornecedores ('+d.qtd_sem_contrato+' sem contrato algum) · de '+d.qtd_fornecedores_pagos+' pagos'
+      +(d.qtd_acima_limite?' · <b style="color:var(--red)">'+d.qtd_acima_limite+' acima do limite de dispensa</b>':'')
       +'<br><span style="font-size:.78rem">Limite dispensa '+(d.exercicio||'')+': <b>'+fmt(d.limite_compras||0)+'</b> ('+(d.decreto||'')+')</span>';
     let b=document.getElementById('semctr-badge');
-    if(b){if(d.qtd_sem_contrato){b.textContent=d.qtd_sem_contrato;b.style.display='inline';}else b.style.display='none';}
+    if(b){if(d.qtd_descoberto){b.textContent=d.qtd_descoberto;b.style.display='inline';}else b.style.display='none';}
     renderSemContrato();
   }catch(e){toast('Erro ao analisar','error');document.getElementById('semctr-resumo').textContent='';}
 }
 function renderSemContrato(){
   let busca=(document.getElementById('transp-busca-semctr').value||'').trim();
+  let filtro=(document.getElementById('transp-semctr-filtro')||{}).value||'todos';
   let nb=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
   let lista=SEM_CONTRATO;
+  if(filtro==='sem')lista=lista.filter(f=>!f.tem_contrato);
+  else if(filtro==='acima-ctr')lista=lista.filter(f=>f.tem_contrato&&(f.descoberto||0)>0);
+  else if(filtro==='acima-lim')lista=lista.filter(f=>(f.excedente||0)>0);
   if(busca){
     let soNum=busca.replace(/\D/g,'');
     let termos=nb(busca).split(/\s+/).filter(Boolean);
@@ -3127,18 +3171,28 @@ function renderSemContrato(){
   }
   document.getElementById('semContratoGrid').innerHTML=lista.length?lista.map((f,i)=>{
     let acima=(f.excedente||0)>0;
+    let ctrCell;
+    if(!f.tem_contrato)ctrCell='<span style="color:var(--red)"><i class="fas fa-xmark"></i> nenhum</span>';
+    else{
+      ctrCell=(f.valor_contratado?fmt(f.valor_contratado):'')+
+        (f.contratos_sem_valor?' <span style="color:var(--amber);font-size:10px" title="'+f.contratos_sem_valor+' contrato(s) sem valor publicado (registro de preços/credenciamento) — cobertura real desconhecida">+'+f.contratos_sem_valor+' s/ valor ⓘ</span>':'');
+      ctrCell='<span title="'+f.qtd_contratos+' contrato(s) no PNCP">'+(ctrCell||'—')+'</span>';
+    }
     return '<tr'+(acima?' style="background:rgba(239,68,68,.06)"':'')+'><td>'+(i+1)+'</td>'
-    +'<td>'+(acima?'<i class="fas fa-triangle-exclamation" style="color:var(--red)" title="Passou do limite de dispensa e não tem contrato publicado"></i> ':'')+'<b>'+f.nome+'</b></td>'
+    +'<td>'+(acima?'<i class="fas fa-triangle-exclamation" style="color:var(--red)" title="Dinheiro descoberto acima do limite de dispensa"></i> ':'')+'<b>'+f.nome+'</b></td>'
     +'<td style="font-size:11px">'+(f.documento?fmtCnpj(f.documento):'-')+'</td>'
-    +'<td>'+fmt(f.empenhado)+'</td><td style="font-weight:600;color:var(--green)">'+fmt(f.pago)+'</td><td style="color:var(--amber)">'+fmt(f.a_pagar)+'</td>'
-    +'<td style="color:var(--text3)">'+fmt(f.limite||0)+'</td>'
-    +'<td style="font-weight:bold;color:'+(acima?'var(--red)':'var(--text3)')+'">'+(acima?'+'+fmt(f.excedente):'—')+'</td>'
-    +'<td style="color:'+((f.margem||0)>0?'var(--green)':'var(--text3)')+'">'+((f.margem||0)>0?fmt(f.margem):'—')+'</td>'
+    +'<td style="font-weight:600;color:var(--green);white-space:nowrap">'+fmt(f.pago)+'</td><td style="color:var(--amber);white-space:nowrap">'+fmt(f.a_pagar)+'</td>'
+    +'<td style="white-space:nowrap">'+ctrCell+'</td>'
+    +'<td style="font-weight:bold;color:var(--amber);white-space:nowrap">'+((f.descoberto||0)>0?fmt(f.descoberto):'—')+'</td>'
+    +'<td style="color:var(--text3);white-space:nowrap">'+fmt(f.limite||0)+'</td>'
+    +'<td style="font-weight:bold;white-space:nowrap;color:'+(acima?'var(--red)':'var(--text3)')+'">'+(acima?'+'+fmt(f.excedente):'—')+'</td>'
+    +'<td style="white-space:nowrap;color:'+((f.margem||0)>0?'var(--green)':'var(--text3)')+'">'+((f.margem||0)>0?fmt(f.margem):'—')+'</td>'
     +'<td>'+f.empenhos+'</td>'
-    +'<td style="white-space:nowrap"><button class="btn btn-sm" style="background:var(--amber);color:#000" onclick="NR.verPagamentos(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Ver pagamentos detalhados"><i class="fas fa-receipt"></i></button> '
+    +'<td style="white-space:nowrap"><button class="btn btn-sm" style="background:#a78bfa;color:#000" onclick="NR.verResumoForn(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Resumo: com contrato x compra direta"><i class="fas fa-chart-pie"></i></button> '
+    +'<button class="btn btn-sm" style="background:var(--amber);color:#000" onclick="NR.verPagamentos(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Ver pagamentos detalhados"><i class="fas fa-receipt"></i></button> '
     +'<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.verItensFornecedor(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Ver produtos/itens comprados"><i class="fas fa-boxes-stacked"></i></button> '
     +(f.documento&&f.documento.length===14?'<button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.consultarCnpj(\''+f.documento+'\')" title="Ver dados e sócios"><i class="fas fa-building"></i></button>':'')+'</td></tr>';
-  }).join(''):'<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--text3)">'+(busca?'Nada encontrado':'Clique em "Analisar"')+'</td></tr>';
+  }).join(''):'<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text3)">'+(busca||filtro!=='todos'?'Nada encontrado com esse filtro':'Clique em "Analisar"')+'</td></tr>';
 }
 async function verPagamentos(doc,nome){
   let body=document.getElementById('pagamentosBody');
@@ -3575,6 +3629,9 @@ async function confirmarRestauraCompleto(){
 let boletoDest='contas-pagar', boletoDados=null, boletoTimer=null;
 function openBoleto(modo,destino){
   boletoDados=null;
+  boletosMulti=[];boletoMultiIdx=-1;
+  document.getElementById('boleto-multi').style.display='none';
+  document.getElementById('boletoMultiList').innerHTML='';
   document.getElementById('boleto-linha').value='';
   document.getElementById('boleto-bipe-status').textContent='';
   document.getElementById('boleto-pdf-file').value='';
@@ -3621,9 +3678,57 @@ async function importarBoletoPdf(file){
     let r=await fetch('/api/boleto/importar-pdf',{method:'POST',headers:hdrs,body:fd});
     let data=await r.json();
     if(data.error){st.innerHTML='<span style="color:var(--red)">'+data.error+'</span>';return;}
-    st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> Boleto lido!</span>';
-    preencherBoleto(data);
+    if(data.boletos&&data.boletos.length>1){
+      boletosMulti=data.boletos.map(b=>({...b,lancado:false}));
+      st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> '+boletosMulti.length+' boletos encontrados no PDF!</span>';
+      document.getElementById('boleto-multi').style.display='';
+      document.getElementById('boleto-multi-qtd').textContent=boletosMulti.length;
+      preencherBoletoMulti(0);
+    }else{
+      st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> Boleto lido!</span>';
+      preencherBoleto(data);
+    }
   }catch(e){st.innerHTML='<span style="color:var(--red)">Erro ao ler PDF</span>';}
+}
+// --- Vários boletos no mesmo PDF ---
+let boletosMulti=[],boletoMultiIdx=-1;
+function renderBoletoMulti(){
+  document.getElementById('boletoMultiList').innerHTML=boletosMulti.map((b,i)=>{
+    let icone=b.lancado?'<i class="fas fa-check-circle" style="color:var(--green)"></i>':(i===boletoMultiIdx?'<i class="fas fa-pen" style="color:var(--blue)"></i>':'<i class="far fa-circle" style="color:var(--text3)"></i>');
+    return '<tr onclick="NR.preencherBoletoMulti('+i+')" style="cursor:pointer'+(i===boletoMultiIdx?';background:rgba(59,130,246,.10)':'')+(b.lancado?';opacity:.55':'')+'">'
+      +'<td>'+icone+'</td><td>'+(i+1)+'</td>'
+      +'<td>'+((b.fornecedor||b.beneficiario||'não identificado')+'').substring(0,30)+'</td>'
+      +'<td style="white-space:nowrap">'+(b.vencimento?fD(b.vencimento):'-')+'</td>'
+      +'<td style="text-align:right;font-weight:600;white-space:nowrap">'+fmt(b.valor||0)+'</td></tr>';
+  }).join('');
+  let pend=boletosMulti.filter(b=>!b.lancado).length;
+  document.getElementById('boleto-multi-status').textContent=pend?pend+' pendente(s)':'todos lançados!';
+}
+function preencherBoletoMulti(i){
+  boletoMultiIdx=i;
+  preencherBoleto(boletosMulti[i]);
+  renderBoletoMulti();
+}
+async function lancarTodosBoletos(){
+  let cat=document.getElementById('bl-cat').value.trim()||'Outros';
+  let rec=document.getElementById('bl-rec').value==='1';
+  let df=document.getElementById('bl-nota').value;
+  let n=0;
+  for(let b of boletosMulti){
+    if(b.lancado)continue;
+    if(!b.valor||!b.vencimento){toast('Boleto sem valor/vencimento — confira manualmente','error');preencherBoletoMulti(boletosMulti.indexOf(b));return;}
+    let forn=b.fornecedor||b.beneficiario||'';
+    let desc=(forn||'Boleto')+(b.nota_numero?' NF '+b.nota_numero:'');
+    if(boletoDest==='contas-pagar'){
+      await api('POST','/api/contas-pagar',{vencimento:b.vencimento,descricao:desc,valor:b.valor,categoria:cat,fornecedor:forn,boleto_chegou:true,recorrente:rec,tipo_nota:df,linha_digitavel:b.linha||''});
+    }else{
+      await api('POST','/api/acerto',{data:b.vencimento,descricao:desc,entrada:0,saida:b.valor,categoria:cat,fornecedor:forn,recorrente:rec,tipo_nota:df});
+    }
+    b.lancado=true;n++;
+  }
+  toast(n+' boleto(s) lançado(s)!');
+  renderBoletoMulti();
+  if(boletosMulti.every(b=>b.lancado)){closeBoleto();refreshAll();}
 }
 function preencherBoleto(d){
   boletoDados=d;
@@ -3664,12 +3769,18 @@ async function salvarBoleto(){
     await api('POST','/api/acerto',{data:venc,descricao:desc,entrada:0,saida:valor,categoria:cat||'Outros',fornecedor:forn,recorrente:rec,tipo_nota:df});
     toast('Boleto lançado no Acerto (saída)!');
   }
+  // Fluxo de vários boletos: marca o atual e avança para o próximo pendente
+  if(boletosMulti.length&&boletoMultiIdx>=0){
+    boletosMulti[boletoMultiIdx].lancado=true;
+    let prox=boletosMulti.findIndex(b=>!b.lancado);
+    if(prox>=0){preencherBoletoMulti(prox);return;}
+  }
   closeBoleto();refreshAll();
 }
 document.getElementById('boleto-linha').addEventListener('input',function(){clearTimeout(boletoTimer);boletoTimer=setTimeout(analisarBipe,350);});
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
 checkAuth();
 })();

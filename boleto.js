@@ -50,6 +50,49 @@ function decodeLinhaDigitavel(raw) {
   return res;
 }
 
+// Extrai TODOS os boletos de um PDF (um arquivo pode trazer o carnê inteiro).
+// Acha cada linha digitável, fatia o texto ao redor de cada uma e extrai os
+// demais dados (vencimento, CNPJ, beneficiário) do trecho correspondente.
+function parseBoletosPdf(text) {
+  const achados = []; // {linha, index}
+  const re = /[\d][\d.\s-]{44,72}[\d]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const d = m[0].replace(/\D/g, '');
+    if (d.length === 47 || d.length === 48 || d.length === 44) {
+      achados.push({ linha: d, index: m.index, end: m.index + m[0].length });
+    }
+  }
+  if (!achados.length) {
+    // Sem linha digitável legível: tenta o parser antigo (campos em texto)
+    const unico = parseBoletoPdf(text);
+    return (unico.valor || unico.linha) ? [unico] : [];
+  }
+  // A mesma linha aparece 2x no boleto (recibo do pagador + ficha de compensação):
+  // agrupa por linha, guardando o primeiro e o último índice para delimitar o trecho.
+  const porLinha = new Map();
+  for (const a of achados) {
+    if (!porLinha.has(a.linha)) porLinha.set(a.linha, { linha: a.linha, ini: a.index, fim: a.end });
+    else porLinha.get(a.linha).fim = a.end;
+  }
+  const unicos = [...porLinha.values()].sort((a, b) => a.ini - b.ini);
+  const out = [];
+  // Um boleto termina logo após a última ocorrência da sua linha digitável
+  // (ficha de compensação); o que vem depois já é o cabeçalho do próximo.
+  for (let i = 0; i < unicos.length; i++) {
+    const ini = i === 0 ? 0 : unicos[i - 1].fim;
+    const fim = i === unicos.length - 1 ? text.length : unicos[i].fim;
+    const trecho = text.substring(ini, fim);
+    const res = parseBoletoPdf(trecho);
+    res.linha = unicos[i].linha; // garante a linha certa do trecho
+    const dec = decodeLinhaDigitavel(res.linha);
+    if (dec.valor) res.valor = dec.valor;
+    if (dec.vencimento) res.vencimento = dec.vencimento;
+    if (res.valor || res.linha) out.push(res);
+  }
+  return out;
+}
+
 // Extrai dados do texto de um PDF de boleto
 function parseBoletoPdf(text) {
   const res = { linha: '', valor: 0, vencimento: '', beneficiario: '', cnpj: '' };
@@ -126,4 +169,4 @@ function enriquecer(slug, dados) {
   return out;
 }
 
-module.exports = { decodeLinhaDigitavel, parseBoletoPdf, enriquecer, fatorToVencimento };
+module.exports = { decodeLinhaDigitavel, parseBoletoPdf, parseBoletosPdf, enriquecer, fatorToVencimento };

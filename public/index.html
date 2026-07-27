@@ -703,14 +703,20 @@
                         <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>#</th><th>Fornecedor</th><th>CNPJ</th><th>Ramo de Atividade</th><th>Pago no Ano</th><th>Limite Legal</th><th style="color:var(--red)" title="Quanto passou do limite legal">Excedeu em</th><th style="color:var(--green)" title="Quanto ainda pode ser pago no ano dentro do limite">Ainda pode</th><th>% do Limite</th><th>Pagtos</th><th>Contrato?</th><th>Ações</th></tr></thead><tbody id="dispensasGrid"></tbody></table></div>
                     </div>
                     <div id="transp-tab-semctr" class="transp-tab-content" style="display:none">
-                        <p style="margin-bottom:10px;color:var(--text3);font-size:.82rem"><i class="fas fa-lightbulb" style="color:var(--amber)"></i> Cruza os <b>pagamentos efetivos</b> do portal da cidade com os <b>contratos publicados no PNCP</b>. Quem recebeu dinheiro mas não tem contrato publicado aparece aqui — pode ser dispensa de licitação, contrato antigo (anterior ao PNCP) ou pagamento sem contrato formal. <b>Não é indício de irregularidade por si só.</b></p>
+                        <p style="margin-bottom:10px;color:var(--text3);font-size:.82rem"><i class="fas fa-lightbulb" style="color:var(--amber)"></i> Cruza os <b>pagamentos efetivos</b> do portal da cidade com os <b>contratos publicados no PNCP</b>. Mostra o <b>dinheiro descoberto</b>: quem recebeu sem contrato algum, ou recebeu <b>mais do que o valor contratado</b>. Pode ser dispensa de licitação, contrato antigo (anterior ao PNCP), registro de preços sem valor publicado ou pagamento sem contrato formal. <b>Não é indício de irregularidade por si só.</b></p>
                         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
                             <input type="text" id="transp-busca-semctr" placeholder="🔍 Buscar por empresa ou CNPJ..." oninput="NR.renderSemContrato()" style="flex:1;min-width:220px;max-width:360px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <select id="transp-semctr-filtro" onchange="NR.renderSemContrato()" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                                <option value="todos">Todo dinheiro descoberto</option>
+                                <option value="sem">Sem contrato algum</option>
+                                <option value="acima-ctr">Pago acima do contratado</option>
+                                <option value="acima-lim">Acima do limite de dispensa</option>
+                            </select>
                             <select id="transp-semctr-exercicio" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem"><option>2026</option><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select>
                             <button class="btn btn-primary btn-sm" onclick="NR.carregarSemContrato()"><i class="fas fa-magnifying-glass-dollar"></i> Analisar</button>
                             <span id="semctr-resumo" style="font-size:.82rem;color:var(--text3)"></span>
                         </div>
-                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>#</th><th>Fornecedor</th><th>CNPJ/CPF</th><th>Empenhado</th><th>Pago</th><th>A Pagar</th><th>Limite Dispensa</th><th style="color:var(--red)" title="Quanto passou do limite de dispensa">Excedeu em</th><th style="color:var(--green)" title="Quanto ainda poderia ser pago no ano dentro do limite">Ainda pode</th><th>Empenhos</th><th>Ações</th></tr></thead><tbody id="semContratoGrid"></tbody></table></div>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>#</th><th>Fornecedor</th><th>CNPJ/CPF</th><th>Pago</th><th>A Pagar</th><th title="Soma dos contratos publicados no PNCP para este fornecedor">Contratado (PNCP)</th><th style="color:var(--amber)" title="Pago além do valor contratado publicado">Descoberto</th><th>Limite Dispensa</th><th style="color:var(--red)" title="Quanto passou do limite de dispensa">Excedeu em</th><th style="color:var(--green)" title="Quanto ainda poderia ser pago no ano dentro do limite">Ainda pode</th><th>Empenhos</th><th>Ações</th></tr></thead><tbody id="semContratoGrid"></tbody></table></div>
                     </div>
                     <div id="transp-tab-servidores" class="transp-tab-content" style="display:none">
                         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
@@ -745,6 +751,13 @@
                         <button class="btn btn-primary" onclick="NR.salvarTranspCfg()"><i class="fas fa-check"></i> Salvar</button>
                     </div>
                 </div>
+            </div>
+        </div>
+        <!-- MODAL RESUMO DO FORNECEDOR (com contrato x compra direta) -->
+        <div class="modal-overlay" id="modalResumoForn" style="display:none">
+            <div class="modal-card" style="max-width:900px">
+                <div class="modal-header"><h3><i class="fas fa-chart-pie" style="color:#a78bfa"></i> Resumo do Fornecedor</h3><button class="modal-close" onclick="NR.closeResumoForn()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto"><div id="resumoFornBody"></div></div>
             </div>
         </div>
         <!-- MODAL ITENS COMPRADOS DO FORNECEDOR -->
@@ -1406,6 +1419,15 @@
                     </div>
                     <p id="boleto-pdf-status" style="margin-top:8px;font-size:.82rem;color:var(--text3)"></p>
                 </div>
+                <!-- Vários boletos no mesmo PDF -->
+                <div id="boleto-multi" style="display:none;margin-top:14px">
+                    <p style="font-size:.85rem;color:var(--text2);margin-bottom:8px"><i class="fas fa-layer-group" style="color:var(--blue)"></i> Este PDF tem <b id="boleto-multi-qtd">0</b> boletos. Clique em um para conferir/editar e salvar um a um, ou use <b>Lançar todos</b>.</p>
+                    <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+                        <table class="data-table" style="font-size:.82rem"><tbody id="boletoMultiList"></tbody></table>
+                    </div>
+                    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="NR.lancarTodosBoletos()"><i class="fas fa-bolt"></i> Lançar todos os pendentes</button>
+                    <span id="boleto-multi-status" style="font-size:.8rem;color:var(--text3);margin-left:8px"></span>
+                </div>
                 <!-- Dados extraídos (conferência) -->
                 <div id="boleto-dados" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
                     <div id="boleto-match" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(16,185,129,.12);border:1px solid var(--green);border-radius:8px;font-size:.85rem"></div>
@@ -1473,6 +1495,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=103"></script>
+    <script src="app.js?v=107"></script>
 </body>
 </html>

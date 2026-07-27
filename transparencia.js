@@ -168,8 +168,8 @@ async function fetchPncp(url, ttlMin) {
   const agora = Date.now();
   const c = cachePncp.get(url);
   if (c && agora - c.t < (ttlMin || 30) * 60000) return c.v;
-  // espaça as chamadas em ~350ms
-  const espera = 350 - (agora - ultimaChamadaPncp);
+  // espaça as chamadas em ~250ms
+  const espera = 250 - (agora - ultimaChamadaPncp);
   if (espera > 0) await new Promise(r => setTimeout(r, espera));
   ultimaChamadaPncp = Date.now();
   let resp = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -358,7 +358,7 @@ async function indicePrecos(cfg, meses) {
   if (c && Date.now() - c.t < 60 * 60000) return c.v;
   const contratacoes = await contratacoesMunicipio(cfg, meses || 24);
   const idx = [];
-  for (const ct of contratacoes.slice(0, 200)) {
+  for (const ct of contratacoes.slice(0, 120)) {
     const r = await itensContratacao(ct.numeroControlePNCP);
     if (r.error || !r.itens) continue;
     for (const i of r.itens) {
@@ -395,43 +395,25 @@ async function produtosFornecedor(slug, documento, meses) {
   const doForn = contratos.filter(c => (c.niFornecedor || '').replace(/\D/g, '') === doc);
   const nomeForn = doForn.length ? (doForn[0].nomeRazaoSocialFornecedor || '') : '';
 
-  const [contratacoes, indice] = await Promise.all([
-    contratacoesMunicipio(cfg, meses || 24),
-    indicePrecos(cfg, meses || 24),
-  ]);
-
-  // Índice agrupado por produto (mediana de mercado)
-  const porProduto = {};
-  for (const i of indice) {
-    const k = chaveProduto(i.descricao);
-    if (!k) continue;
-    (porProduto[k] = porProduto[k] || []).push(i);
-  }
-  const refDe = (descricao, ncExcluir, precoPago) => {
-    const k = chaveProduto(descricao);
-    const similares = (porProduto[k] || []).filter(x => x.numero_controle !== ncExcluir && x.valor_unitario > 0);
-    if (!similares.length) return null;
-    const precos = similares.map(x => x.valor_unitario).sort((a, b) => a - b);
-    const mediana = precos[Math.floor(precos.length / 2)];
-    return {
-      mediana, min: precos[0], max: precos[precos.length - 1], amostras: precos.length,
-      variacao: mediana && precoPago ? ((precoPago - mediana) / mediana * 100) : 0,
-    };
-  };
+  const contratacoes = await contratacoesMunicipio(cfg, meses || 24);
+  // O índice de preços do município é caro de montar — fica para o final,
+  // e só é calculado se algum produto tiver preço para comparar.
+  const refDe = () => null; // preenchido depois, em anexarReferencias()
 
   const produtos = [];
   const vistos = new Set();
 
-  // 1) Busca nos resultados das contratações: qual fornecedor venceu cada item
-  //    (endpoint por item: /itens/{n}/resultados). Limita o esforço para não estourar a cota.
-  for (const ct of contratacoes.slice(0, 60)) {
+  // 1) Varredura ampla nos resultados das contratações: qual fornecedor venceu cada item
+  //    (endpoint por item: /itens/{n}/resultados). É CARA (1 chamada por item) — só roda
+  //    quando o fornecedor não tem contrato para casar de forma direcionada na etapa 2.
+  for (const ct of (doForn.length ? [] : contratacoes.slice(0, 25))) {
     const nc = ct.numeroControlePNCP;
     const m = (nc || '').match(/^(\d{14})-\d+-(\d+)\/(\d{4})$/);
     if (!m) continue;
     const it = await itensContratacao(nc);
     if (it.error || !it.itens || !it.itens.length) continue;
     const baseUrl = 'https://pncp.gov.br/api/pncp/v1/orgaos/' + m[1] + '/compras/' + m[3] + '/' + parseInt(m[2]);
-    for (const item of it.itens.slice(0, 60)) {
+    for (const item of it.itens.slice(0, 30)) {
       const r0 = await fetchPncp(baseUrl + '/itens/' + item.numero + '/resultados', 240);
       if (r0.status !== 200) continue;
       const res = Array.isArray(r0.json) ? r0.json : [r0.json];
@@ -448,7 +430,7 @@ async function produtosFornecedor(slug, documento, meses) {
           valor_unitario: preco, valor_total: parseFloat(x.valorTotalHomologado) || (preco * qtd) || 0,
           contrato: '', data: (ct.dataPublicacaoPncp || '').substring(0, 10),
           objeto: (ct.objetoCompra || '').substring(0, 80),
-          referencia: refDe(item.descricao || '', nc, preco),
+          referencia: null, nc,
           homologado: true,
         });
       }
@@ -464,29 +446,142 @@ async function produtosFornecedor(slug, documento, meses) {
     if (!match) continue;
     const r = await itensContratacao(match.numeroControlePNCP);
     if (r.error || !r.itens) continue;
-    for (const i of r.itens) {
+    // Busca o resultado homologado de cada item: dá o preço real e o vencedor certo
+    const mm = match.numeroControlePNCP.match(/^(\d{14})-\d+-(\d+)\/(\d{4})$/);
+    const baseUrl = mm ? 'https://pncp.gov.br/api/pncp/v1/orgaos/' + mm[1] + '/compras/' + mm[3] + '/' + parseInt(mm[2]) : '';
+    for (const i of r.itens.slice(0, 80)) {
       const chave = match.numeroControlePNCP + '#' + i.numero;
       if (vistos.has(chave)) continue;
+      let preco = i.valor_unitario, qtd = i.quantidade, homologado = false, deOutro = false;
+      // Só consulta o resultado quando o edital não publicou preço estimado (economiza chamadas)
+      if (baseUrl && !preco) {
+        const r0 = await fetchPncp(baseUrl + '/itens/' + i.numero + '/resultados', 240);
+        if (r0.status === 200 && r0.json) {
+          const res = (Array.isArray(r0.json) ? r0.json : [r0.json]).filter(Boolean);
+          const meu = res.find(x => (x.niFornecedor || '').replace(/\D/g, '') === doc);
+          if (meu) {
+            preco = parseFloat(meu.valorUnitarioHomologado) || preco;
+            qtd = parseFloat(meu.quantidadeHomologada) || qtd;
+            homologado = true;
+          } else if (res.length) deOutro = true; // item vencido por outro fornecedor
+        }
+      }
+      if (deOutro) continue;
       vistos.add(chave);
       produtos.push({
-        descricao: i.descricao, unidade: i.unidade, quantidade: i.quantidade,
-        valor_unitario: i.valor_unitario, valor_total: i.valor_total,
+        descricao: i.descricao, unidade: i.unidade, quantidade: qtd,
+        valor_unitario: preco, valor_total: preco && qtd ? Math.round(preco * qtd * 100) / 100 : i.valor_total,
         contrato: c.numeroContratoEmpenho || '', data: (c.dataAssinatura || '').substring(0, 10),
         objeto: (c.objetoContrato || '').substring(0, 80),
-        referencia: refDe(i.descricao, match.numeroControlePNCP, i.valor_unitario),
-        homologado: false,
+        referencia: null, nc: match.numeroControlePNCP,
+        homologado,
       });
     }
   }
 
-  produtos.forEach(p => { p.sobrepreco = !!(p.referencia && p.referencia.variacao > 30); });
+  // Anexa as referências de preço (mediana do município) — só se houver o que comparar
+  if (produtos.some(p => p.valor_unitario > 0)) {
+    const indice = await indicePrecos(cfg, meses || 24);
+    const porProduto = {};
+    for (const i of indice) {
+      const k = chaveProduto(i.descricao);
+      if (k) (porProduto[k] = porProduto[k] || []).push(i);
+    }
+    for (const p of produtos) {
+      if (!p.valor_unitario) continue;
+      const k = chaveProduto(p.descricao);
+      const similares = (porProduto[k] || []).filter(x => x.numero_controle !== p.nc && x.valor_unitario > 0);
+      if (!similares.length) continue;
+      const precos = similares.map(x => x.valor_unitario).sort((a, b) => a - b);
+      const mediana = precos[Math.floor(precos.length / 2)];
+      p.referencia = {
+        mediana, min: precos[0], max: precos[precos.length - 1], amostras: precos.length,
+        variacao: mediana ? ((p.valor_unitario - mediana) / mediana * 100) : 0,
+      };
+    }
+  }
+  produtos.forEach(p => { delete p.nc; p.sobrepreco = !!(p.referencia && p.referencia.variacao > 30); });
   const totalItens = produtos.reduce((s, p) => s + (p.valor_total || 0), 0);
   return {
     fornecedor: nomeForn, documento: doc,
     qtd_contratos: doForn.length, total_produtos: produtos.length, valor_total_itens: totalItens,
     qtd_sobrepreco: produtos.filter(p => p.sobrepreco).length,
+    qtd_sem_preco: produtos.filter(p => !p.valor_unitario).length,
     sem_contrato: !doForn.length && !produtos.length,
     produtos: produtos.sort((a, b) => ((b.referencia && b.referencia.variacao) || -999) - ((a.referencia && a.referencia.variacao) || -999)),
+  };
+}
+
+// Resumo do fornecedor: quanto recebeu no período, separando o que foi
+// com licitação/contrato do que foi compra direta (modalidade "Não se Aplica"/dispensa).
+// exercicio = ano ("2026") ou "todos" (últimos 6 exercícios).
+async function resumoFornecedor(slug, documento, exercicio) {
+  const cfg = getCfgTransp(slug);
+  if (!cfg.codigo) return { error: 'Portal de transparência não configurado' };
+  const doc = (documento || '').replace(/\D/g, '');
+  const anoAtual = new Date().getFullYear();
+  const anos = (String(exercicio).toLowerCase() === 'todos')
+    ? Array.from({ length: 6 }, (_, i) => String(anoAtual - i))
+    : [String(parseInt(exercicio) || cfg.exercicio || anoAtual)];
+  const num = v => (typeof v === 'number' ? v : parseFloat(String(v || '0').replace(/,/g, '')) || 0);
+
+  let fornecedor = '';
+  const porAno = [];
+  for (const ano of anos) {
+    const c = { ...cfg, exercicio: ano };
+    let lista;
+    try { lista = await ilaiQuery(c, 'wsempenho', '&$top=3000'); }
+    catch (e) { porAno.push({ exercicio: ano, erro: e.message }); continue; }
+    const meus = lista.results.filter(e => (e.fornecedor_cpf_cnpj || '').replace(/\D/g, '') === doc);
+    if (!meus.length) { porAno.push({ exercicio: ano, total: 0, pago: 0, grupos: [] }); continue; }
+    if (!fornecedor) fornecedor = meus[0].fornecedor_nome || '';
+    // Detalhes em paralelo (5 por vez) para saber a modalidade de cada empenho
+    const detalhes = [];
+    const fila = meus.slice(0, 200);
+    for (let i = 0; i < fila.length; i += 5) {
+      const lote = await Promise.all(fila.slice(i, i + 5).map(async e => {
+        try {
+          const d = await ilaiQuery(c, 'wsdetalhesempenho', '&$top=1', { id_empenho: e.id_empenho });
+          return { emp: e, det: (d.results || [])[0] || null };
+        } catch (err) { return { emp: e, det: null }; }
+      }));
+      detalhes.push(...lote);
+    }
+    // Agrupa por modalidade + contrato
+    const grupos = {};
+    let totalEmp = 0, totalPago = 0, comCtr = 0, direta = 0, pagoComCtr = 0, pagoDireta = 0;
+    for (const { emp, det } of detalhes) {
+      const vEmp = num(emp.valor_empenho);
+      const vPago = det ? num(det.valor_pago) : 0;
+      const mod = det ? (det.descricao_modalidade_licitacao || 'Sem informação') : 'Sem informação';
+      const ctr = det ? (det.numero_contrato || '') : '';
+      const lic = det ? (det.numero_licitacao || '') : '';
+      // Dispensa é compra direta mesmo quando numerada/contratada — o corte é ter havido licitação
+      const ehDireta = /n[ãa]o se aplica|dispensa|inexigibilidade|sem informa/i.test(mod);
+      totalEmp += vEmp; totalPago += vPago;
+      if (ehDireta) { direta += vEmp; pagoDireta += vPago; } else { comCtr += vEmp; pagoComCtr += vPago; }
+      const chave = (ehDireta ? 'Compra direta · ' + mod : mod) + (ctr ? ' · Contrato ' + ctr : '');
+      const g = grupos[chave] || { titulo: chave, direta: ehDireta, contrato: ctr, licitacao: lic, qtd: 0, empenhado: 0, pago: 0 };
+      g.qtd++; g.empenhado += vEmp; g.pago += vPago;
+      grupos[chave] = g;
+    }
+    porAno.push({
+      exercicio: ano, qtd_empenhos: meus.length,
+      total: Math.round(totalEmp * 100) / 100, pago: Math.round(totalPago * 100) / 100,
+      com_contrato: Math.round(comCtr * 100) / 100, compra_direta: Math.round(direta * 100) / 100,
+      pago_com_contrato: Math.round(pagoComCtr * 100) / 100, pago_compra_direta: Math.round(pagoDireta * 100) / 100,
+      grupos: Object.values(grupos).sort((a, b) => b.empenhado - a.empenhado),
+    });
+  }
+  const soma = campo => porAno.reduce((s, a) => s + (a[campo] || 0), 0);
+  return {
+    fornecedor, documento: doc, exercicios: anos,
+    total: Math.round(soma('total') * 100) / 100, pago: Math.round(soma('pago') * 100) / 100,
+    com_contrato: Math.round(soma('com_contrato') * 100) / 100,
+    compra_direta: Math.round(soma('compra_direta') * 100) / 100,
+    pago_com_contrato: Math.round(soma('pago_com_contrato') * 100) / 100,
+    pago_compra_direta: Math.round(soma('pago_compra_direta') * 100) / 100,
+    anos: porAno,
   };
 }
 
@@ -628,29 +723,54 @@ async function semContrato(slug, exercicio, meses) {
     contratosOrgao(cfg.cnpj_orgao, meses || 24),
   ]);
   if (pagos.error) return pagos;
-  const comContrato = new Set();
-  contratos.forEach(c => { const d = (c.niFornecedor || '').replace(/\D/g, ''); if (d) comContrato.add(d); });
+  // Soma o valor contratado por fornecedor (contratos com valor zero = registro de
+  // preços/credenciamento sem valor publicado — contam como contrato, mas sem cobertura conhecida)
+  const contratado = new Map(); // doc -> {valor, qtd, qtd_sem_valor}
+  contratos.forEach(c => {
+    const d = (c.niFornecedor || '').replace(/\D/g, '');
+    if (!d) return;
+    const v = parseFloat(c.valorGlobal) || parseFloat(c.valorInicial) || 0;
+    const g = contratado.get(d) || { valor: 0, qtd: 0, qtd_sem_valor: 0 };
+    g.qtd++; if (v > 0) g.valor += v; else g.qtd_sem_valor++;
+    contratado.set(d, g);
+  });
   // Órgãos públicos e o próprio município não são "fornecedores" para essa análise
   const ignorar = /prefeitura municipal|instituto nacional do seguro|inprev|receita federal|fundo (municipal|de)|camara municipal|secretaria|tesouro|banco do brasil|caixa economica/i;
   const lim = limiteDispensa(parseInt(pagos.exercicio) || new Date().getFullYear());
-  const semCtr = pagos.fornecedores.filter(f => f.pago > 0 && !comContrato.has(f.documento) && !ignorar.test(f.nome))
+  const semCtr = pagos.fornecedores.filter(f => f.pago > 0 && !ignorar.test(f.nome))
     .map(f => {
+      const ctr = contratado.get(f.documento) || null;
+      const vCtr = ctr ? ctr.valor : 0;
+      // Descoberto = pago além do que há contratado publicado (se houver contrato sem
+      // valor publicado, a cobertura real é desconhecida — sinalizamos isso)
+      const desc = Math.round((f.pago - vCtr) * 100) / 100;
       // Comparação com o limite de compras/serviços (art. 75, II) — referência mais comum
       const dif = Math.round((f.pago - lim.compras) * 100) / 100;
       return {
         ...f,
+        tem_contrato: !!ctr,
+        qtd_contratos: ctr ? ctr.qtd : 0,
+        contratos_sem_valor: ctr ? ctr.qtd_sem_valor : 0,
+        valor_contratado: vCtr,
+        descoberto: desc > 0 ? desc : 0,
         limite: lim.compras,
         percentual: lim.compras ? (f.pago / lim.compras * 100) : 0,
         excedente: dif > 0 ? dif : 0,
         margem: dif < 0 ? Math.abs(dif) : 0,
       };
-    });
-  const totalSem = semCtr.reduce((s, f) => s + f.pago, 0);
+    })
+    // Interessa quem tem dinheiro descoberto: sem contrato algum, ou pago acima do contratado
+    .filter(f => f.descoberto > 0)
+    .sort((a, b) => b.descoberto - a.descoberto);
+  const soSem = semCtr.filter(f => !f.tem_contrato);
   return {
     exercicio: pagos.exercicio, periodo_contratos_meses: meses || 24,
     limite_compras: lim.compras, decreto: lim.decreto,
     qtd_fornecedores_pagos: pagos.fornecedores.filter(f => f.pago > 0).length,
-    qtd_sem_contrato: semCtr.length, valor_sem_contrato: totalSem,
+    qtd_sem_contrato: soSem.length,
+    qtd_descoberto: semCtr.length,
+    valor_sem_contrato: soSem.reduce((s, f) => s + f.pago, 0),
+    valor_descoberto: semCtr.reduce((s, f) => s + f.descoberto, 0),
     qtd_acima_limite: semCtr.filter(f => f.excedente > 0).length,
     excedente_total: semCtr.reduce((s, f) => s + f.excedente, 0),
     fornecedores: semCtr.slice(0, 300),
@@ -735,4 +855,4 @@ async function analisarMunicipio(slug, meses) {
   };
 }
 
-module.exports = { listarServidores, fichaServidor, padraoRemuneratorio, analisarMunicipio, getCfgTransp, fornecedoresPagos, pagamentosDetalhados, semContrato, analiseDispensas, limiteDispensa, itensContratacao, itensPorFornecedor, compararPrecos, empenhosFornecedor, produtosFornecedor };
+module.exports = { listarServidores, fichaServidor, padraoRemuneratorio, analisarMunicipio, getCfgTransp, fornecedoresPagos, pagamentosDetalhados, semContrato, analiseDispensas, limiteDispensa, itensContratacao, itensPorFornecedor, compararPrecos, empenhosFornecedor, produtosFornecedor, resumoFornecedor };
