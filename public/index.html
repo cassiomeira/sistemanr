@@ -7,7 +7,7 @@
     <meta name="description" content="Sistema de controle financeiro da Loja Nunes Rocha">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2">
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
@@ -59,6 +59,7 @@
             <li><a href="#" class="nav-link" data-section="distribuicao" id="nav-distribuicao"><i class="fas fa-percentage"></i><span>Distribuição</span></a></li>
             <li><a href="#" class="nav-link" data-section="notas-nfe" id="nav-notas-nfe"><i class="fas fa-file-download"></i><span>Notas CNPJ</span><span class="badge-count" id="badge-nfe" style="display:none;background:var(--blue);color:#fff;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
             <li><a href="#" class="nav-link" data-section="licitacoes" id="nav-licitacoes"><i class="fas fa-gavel"></i><span>Licitações</span><span class="badge-count" id="badge-licit" style="display:none;background:var(--green);color:#fff;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
+            <li><a href="#" class="nav-link" data-section="transparencia" id="nav-transparencia"><i class="fas fa-search-dollar"></i><span>Transparência</span></a></li>
             <li><a href="#" class="nav-link" data-section="fornecedores-cad" id="nav-fornecedores-cad"><i class="fas fa-address-book"></i><span>Fornecedores</span></a></li>
             <li><a href="#" class="nav-link" data-section="folha" id="nav-folha"><i class="fas fa-file-invoice-dollar"></i><span>Folha Pagamento</span></a></li>
             <li><a href="#" class="nav-link" data-section="colaboradores" id="nav-colaboradores"><i class="fas fa-users"></i><span>Comissionados</span></a></li>
@@ -627,16 +628,161 @@
                 </div>
             </div>
         </section>
+        <!-- TRANSPARÊNCIA MUNICIPAL -->
+        <section class="content-section" id="section-transparencia">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-search-dollar"></i> Transparência Municipal</h3>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <select id="transp-meses" onchange="NR.carregarTransparencia()" style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <option value="6">Últimos 6 meses</option>
+                            <option value="12" selected>Últimos 12 meses</option>
+                            <option value="24">Últimos 2 anos</option>
+                            <option value="48">Últimos 4 anos</option>
+                        </select>
+                        <button class="btn btn-outline btn-sm" onclick="NR.openTranspCfg()"><i class="fas fa-cog"></i> Configurar</button>
+                        <button class="btn btn-primary btn-sm" id="btnTranspCarregar" onclick="NR.carregarTransparencia()"><i class="fas fa-sync-alt"></i> Carregar</button>
+                    </div>
+                </div>
+                <div style="padding:0 24px 16px">
+                    <p style="margin-bottom:12px;color:var(--text3);font-size:.82rem"><i class="fas fa-info-circle"></i> Cruza dados <b>públicos</b>: contratos do <b>PNCP</b> + servidores e folha do <b>portal de transparência</b> da cidade (Lei de Acesso à Informação). Os alertas são <b>sinalizações para conferência humana</b> — não são acusações de irregularidade.</p>
+                    <div class="summary-badges" style="margin-bottom:14px">
+                        <span class="badge badge-blue">Município: <b id="transp-municipio">—</b></span>
+                        <span class="badge badge-green">Contratos: <b id="transp-qtd">0</b></span>
+                        <span class="badge badge-amber">Valor total: <b id="transp-total">R$ 0,00</b></span>
+                        <span class="badge badge-pink">Servidores: <b id="transp-servidores">—</b></span>
+                    </div>
+                    <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);flex-wrap:wrap">
+                        <button class="btn btn-sm transp-tab active" data-tab="transp-tab-alertas" onclick="NR.switchTranspTab(this)"><i class="fas fa-triangle-exclamation"></i> Alertas</button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-forn" onclick="NR.switchTranspTab(this)"><i class="fas fa-ranking-star"></i> Fornecedores</button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-contratos" onclick="NR.switchTranspTab(this)"><i class="fas fa-file-contract"></i> Contratos</button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-precos" onclick="NR.switchTranspTab(this)"><i class="fas fa-tags"></i> Preços por Produto</button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-dispensas" onclick="NR.switchTranspTab(this)"><i class="fas fa-scale-unbalanced"></i> Limite de Dispensa <span id="disp-badge" style="display:none;background:var(--red);color:#fff;border-radius:50%;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px"></span></button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-semctr" onclick="NR.switchTranspTab(this)"><i class="fas fa-file-circle-question"></i> Sem Contrato <span id="semctr-badge" style="display:none;background:var(--red);color:#fff;border-radius:50%;font-size:10px;font-weight:700;padding:1px 6px;margin-left:4px"></span></button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-servidores" onclick="NR.switchTranspTab(this)"><i class="fas fa-users"></i> Servidores</button>
+                        <button class="btn btn-sm transp-tab" data-tab="transp-tab-cargos" onclick="NR.switchTranspTab(this)"><i class="fas fa-sitemap"></i> Cargos/Vagas</button>
+                    </div>
+                    <div id="transp-tab-alertas" class="transp-tab-content"><div id="transpAlertas"></div></div>
+                    <div id="transp-tab-forn" class="transp-tab-content" style="display:none">
+                        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+                            <input type="text" id="transp-busca-forn" placeholder="🔍 Buscar por empresa, CNPJ/CPF ou objeto..." oninput="NR.renderTranspFornecedores()" style="flex:1;min-width:240px;max-width:400px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text2);cursor:pointer"><input type="checkbox" id="transp-forn-sem-valor" onchange="NR.renderTranspFornecedores()" style="width:15px;height:15px"> Só sem valor publicado</label>
+                            <span id="transp-forn-count" style="font-size:.8rem;color:var(--text3)"></span>
+                        </div>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>#</th><th>Fornecedor</th><th>CNPJ/CPF</th><th>Contratos</th><th>Valor Total</th><th>% do Total</th><th>Objetos</th><th></th></tr></thead><tbody id="transpFornGrid"></tbody></table></div>
+                    </div>
+                    <div id="transp-tab-contratos" class="transp-tab-content" style="display:none">
+                        <input type="text" id="transp-busca-contrato" placeholder="🔍 Buscar por fornecedor ou objeto..." oninput="NR.renderTranspContratos()" style="width:100%;max-width:380px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;margin-bottom:10px">
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Assinatura</th><th>Fornecedor</th><th>Objeto</th><th>Valor</th><th>Vigência até</th></tr></thead><tbody id="transpContratosGrid"></tbody></table></div>
+                    </div>
+                    <div id="transp-tab-precos" class="transp-tab-content" style="display:none">
+                        <p style="margin-bottom:10px;color:var(--text3);font-size:.82rem"><i class="fas fa-magnifying-glass-dollar" style="color:var(--green)"></i> Busca um <b>produto/serviço</b> nos itens das contratações publicadas e compara o <b>preço unitário</b> pago em cada uma. Itens muito acima da mediana são destacados — <b>confira sempre</b>, produtos com o mesmo nome podem ter especificação diferente.</p>
+                        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+                            <input type="text" id="preco-termo" placeholder="Ex: refeição, cadeira, combustível, pneu..." onkeydown="if(event.key==='Enter')NR.compararPrecos()" style="flex:1;min-width:240px;max-width:340px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <select id="preco-meses" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem"><option value="12">12 meses</option><option value="24" selected>24 meses</option><option value="36">36 meses</option></select>
+                            <button class="btn btn-primary btn-sm" onclick="NR.compararPrecos()"><i class="fas fa-search"></i> Comparar Preços</button>
+                            <span id="preco-resumo" style="font-size:.82rem;color:var(--text3)"></span>
+                        </div>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Produto/Serviço</th><th>Fornecedor</th><th>Qtd</th><th>Unid.</th><th>Preço Unitário</th><th>vs. Mediana</th><th>Total</th><th>Data</th></tr></thead><tbody id="precosGrid"></tbody></table></div>
+                    </div>
+                    <div id="transp-tab-dispensas" class="transp-tab-content" style="display:none">
+                        <p style="margin-bottom:10px;color:var(--text3);font-size:.82rem"><i class="fas fa-gavel" style="color:var(--amber)"></i> A <b>Lei 14.133/2021 (art. 75)</b> limita a dispensa de licitação por valor. O teto <b>não é por contrato</b>: soma-se tudo que foi pago no <b>exercício</b>, por fornecedor e <b>ramo de atividade</b> (§1º — regra antifracionamento). Quem passou do teto <b>sem contrato publicado</b> aparece em vermelho para <b>conferência humana</b> — pode haver explicação legal (contrato antigo, ata de registro, credenciamento, convênio).</p>
+                        <div id="disp-limites" style="margin-bottom:10px;font-size:.82rem;color:var(--text2)"></div>
+                        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+                            <input type="text" id="disp-busca" placeholder="🔍 Buscar por empresa, CNPJ ou ramo..." oninput="NR.renderDispensas()" style="flex:1;min-width:220px;max-width:340px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <select id="disp-filtro" onchange="NR.renderDispensas()" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                                <option value="criticos">🔴 Só críticos (acima do teto, sem contrato)</option>
+                                <option value="acima">Todos acima do teto</option>
+                                <option value="perto">Perto do teto (80%+)</option>
+                                <option value="todos">Todos</option>
+                            </select>
+                            <select id="disp-exercicio" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem"><option>2026</option><option>2025</option><option>2024</option><option>2023</option></select>
+                            <button class="btn btn-primary btn-sm" onclick="NR.carregarDispensas()"><i class="fas fa-scale-balanced"></i> Analisar</button>
+                            <span id="disp-resumo" style="font-size:.82rem;color:var(--text3)"></span>
+                        </div>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>#</th><th>Fornecedor</th><th>CNPJ</th><th>Ramo de Atividade</th><th>Pago no Ano</th><th>Limite Legal</th><th style="color:var(--red)" title="Quanto passou do limite legal">Excedeu em</th><th style="color:var(--green)" title="Quanto ainda pode ser pago no ano dentro do limite">Ainda pode</th><th>% do Limite</th><th>Pagtos</th><th>Contrato?</th><th>Ações</th></tr></thead><tbody id="dispensasGrid"></tbody></table></div>
+                    </div>
+                    <div id="transp-tab-semctr" class="transp-tab-content" style="display:none">
+                        <p style="margin-bottom:10px;color:var(--text3);font-size:.82rem"><i class="fas fa-lightbulb" style="color:var(--amber)"></i> Cruza os <b>pagamentos efetivos</b> do portal da cidade com os <b>contratos publicados no PNCP</b>. Quem recebeu dinheiro mas não tem contrato publicado aparece aqui — pode ser dispensa de licitação, contrato antigo (anterior ao PNCP) ou pagamento sem contrato formal. <b>Não é indício de irregularidade por si só.</b></p>
+                        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+                            <input type="text" id="transp-busca-semctr" placeholder="🔍 Buscar por empresa ou CNPJ..." oninput="NR.renderSemContrato()" style="flex:1;min-width:220px;max-width:360px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <select id="transp-semctr-exercicio" style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem"><option>2026</option><option>2025</option><option>2024</option><option>2023</option><option>2022</option></select>
+                            <button class="btn btn-primary btn-sm" onclick="NR.carregarSemContrato()"><i class="fas fa-magnifying-glass-dollar"></i> Analisar</button>
+                            <span id="semctr-resumo" style="font-size:.82rem;color:var(--text3)"></span>
+                        </div>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>#</th><th>Fornecedor</th><th>CNPJ/CPF</th><th>Empenhado</th><th>Pago</th><th>A Pagar</th><th>Limite Dispensa</th><th style="color:var(--red)" title="Quanto passou do limite de dispensa">Excedeu em</th><th style="color:var(--green)" title="Quanto ainda poderia ser pago no ano dentro do limite">Ainda pode</th><th>Empenhos</th><th>Ações</th></tr></thead><tbody id="semContratoGrid"></tbody></table></div>
+                    </div>
+                    <div id="transp-tab-servidores" class="transp-tab-content" style="display:none">
+                        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
+                            <input type="text" id="transp-busca-servidor" placeholder="🔍 Buscar por nome, matrícula, cargo, lotação ou regime..." oninput="NR.renderTranspServidores()" style="flex:1;min-width:240px;max-width:400px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+                            <span id="transp-serv-count" style="font-size:.8rem;color:var(--text3)"></span>
+                            <button class="btn btn-outline btn-sm" onclick="NR.carregarServidores()"><i class="fas fa-download"></i> Carregar Servidores</button>
+                        </div>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Nome</th><th>Matrícula</th><th>Cargo/Função</th><th>Lotação</th><th>Regime</th><th>Admissão</th><th>Situação</th><th>Folha</th></tr></thead><tbody id="transpServidoresGrid"></tbody></table></div>
+                    </div>
+                    <div id="transp-tab-cargos" class="transp-tab-content" style="display:none">
+                        <button class="btn btn-outline btn-sm" style="margin-bottom:10px" onclick="NR.carregarCargos()"><i class="fas fa-download"></i> Carregar Cargos</button>
+                        <div style="overflow-x:auto"><table class="data-table" style="font-size:.82rem"><thead><tr><th>Função</th><th>Nível</th><th>Grupo Ocupacional</th><th>Vagas Criadas</th><th>Vagas Ocupadas</th></tr></thead><tbody id="transpCargosGrid"></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- MODAL CONFIG TRANSPARÊNCIA -->
+        <div class="modal-overlay" id="modalTranspCfg" style="display:none">
+            <div class="modal-card" style="max-width:560px">
+                <div class="modal-header"><h3><i class="fas fa-cog"></i> Configurar Município</h3><button class="modal-close" onclick="NR.closeTranspCfg()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px">
+                    <p style="margin-bottom:12px;color:var(--text2);font-size:.85rem">Dados públicos do município a monitorar. O <b>código do portal</b> é o identificador que aparece no endereço do portal de transparência da cidade (ex: <code>98TL0T</code> em Carbonita).</p>
+                    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+                        <div class="form-group"><label>Município</label><input type="text" id="tc-municipio" placeholder="Carbonita/MG"></div>
+                        <div class="form-group"><label>Código IBGE</label><input type="text" id="tc-ibge" placeholder="3113503"></div>
+                        <div class="form-group" style="grid-column:span 2"><label>CNPJ do Órgão (Prefeitura)</label><input type="text" id="tc-cnpj" placeholder="21.154.174/0001-89"></div>
+                        <div class="form-group"><label>Código do Portal (ILAI)</label><input type="text" id="tc-codigo" placeholder="98TL0T"></div>
+                        <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Entidade</label><input type="text" id="tc-entidade" value="1" style="width:100%"></div><div><label>Exercício</label><input type="text" id="tc-exercicio" placeholder="2026" style="width:100%"></div></div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-outline" onclick="NR.closeTranspCfg()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="NR.salvarTranspCfg()"><i class="fas fa-check"></i> Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- MODAL ITENS COMPRADOS DO FORNECEDOR -->
+        <div class="modal-overlay" id="modalItens" style="display:none">
+            <div class="modal-card" style="max-width:1150px">
+                <div class="modal-header"><h3><i class="fas fa-boxes-stacked" style="color:var(--green)"></i> Produtos / Itens Comprados</h3><button class="modal-close" onclick="NR.closeItens()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto"><div id="itensBody"></div></div>
+            </div>
+        </div>
+        <!-- MODAL PAGAMENTOS DO FORNECEDOR -->
+        <div class="modal-overlay" id="modalPagamentos" style="display:none">
+            <div class="modal-card" style="max-width:1050px">
+                <div class="modal-header"><h3><i class="fas fa-receipt" style="color:var(--amber)"></i> Pagamentos ao Fornecedor</h3><button class="modal-close" onclick="NR.closePagamentos()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto"><div id="pagamentosBody"></div></div>
+            </div>
+        </div>
+        <!-- MODAL FICHA DO SERVIDOR -->
+        <div class="modal-overlay" id="modalFichaServidor" style="display:none">
+            <div class="modal-card" style="max-width:680px">
+                <div class="modal-header"><h3><i class="fas fa-file-invoice-dollar" style="color:var(--green)"></i> Ficha Financeira</h3><button class="modal-close" onclick="NR.closeFichaServidor()"><i class="fas fa-times"></i></button></div>
+                <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto"><div id="fichaServidorBody"></div></div>
+            </div>
+        </div>
+
         <!-- FORNECEDORES (CADASTRO) -->
         <section class="content-section" id="section-fornecedores-cad">
             <div class="panel">
                 <div class="panel-header">
                     <h3><i class="fas fa-address-book"></i> Fornecedores</h3>
-                    <button class="btn btn-primary btn-sm" onclick="NR.openCadForn()"><i class="fas fa-plus"></i> Cadastrar Manual</button>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="text" id="cnpj-consulta" placeholder="Consultar qualquer CNPJ..." style="padding:7px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem;width:200px" onkeydown="if(event.key==='Enter')NR.consultarCnpj(this.value)">
+                        <button class="btn btn-outline btn-sm" onclick="NR.consultarCnpj(document.getElementById('cnpj-consulta').value)"><i class="fas fa-search"></i> Ver Dados/Sócios</button>
+                        <button class="btn btn-primary btn-sm" onclick="NR.openCadForn()"><i class="fas fa-plus"></i> Cadastrar Manual</button>
+                    </div>
                 </div>
                 <div style="padding:0 24px 16px">
-                    <p style="margin-bottom:12px;color:var(--text3);font-size:.82rem"><i class="fas fa-magic" style="color:var(--blue)"></i> Fornecedores são cadastrados automaticamente a partir das notas fiscais recebidas (razão social, CNPJ, telefone, endereço). E-mail e responsável você completa manualmente.</p>
-                    <div style="margin-bottom:14px"><input type="text" id="forn-busca" placeholder="🔍 Buscar por nome, CNPJ, cidade, telefone..." style="width:100%;max-width:420px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" oninput="NR.renderFornecedoresCad()"></div>
+                    <p style="margin-bottom:12px;color:var(--text3);font-size:.82rem"><i class="fas fa-magic" style="color:var(--blue)"></i> Fornecedores são cadastrados automaticamente a partir das notas fiscais recebidas. Use "Ver Dados/Sócios" para consultar qualquer CNPJ na base pública da Receita (razão social, capital, sócios, situação).</p>
+                    <div style="margin-bottom:14px"><input type="text" id="forn-busca" placeholder="🔍 Buscar por nome, CNPJ, telefone, e-mail, responsável, cidade, endereço..." style="width:100%;max-width:480px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" oninput="NR.renderFornecedoresCad()"></div>
                     <div style="overflow-x:auto">
                         <table class="data-table" style="font-size:.82rem"><thead><tr>
                             <th>Razão Social / Fantasia</th><th>CNPJ</th><th>Telefone</th><th>E-mail</th><th>Responsável</th><th>Cidade/UF</th><th>Origem</th><th>Ações</th>
@@ -1178,9 +1324,18 @@
             </div>
         </div>
     </div>
+    <!-- MODAL DADOS DA EMPRESA (CNPJ) -->
+    <div class="modal-overlay" id="modalCnpj" style="display:none">
+        <div class="modal-card" style="max-width:640px">
+            <div class="modal-header"><h3><i class="fas fa-building" style="color:var(--blue)"></i> Dados da Empresa</h3><button class="modal-close" onclick="NR.closeCnpj()"><i class="fas fa-times"></i></button></div>
+            <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto">
+                <div id="cnpjBody"></div>
+            </div>
+        </div>
+    </div>
     <!-- MODAL ANÁLISE DE EDITAL -->
     <div class="modal-overlay" id="modalAnalise" style="display:none">
-        <div class="modal-card" style="max-width:760px">
+        <div class="modal-card" style="max-width:900px">
             <div class="modal-header"><h3><i class="fas fa-magic" style="color:#a78bfa"></i> Análise do Edital</h3><button class="modal-close" onclick="NR.closeAnalise()"><i class="fas fa-times"></i></button></div>
             <div style="padding:0 24px 24px;max-height:75vh;overflow-y:auto">
                 <p id="analiseInfo" style="margin-bottom:10px;color:var(--text2);font-size:.88rem"></p>
@@ -1318,6 +1473,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=92"></script>
+    <script src="app.js?v=103"></script>
 </body>
 </html>

@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','licitacoes':'Licitações','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','licitacoes':'fa-gavel','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','licitacoes':'Licitações','transparencia':'Transparência','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','licitacoes':'fa-gavel','transparencia':'fa-search-dollar','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -928,7 +928,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','licitacoes','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','licitacoes','transparencia','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -2811,8 +2811,18 @@ let fornecedoresCad=[];
 async function renderFornecedoresCad(){
   if(!document.getElementById('fornCadGrid'))return;
   try{fornecedoresCad=await api('GET','/api/fornecedores-cad');}catch(e){fornecedoresCad=[];}
-  let busca=(document.getElementById('forn-busca').value||'').toLowerCase();
-  let lista=busca?fornecedoresCad.filter(f=>((f.razao||'')+' '+(f.fantasia||'')+' '+(f.cnpj||'')+' '+(f.municipio||'')+' '+(f.telefone||'')+' '+(f.responsavel||'')).toLowerCase().includes(busca)):fornecedoresCad;
+  let buscaRaw=(document.getElementById('forn-busca').value||'').trim();
+  let nbf=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  let lista=fornecedoresCad;
+  if(buscaRaw){
+    let termos=nbf(buscaRaw).split(/\s+/).filter(Boolean);
+    let soNum=buscaRaw.replace(/\D/g,'');
+    lista=lista.filter(f=>{
+      if(soNum.length>=3&&((f.cnpj||'').replace(/\D/g,'').includes(soNum)||(f.telefone||'').replace(/\D/g,'').includes(soNum)))return true;
+      let alvo=nbf([f.razao,f.fantasia,f.cnpj,f.municipio,f.uf,f.telefone,f.responsavel,f.email,f.endereco,f.ie,f.observacao].join(' '));
+      return termos.every(t=>alvo.includes(t));
+    });
+  }
   document.getElementById('fornCadGrid').innerHTML=lista.length?lista.map(f=>{
     let tel=f.telefone?'<a href="tel:'+f.telefone.replace(/\D/g,'')+'" style="color:var(--blue)"><i class="fas fa-phone"></i> '+f.telefone+'</a>':'-';
     let mail=f.email?'<a href="mailto:'+f.email+'" style="color:var(--blue)">'+f.email+'</a>':'-';
@@ -2821,9 +2831,438 @@ async function renderFornecedoresCad(){
       +'<td style="white-space:nowrap;font-size:11px">'+fmtCnpj(f.cnpj)+'</td>'
       +'<td style="white-space:nowrap">'+tel+'</td><td>'+mail+'</td><td>'+(f.responsavel||'-')+'</td>'
       +'<td>'+(f.municipio?f.municipio+(f.uf?'/'+f.uf:''):'-')+'</td><td>'+origem+'</td>'
-      +'<td style="white-space:nowrap"><button class="btn btn-sm btn-outline" onclick="NR.editFornCad(\''+f.id+'\')" title="Editar / completar dados"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="NR.delFornCad(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
-  }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-address-book" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>'+(busca?'Nenhum fornecedor encontrado na busca.':'Nenhum fornecedor ainda. Eles são cadastrados automaticamente quando as notas chegam.')+'</td></tr>';
+      +'<td style="white-space:nowrap">'+(f.cnpj?'<button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.consultarCnpj(\''+f.cnpj+'\')" title="Ver dados e sócios na Receita"><i class="fas fa-building"></i></button> ':'')+'<button class="btn btn-sm btn-outline" onclick="NR.editFornCad(\''+f.id+'\')" title="Editar / completar dados"><i class="fas fa-edit"></i></button> <button class="btn btn-sm btn-danger" onclick="NR.delFornCad(\''+f.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+  }).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)"><i class="fas fa-address-book" style="font-size:1.6rem;display:block;margin-bottom:8px"></i>'+(buscaRaw?'Nenhum fornecedor encontrado na busca.':'Nenhum fornecedor ainda. Eles são cadastrados automaticamente quando as notas chegam.')+'</td></tr>';
 }
+// === TRANSPARÊNCIA MUNICIPAL ===
+let TRANSP={},TRANSP_SERV=[],TRANSP_CARGOS=[];
+function switchTranspTab(btn){
+  document.querySelectorAll('.transp-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.transp-tab-content').forEach(d=>d.style.display='none');
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.tab).style.display='';
+}
+async function openTranspCfg(){
+  let c={};try{c=await api('GET','/api/transparencia/config');}catch(e){}
+  document.getElementById('tc-municipio').value=c.municipio||'';
+  document.getElementById('tc-ibge').value=c.ibge||'';
+  document.getElementById('tc-cnpj').value=c.cnpj_orgao||'';
+  document.getElementById('tc-codigo').value=c.codigo||'';
+  document.getElementById('tc-entidade').value=c.entidade||'1';
+  document.getElementById('tc-exercicio').value=c.exercicio||new Date().getFullYear();
+  document.getElementById('modalTranspCfg').style.display='flex';
+}
+function closeTranspCfg(){document.getElementById('modalTranspCfg').style.display='none';}
+async function salvarTranspCfg(){
+  let r=await api('PUT','/api/transparencia/config',{
+    municipio:document.getElementById('tc-municipio').value.trim(),
+    ibge:document.getElementById('tc-ibge').value.trim(),
+    cnpj_orgao:document.getElementById('tc-cnpj').value.trim(),
+    codigo:document.getElementById('tc-codigo').value.trim(),
+    entidade:document.getElementById('tc-entidade').value.trim(),
+    exercicio:document.getElementById('tc-exercicio').value.trim()
+  });
+  if(r&&r.error){toast('Erro: '+r.error,'error');return;}
+  toast('Configuração salva!');closeTranspCfg();carregarTransparencia();
+}
+async function carregarTransparencia(){
+  let btn=document.getElementById('btnTranspCarregar');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Carregando...';
+  try{
+    let meses=document.getElementById('transp-meses').value;
+    let d=await api('GET','/api/transparencia/analise?meses='+meses);
+    if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('transpAlertas').innerHTML='<p style="color:var(--amber);padding:16px"><i class="fas fa-cog"></i> '+d.error+' — clique em "Configurar".</p>';}
+    else{TRANSP=d;renderTransparencia();}
+  }catch(e){toast('Erro ao carregar','error');}
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-sync-alt"></i> Carregar';
+}
+function renderTransparencia(){
+  document.getElementById('transp-municipio').textContent=TRANSP.municipio||'—';
+  document.getElementById('transp-qtd').textContent=TRANSP.qtd_contratos||0;
+  document.getElementById('transp-total').textContent=fmt(TRANSP.valor_total||0);
+  // Alertas
+  let cor={'alto':'var(--red)','medio':'var(--amber)','baixo':'var(--blue)'};
+  let al=TRANSP.alertas||[];
+  document.getElementById('transpAlertas').innerHTML=al.length?
+    '<p style="margin-bottom:10px;font-size:.8rem;color:var(--text3)"><i class="fas fa-info-circle"></i> Pontos que fogem do padrão e <b>merecem conferência</b>. Podem ter explicação legítima (ex: honorário de êxito, contrato de longo prazo).</p>'
+    +al.map(a=>'<div style="background:rgba(0,0,0,.15);border-left:4px solid '+(cor[a.nivel]||'var(--blue)')+';border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      +'<div><b style="color:'+(cor[a.nivel]||'var(--blue)')+'">'+a.tipo+'</b><br><span style="font-size:.88rem">'+a.texto+'</span></div>'
+      +(a.documento?'<button class="btn btn-sm" style="background:var(--blue);color:#fff;white-space:nowrap" onclick="NR.consultarCnpj(\''+a.documento+'\')"><i class="fas fa-building"></i> Ver empresa</button>':'')+'</div>').join('')
+    :'<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-circle-check" style="font-size:2rem;display:block;margin-bottom:8px;color:var(--green)"></i>Nenhum alerta de concentração no período. Clique em "Carregar" se ainda não buscou os dados.</div>';
+  if(TRANSP.qtd_sem_valor)document.getElementById('transp-total').title=TRANSP.qtd_sem_valor+' contrato(s) foram publicados pelo PNCP sem valor global (credenciamento/registro de preços) e não entram no total';
+  renderTranspFornecedores();
+  renderTranspContratos();
+}
+function renderTranspFornecedores(){
+  let fs=TRANSP.fornecedores||[];
+  let busca=(document.getElementById('transp-busca-forn').value||'').trim();
+  let soSemValor=document.getElementById('transp-forn-sem-valor').checked;
+  let nb=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  let lista=fs;
+  if(soSemValor)lista=lista.filter(f=>f.valor===0||f.qtd_sem_valor>0);
+  if(busca){
+    let termos=nb(busca).split(/\s+/).filter(Boolean);
+    let soNum=busca.replace(/\D/g,'');
+    lista=lista.filter(f=>{
+      let alvo=nb(f.nome+' '+(f.objetos||[]).join(' '));
+      let docOk=soNum.length>=3&&(f.documento||'').includes(soNum);
+      return docOk||termos.every(t=>alvo.includes(t));
+    });
+  }
+  document.getElementById('transp-forn-count').textContent=lista.length?lista.length+' de '+fs.length:'';
+  document.getElementById('transpFornGrid').innerHTML=lista.length?lista.map((f,i)=>{
+    let c=f.participacao>=20?'var(--red)':(f.participacao>=10?'var(--amber)':'var(--text2)');
+    let valorCell=f.valor>0?('<span style="font-weight:600">'+fmt(f.valor)+'</span>'+(f.qtd_sem_valor?' <span title="'+f.qtd_sem_valor+' contrato(s) sem valor publicado" style="color:var(--amber);font-size:10px">+'+f.qtd_sem_valor+'ⓘ</span>':''))
+      :'<span style="color:var(--amber)" title="O PNCP publicou este(s) contrato(s) sem valor global — típico de credenciamento e registro de preços, onde o município paga conforme a demanda">sem valor publicado ⓘ</span>';
+    return '<tr><td>'+(i+1)+'</td><td><b>'+f.nome+'</b></td><td style="font-size:11px">'+(f.documento?fmtCnpj(f.documento):'-')+'</td><td>'+f.qtd+'</td><td>'+valorCell+'</td>'
+      +'<td style="color:'+c+';font-weight:bold">'+(f.valor>0?f.participacao.toFixed(1)+'%':'-')+'</td>'
+      +'<td style="font-size:11px;color:var(--text3)" title="'+(f.objetos||[]).join(' | ').replace(/"/g,'&quot;')+'">'+((f.objetos||[])[0]||'-').substring(0,50)+'…</td>'
+      +'<td style="white-space:nowrap">'+(f.documento?'<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.verItensFornecedor(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Ver produtos/itens comprados"><i class="fas fa-boxes-stacked"></i></button> ':'')
+      +(f.documento&&f.documento.length===14?'<button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.consultarCnpj(\''+f.documento+'\')" title="Ver dados e sócios"><i class="fas fa-building"></i></button>':'')+'</td></tr>';
+  }).join(''):'<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">'+(busca||soSemValor?'Nada encontrado com esse filtro':'Clique em "Carregar"')+'</td></tr>';
+}
+function renderTranspContratos(){
+  let busca=(document.getElementById('transp-busca-contrato').value||'').trim().toLowerCase();
+  let nb=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  let lista=(TRANSP.contratos||[]);
+  if(busca)lista=lista.filter(c=>nb(c.fornecedor+' '+c.objeto).includes(nb(busca)));
+  document.getElementById('transpContratosGrid').innerHTML=lista.length?lista.map(c=>
+    '<tr><td style="white-space:nowrap">'+(c.assinatura?fD(c.assinatura):'-')+'</td><td>'+c.fornecedor+'</td>'
+    +'<td title="'+(c.objeto||'').replace(/"/g,'&quot;')+'">'+(c.objeto||'').substring(0,90)+((c.objeto||'').length>90?'…':'')+'</td>'
+    +'<td style="white-space:nowrap;font-weight:600">'+fmt(c.valor)+'</td><td style="white-space:nowrap">'+(c.vigencia_fim?fD(c.vigencia_fim):'-')+'</td></tr>'
+  ).join(''):'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">'+(busca?'Nada encontrado':'Clique em "Carregar"')+'</td></tr>';
+}
+// --- Itens/produtos comprados de um fornecedor ---
+async function verItensFornecedor(doc,nome){
+  let body=document.getElementById('itensBody');
+  body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-spinner fa-spin" style="font-size:1.6rem"></i><br>Buscando produtos e comparando preços...<br><span style="font-size:.8rem">Pode levar até 1 minuto na primeira vez</span></div>';
+  document.getElementById('modalItens').style.display='flex';
+  // 1) Tenta os produtos com comparação de preço (fornecedor com contrato no PNCP)
+  let p=await api('GET','/api/transparencia/produtos-fornecedor?doc='+doc+'&meses=24').catch(()=>null);
+  if(p&&!p.error&&p.produtos&&p.produtos.length){renderProdutosFornecedor(p,nome);return;}
+  // 2) Sem itens: cai para empenhos/descrição
+  let d=await api('GET','/api/transparencia/itens-fornecedor?doc='+doc+'&meses=36');
+  if(d&&d.error){body.innerHTML='<p style="color:var(--red)">'+d.error+'</p>';return;}
+  if(d.aviso||!d.contratacoes||!d.contratacoes.length){
+    let emps=d.empenhos||[];
+    let totalEmp=emps.reduce((s,e)=>s+(e.valor||0),0);
+    let totalPago=emps.reduce((s,e)=>s+(e.pago||0),0);
+    // Contratos citados nos empenhos (contratos antigos, fora do PNCP)
+    let ctrs=[...new Set(emps.map(e=>e.contrato).filter(Boolean))];
+    let mods=[...new Set(emps.map(e=>e.modalidade).filter(Boolean))];
+    body.innerHTML='<h4 style="margin:0 0 2px">'+(nome||d.fornecedor||'')+'</h4>'
+      +'<p style="color:var(--text3);font-size:.8rem;margin-bottom:10px">'+fmtCnpj(d.documento||'')+(d.exercicio?' · exercício '+d.exercicio:'')+' · <b>'+emps.length+'</b> empenho(s) · empenhado <b>'+fmt(totalEmp)+'</b> · pago <b style="color:var(--green)">'+fmt(totalPago)+'</b></p>'
+      +'<div style="background:rgba(245,158,11,.10);border:1px solid var(--amber);border-radius:8px;padding:12px;font-size:.84rem;margin-bottom:12px">'
+      +'<i class="fas fa-circle-info" style="color:var(--amber)"></i> '+(d.aviso||'')
+      +(ctrs.length?'<br><br><b>Contrato(s) citado(s) nos empenhos:</b> '+ctrs.join(', ')+(mods.length?' · <b>Modalidade:</b> '+mods.join(', '):'')+'<br><span style="color:var(--text3)">Contrato anterior ao PNCP (obrigatório desde 2023) — por isso não aparece na busca de contratos.</span>':'')
+      +'</div>'
+      +(emps.length?'<div style="overflow-x:auto"><table class="data-table" style="font-size:.8rem"><thead><tr><th>Empenho</th><th>Data</th><th>Secretaria</th><th>O que foi contratado</th><th style="text-align:right">Qtd</th><th style="text-align:right" title="Valor empenhado dividido pela quantidade encontrada no texto">Unitário</th><th style="text-align:right">Empenhado</th><th style="text-align:right">Pago</th></tr></thead><tbody>'
+        +emps.map(e=>'<tr><td>'+e.numero+'</td><td style="white-space:nowrap">'+(e.data?fD(String(e.data).substring(0,10)):'-')+'</td>'
+          +'<td style="font-size:11px;min-width:130px">'+(e.secretaria||'-').substring(0,32)+'</td>'
+          +'<td style="min-width:260px" title="'+(e.descricao||'').replace(/"/g,'&quot;')+'">'+((e.descricao||e.despesa||'-').substring(0,110))+'…</td>'
+          +'<td style="text-align:right;white-space:nowrap">'+(e.quantidade?e.quantidade.toLocaleString('pt-BR')+' '+(e.unidade||''):'<span style="color:var(--text3)">—</span>')+'</td>'
+          +'<td style="text-align:right;white-space:nowrap;font-weight:600">'+(e.valor_unitario?fmt(e.valor_unitario):'<span style="color:var(--text3)">—</span>')+'</td>'
+          +'<td style="text-align:right;white-space:nowrap">'+fmt(e.valor)+'</td><td style="text-align:right;white-space:nowrap;color:var(--green)">'+fmt(e.pago)+'</td></tr>').join('')
+        +'</tbody></table></div>'
+        +'<p style="margin-top:6px;font-size:.75rem;color:var(--text3)"><i class="fas fa-calculator"></i> <b>Unitário</b> = valor empenhado ÷ quantidade citada no texto do empenho. Aproximação — confira a descrição, o empenho pode cobrir mais de um item.</p>'
+        :'<p style="color:var(--text3)">Nenhum empenho encontrado no exercício. Use o botão 🧾 de pagamentos.</p>')
+      +'<p style="margin-top:8px;font-size:.75rem;color:var(--text3)"><i class="fas fa-database"></i> Empenhos do portal de transparência da cidade (LAI). A descrição é o texto oficial do empenho.</p>';
+    return;
+  }
+  let totalGeral=0;
+  d.contratacoes.forEach(c=>c.itens.forEach(i=>totalGeral+=i.valor_total||0));
+  body.innerHTML='<h4 style="margin:0 0 2px">'+(nome||d.fornecedor)+'</h4>'
+    +'<p style="color:var(--text3);font-size:.8rem;margin-bottom:12px">'+fmtCnpj(d.documento)+' · <b>'+d.qtd_contratos+'</b> contrato(s) · <b>'+d.total_itens+'</b> item(ns)'+(totalGeral?' · Total em itens: <b style="color:var(--green)">'+fmt(totalGeral)+'</b>':'')+'</p>'
+    +d.contratacoes.map(c=>{
+      let somaC=c.itens.reduce((s,i)=>s+(i.valor_total||0),0);
+      return '<div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:10px">'
+      +'<div style="margin-bottom:8px"><b>Contrato '+(c.contrato||'-')+'</b> · '+(c.assinatura?fD(c.assinatura):'-')+' · valor '+fmt(c.valor_contrato)
+      +'<br><span style="font-size:.8rem;color:var(--text3)">'+(c.objeto||'').substring(0,140)+'</span></div>'
+      +(c.sigiloso?'<p style="font-size:.8rem;color:var(--amber)"><i class="fas fa-lock"></i> Orçamento sigiloso — preços unitários não divulgados nesta contratação.</p>':'')
+      +'<div style="overflow-x:auto"><table class="data-table" style="font-size:.8rem"><thead><tr><th>#</th><th>Descrição</th><th>Qtd</th><th>Unid.</th><th style="text-align:right">Preço Unit.</th><th style="text-align:right">Total</th></tr></thead><tbody>'
+      +c.itens.map(i=>'<tr><td>'+i.numero+'</td><td title="'+(i.descricao||'').replace(/"/g,'&quot;')+'">'+(i.descricao||'').substring(0,70)+'</td>'
+        +'<td>'+i.quantidade+'</td><td>'+i.unidade+'</td>'
+        +'<td style="text-align:right'+(i.valor_unitario?';font-weight:600':';color:var(--text3)')+'">'+(i.valor_unitario?fmt(i.valor_unitario):'—')+'</td>'
+        +'<td style="text-align:right">'+(i.valor_total?fmt(i.valor_total):'—')+'</td></tr>').join('')
+      +'</tbody>'+(somaC?'<tfoot><tr style="font-weight:bold;background:var(--bg2)"><td colspan="5">TOTAL</td><td style="text-align:right">'+fmt(somaC)+'</td></tr></tfoot>':'')+'</table></div></div>';
+    }).join('')
+    +'<p style="margin-top:8px;font-size:.75rem;color:var(--text3)"><i class="fas fa-database"></i> Itens publicados no PNCP. Contratações antigas ou pagas por empenho direto podem não ter itens detalhados.</p>';
+}
+function renderProdutosFornecedor(p,nome){
+  let body=document.getElementById('itensBody');
+  let comRef=p.produtos.filter(x=>x.referencia);
+  body.innerHTML='<h4 style="margin:0 0 2px">'+(nome||p.fornecedor||'')+'</h4>'
+    +'<p style="color:var(--text3);font-size:.8rem;margin-bottom:10px">'+fmtCnpj(p.documento||'')+' · <b>'+p.qtd_contratos+'</b> contrato(s) · <b>'+p.total_produtos+'</b> produto(s) · total em itens <b style="color:var(--green)">'+fmt(p.valor_total_itens||0)+'</b></p>'
+    +(p.qtd_sobrepreco?'<div style="background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.85rem"><b style="color:var(--red)"><i class="fas fa-triangle-exclamation"></i> '+p.qtd_sobrepreco+' produto(s) com preço mais de 30% acima do praticado</b> em outras compras do município — vale conferir a especificação antes de concluir.</div>'
+      :(comRef.length?'<div style="background:rgba(16,185,129,.10);border:1px solid var(--green);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.85rem"><i class="fas fa-circle-check" style="color:var(--green)"></i> Nenhum produto muito acima da média nas comparações possíveis.</div>':''))
+    +'<div style="overflow-x:auto"><table class="data-table" style="font-size:.8rem"><thead><tr><th>Produto</th><th>Qtd</th><th>Un.</th><th style="text-align:right">Preço pago</th><th style="text-align:right" title="Preço mediano do mesmo produto em outras compras do município">Média município</th><th style="text-align:right">Diferença</th><th style="text-align:right">Total</th></tr></thead><tbody>'
+    +p.produtos.map(x=>{
+      let r=x.referencia;
+      let difCell='<td style="text-align:right;color:var(--text3)">—</td>';
+      let refCell='<td style="text-align:right;color:var(--text3)">sem comparação</td>';
+      if(r){
+        let cor=r.variacao>30?'var(--red)':(r.variacao>10?'var(--amber)':(r.variacao<-10?'var(--green)':'var(--text2)'));
+        refCell='<td style="text-align:right;white-space:nowrap" title="'+r.amostras+' outra(s) compra(s): de '+fmt(r.min)+' a '+fmt(r.max)+'">'+fmt(r.mediana)+' <span style="color:var(--text3);font-size:10px">('+r.amostras+')</span></td>';
+        difCell='<td style="text-align:right;white-space:nowrap;color:'+cor+';font-weight:bold">'+(r.variacao>0?'+':'')+r.variacao.toFixed(0)+'%</td>';
+      }
+      return '<tr'+(x.sobrepreco?' style="background:rgba(239,68,68,.07)"':'')+'>'
+        +'<td style="min-width:250px" title="'+(x.descricao||'').replace(/"/g,'&quot;')+'">'+(x.sobrepreco?'<i class="fas fa-triangle-exclamation" style="color:var(--red)"></i> ':'')+(x.descricao||'').substring(0,70)+'</td>'
+        +'<td style="white-space:nowrap">'+x.quantidade+'</td><td style="white-space:nowrap">'+x.unidade+'</td>'
+        +'<td style="text-align:right;font-weight:600;white-space:nowrap">'+(x.valor_unitario?fmt(x.valor_unitario):'—')+'</td>'
+        +refCell+difCell
+        +'<td style="text-align:right;white-space:nowrap">'+(x.valor_total?fmt(x.valor_total):'—')+'</td></tr>';
+    }).join('')
+    +'</tbody></table></div>'
+    +'<p style="margin-top:10px;font-size:.75rem;color:var(--text3)"><i class="fas fa-circle-info"></i> A "média município" é a <b>mediana do mesmo produto em outras contratações</b> da cidade. Produtos com nome parecido podem ter especificação diferente (litragem, potência, marca) — <b>confira antes de concluir que houve sobrepreço</b>.</p>';
+}
+function closeItens(){document.getElementById('modalItens').style.display='none';}
+
+// --- Comparador de preços por produto ---
+async function compararPrecos(){
+  let termo=(document.getElementById('preco-termo').value||'').trim();
+  if(termo.length<3){toast('Digite ao menos 3 letras do produto','error');return;}
+  let meses=document.getElementById('preco-meses').value;
+  document.getElementById('preco-resumo').innerHTML='<i class="fas fa-spinner fa-spin"></i> varrendo contratações...';
+  document.getElementById('precosGrid').innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)"><i class="fas fa-spinner fa-spin"></i> Buscando... pode levar até 1 minuto</td></tr>';
+  try{
+    let d=await api('GET','/api/transparencia/comparar-precos?termo='+encodeURIComponent(termo)+'&meses='+meses);
+    if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('preco-resumo').textContent='';return;}
+    if(!d.total){
+      document.getElementById('preco-resumo').textContent='';
+      document.getElementById('precosGrid').innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">Nenhum item encontrado com "'+termo+'". Tente uma palavra mais genérica (ex: "refeição" em vez de "marmitex").</td></tr>';
+      return;
+    }
+    document.getElementById('preco-resumo').innerHTML='<b>'+d.total+'</b> item(ns) · menor <b style="color:var(--green)">'+fmt(d.preco_min)+'</b> · mediana <b>'+fmt(d.preco_mediana)+'</b> · maior <b style="color:var(--red)">'+fmt(d.preco_max)+'</b>';
+    document.getElementById('precosGrid').innerHTML=d.itens.map(i=>{
+      let cor=i.variacao>30?'var(--red)':(i.variacao>10?'var(--amber)':(i.variacao<-10?'var(--green)':'var(--text2)'));
+      let sinal=i.variacao>0?'+':'';
+      return '<tr'+(i.acima_media?' style="background:rgba(239,68,68,.06)"':'')+'>'
+        +'<td title="'+(i.descricao||'').replace(/"/g,'&quot;')+'">'+(i.acima_media?'<i class="fas fa-triangle-exclamation" style="color:var(--red)" title="Bem acima da média"></i> ':'')+(i.descricao||'').substring(0,60)+'</td>'
+        +'<td>'+(i.fornecedor||'').substring(0,32)+'</td><td>'+i.quantidade+'</td><td>'+i.unidade+'</td>'
+        +'<td style="font-weight:600">'+fmt(i.valor_unitario)+'</td>'
+        +'<td style="color:'+cor+';font-weight:bold">'+sinal+i.variacao.toFixed(0)+'%</td>'
+        +'<td>'+(i.valor_total?fmt(i.valor_total):'—')+'</td><td style="white-space:nowrap">'+(i.data?fD(i.data):'-')+'</td></tr>';
+    }).join('');
+  }catch(e){toast('Erro ao comparar','error');document.getElementById('preco-resumo').textContent='';}
+}
+
+// --- Limite legal de dispensa (Lei 14.133/2021 art. 75) ---
+let DISPENSAS={};
+async function carregarDispensas(){
+  let ex=document.getElementById('disp-exercicio').value;
+  document.getElementById('disp-resumo').innerHTML='<i class="fas fa-spinner fa-spin"></i> analisando...';
+  try{
+    let d=await api('GET','/api/transparencia/dispensas?exercicio='+ex+'&meses=36');
+    if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('disp-resumo').textContent='';return;}
+    DISPENSAS=d;
+    document.getElementById('disp-limites').innerHTML='<i class="fas fa-circle-info"></i> Limites de <b>'+d.exercicio+'</b> ('+d.decreto+'): Compras/Serviços <b>'+fmt(d.limite_compras)+'</b> · Obras/Engenharia <b>'+fmt(d.limite_engenharia)+'</b>';
+    document.getElementById('disp-resumo').innerHTML='<b style="color:var(--red)">'+d.qtd_criticos+'</b> crítico(s) · pago '+fmt(d.valor_critico)+' · <b style="color:var(--red)">'+fmt(d.excedente_total||0)+' acima do teto</b> · de '+d.qtd_grupos+' grupos';
+    let b=document.getElementById('disp-badge');
+    if(b){if(d.qtd_criticos){b.textContent=d.qtd_criticos;b.style.display='inline';}else b.style.display='none';}
+    renderDispensas();
+  }catch(e){toast('Erro ao analisar','error');document.getElementById('disp-resumo').textContent='';}
+}
+function renderDispensas(){
+  let gs=DISPENSAS.grupos||[];
+  let filtro=document.getElementById('disp-filtro').value;
+  let busca=(document.getElementById('disp-busca').value||'').trim();
+  let nb=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  let lista=gs;
+  if(filtro==='criticos')lista=lista.filter(g=>g.alerta==='alto');
+  else if(filtro==='acima')lista=lista.filter(g=>g.excedeu);
+  else if(filtro==='perto')lista=lista.filter(g=>g.percentual>=80);
+  if(busca){
+    let soNum=busca.replace(/\D/g,'');
+    let termos=nb(busca).split(/\s+/).filter(Boolean);
+    lista=lista.filter(g=>(soNum.length>=3&&g.documento.includes(soNum))||termos.every(t=>nb(g.fornecedor+' '+g.ramo).includes(t)));
+  }
+  document.getElementById('dispensasGrid').innerHTML=lista.length?lista.map((g,i)=>{
+    let cor=g.alerta==='alto'?'var(--red)':(g.alerta==='medio'?'var(--amber)':(g.alerta==='baixo'?'var(--blue)':'var(--text2)'));
+    let icone=g.alerta==='alto'?'<i class="fas fa-triangle-exclamation" style="color:var(--red)" title="Passou do teto legal e não tem contrato publicado — verificar"></i> ':'';
+    return '<tr'+(g.alerta==='alto'?' style="background:rgba(239,68,68,.07)"':'')+'><td>'+(i+1)+'</td>'
+      +'<td>'+icone+'<b>'+g.fornecedor+'</b></td><td style="font-size:11px">'+(g.documento?fmtCnpj(g.documento):'-')+'</td>'
+      +'<td>'+g.ramo+'</td><td style="font-weight:600">'+fmt(g.total)+'</td>'
+      +'<td style="color:var(--text3)" title="'+g.tipo_limite+'">'+fmt(g.limite)+'</td>'
+      +'<td style="font-weight:bold;color:'+(g.excedente>0?'var(--red)':'var(--text3)')+'">'+(g.excedente>0?'+'+fmt(g.excedente):'—')+'</td>'
+      +'<td style="color:'+(g.margem>0?'var(--green)':'var(--text3)')+'">'+(g.margem>0?fmt(g.margem):'—')+'</td>'
+      +'<td style="color:'+cor+';font-weight:bold">'+g.percentual.toFixed(0)+'%</td>'
+      +'<td>'+g.qtd_pagamentos+(g.qtd_empenhos>1?' <span style="color:var(--text3);font-size:10px">('+g.qtd_empenhos+' emp)</span>':'')+'</td>'
+      +'<td>'+(g.tem_contrato?'<span style="color:var(--green)" title="Tem contrato publicado no PNCP"><i class="fas fa-check-circle"></i> Sim</span>':'<span style="color:var(--red)"><i class="fas fa-xmark"></i> Não</span>')+'</td>'
+      +'<td style="white-space:nowrap"><button class="btn btn-sm" style="background:var(--amber);color:#000" onclick="NR.verPagamentosDisp(\''+g.documento+'\',\''+(g.fornecedor||'').replace(/'/g,"\\'")+'\')" title="Ver pagamentos"><i class="fas fa-receipt"></i></button> '
+      +'<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.verItensFornecedor(\''+g.documento+'\',\''+(g.fornecedor||'').replace(/'/g,"\\'")+'\')" title="Ver produtos/itens comprados"><i class="fas fa-boxes-stacked"></i></button> '
+      +(g.documento&&g.documento.length===14?'<button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.consultarCnpj(\''+g.documento+'\')" title="Dados e sócios"><i class="fas fa-building"></i></button>':'')+'</td></tr>';
+  }).join(''):'<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text3)">'+(gs.length?'Nada encontrado com esse filtro':'Clique em "Analisar"')+'</td></tr>';
+}
+function verPagamentosDisp(doc,nome){
+  let sel=document.getElementById('transp-semctr-exercicio');
+  if(sel)sel.value=document.getElementById('disp-exercicio').value;
+  verPagamentos(doc,nome);
+}
+
+// --- Sem contrato publicado (cruzamento pagamentos x PNCP) ---
+let SEM_CONTRATO=[];
+async function carregarSemContrato(){
+  let ex=document.getElementById('transp-semctr-exercicio').value;
+  document.getElementById('semctr-resumo').innerHTML='<i class="fas fa-spinner fa-spin"></i> cruzando dados...';
+  try{
+    let d=await api('GET','/api/transparencia/sem-contrato?exercicio='+ex+'&meses=36');
+    if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('semctr-resumo').textContent='';return;}
+    SEM_CONTRATO=d.fornecedores||[];
+    document.getElementById('semctr-resumo').innerHTML='<b>'+d.qtd_sem_contrato+'</b> de '+d.qtd_fornecedores_pagos+' pagos · <b style="color:var(--amber)">'+fmt(d.valor_sem_contrato)+'</b> sem contrato'
+      +(d.qtd_acima_limite?' · <b style="color:var(--red)">'+d.qtd_acima_limite+' acima do limite ('+fmt(d.excedente_total||0)+' excedido)</b>':'')
+      +'<br><span style="font-size:.78rem">Limite dispensa '+(d.exercicio||'')+': <b>'+fmt(d.limite_compras||0)+'</b> ('+(d.decreto||'')+')</span>';
+    let b=document.getElementById('semctr-badge');
+    if(b){if(d.qtd_sem_contrato){b.textContent=d.qtd_sem_contrato;b.style.display='inline';}else b.style.display='none';}
+    renderSemContrato();
+  }catch(e){toast('Erro ao analisar','error');document.getElementById('semctr-resumo').textContent='';}
+}
+function renderSemContrato(){
+  let busca=(document.getElementById('transp-busca-semctr').value||'').trim();
+  let nb=s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  let lista=SEM_CONTRATO;
+  if(busca){
+    let soNum=busca.replace(/\D/g,'');
+    let termos=nb(busca).split(/\s+/).filter(Boolean);
+    lista=lista.filter(f=>(soNum.length>=3&&f.documento.includes(soNum))||termos.every(t=>nb(f.nome).includes(t)));
+  }
+  document.getElementById('semContratoGrid').innerHTML=lista.length?lista.map((f,i)=>{
+    let acima=(f.excedente||0)>0;
+    return '<tr'+(acima?' style="background:rgba(239,68,68,.06)"':'')+'><td>'+(i+1)+'</td>'
+    +'<td>'+(acima?'<i class="fas fa-triangle-exclamation" style="color:var(--red)" title="Passou do limite de dispensa e não tem contrato publicado"></i> ':'')+'<b>'+f.nome+'</b></td>'
+    +'<td style="font-size:11px">'+(f.documento?fmtCnpj(f.documento):'-')+'</td>'
+    +'<td>'+fmt(f.empenhado)+'</td><td style="font-weight:600;color:var(--green)">'+fmt(f.pago)+'</td><td style="color:var(--amber)">'+fmt(f.a_pagar)+'</td>'
+    +'<td style="color:var(--text3)">'+fmt(f.limite||0)+'</td>'
+    +'<td style="font-weight:bold;color:'+(acima?'var(--red)':'var(--text3)')+'">'+(acima?'+'+fmt(f.excedente):'—')+'</td>'
+    +'<td style="color:'+((f.margem||0)>0?'var(--green)':'var(--text3)')+'">'+((f.margem||0)>0?fmt(f.margem):'—')+'</td>'
+    +'<td>'+f.empenhos+'</td>'
+    +'<td style="white-space:nowrap"><button class="btn btn-sm" style="background:var(--amber);color:#000" onclick="NR.verPagamentos(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Ver pagamentos detalhados"><i class="fas fa-receipt"></i></button> '
+    +'<button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.verItensFornecedor(\''+f.documento+'\',\''+(f.nome||'').replace(/'/g,"\\'")+'\')" title="Ver produtos/itens comprados"><i class="fas fa-boxes-stacked"></i></button> '
+    +(f.documento&&f.documento.length===14?'<button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="NR.consultarCnpj(\''+f.documento+'\')" title="Ver dados e sócios"><i class="fas fa-building"></i></button>':'')+'</td></tr>';
+  }).join(''):'<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--text3)">'+(busca?'Nada encontrado':'Clique em "Analisar"')+'</td></tr>';
+}
+async function verPagamentos(doc,nome){
+  let body=document.getElementById('pagamentosBody');
+  body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-spinner fa-spin" style="font-size:1.6rem"></i><br>Buscando pagamentos...</div>';
+  document.getElementById('modalPagamentos').style.display='flex';
+  let ex=document.getElementById('transp-semctr-exercicio').value;
+  let d=await api('GET','/api/transparencia/pagamentos?exercicio='+ex+'&doc='+doc);
+  if(d&&d.error){body.innerHTML='<p style="color:var(--red)">'+d.error+'</p>';return;}
+  let ps=d.pagamentos||[];
+  let tot=ps.reduce((s,p)=>s+p.valor,0);
+  body.innerHTML='<h4 style="margin:0 0 2px">'+nome+'</h4><p style="color:var(--text3);font-size:.8rem;margin-bottom:12px">'+fmtCnpj(doc)+' · exercício '+(d.exercicio||'')+' · <b>'+ps.length+'</b> pagamento(s) · Total <b style="color:var(--green)">'+fmt(tot)+'</b></p>'
+    +(ps.length?'<div style="overflow-x:auto"><table class="data-table" style="font-size:.8rem"><thead><tr><th>Pagamento</th><th>Empenho</th><th>NF</th><th>Despesa</th><th>Fonte</th><th style="text-align:right">Valor</th></tr></thead><tbody>'
+      +ps.map(p=>'<tr><td style="white-space:nowrap">'+(p.data_pagamento||'-')+'</td><td>'+(p.empenho||'-')+'/'+(p.ano_empenho||'')+'</td><td>'+(p.nota_fiscal||'-')+'</td>'
+        +'<td style="font-size:11px" title="'+(p.despesa||'').replace(/"/g,'&quot;')+'">'+(p.despesa||'-').substring(0,45)+'</td><td style="font-size:11px">'+(p.fonte||'-').substring(0,28)+'</td>'
+        +'<td style="text-align:right;font-weight:600">'+fmt(p.valor)+'</td></tr>').join('')+'</tbody></table></div>'
+      :'<p style="color:var(--text3)">Nenhum pagamento detalhado neste exercício.</p>')
+    +'<p style="margin-top:10px;font-size:.75rem;color:var(--text3)"><i class="fas fa-database"></i> Dados públicos do portal de transparência (LAI).</p>';
+}
+function closePagamentos(){document.getElementById('modalPagamentos').style.display='none';}
+
+async function carregarServidores(){
+  toast('Buscando servidores no portal da cidade...','info');
+  try{
+    let d=await api('GET','/api/transparencia/servidores?top=1000');
+    if(d&&d.error){toast('Erro: '+d.error,'error');return;}
+    TRANSP_SERV=d.servidores||[];
+    document.getElementById('transp-servidores').textContent=d.total||TRANSP_SERV.length;
+    renderTranspServidores();
+    toast(TRANSP_SERV.length+' servidor(es) carregado(s)');
+  }catch(e){toast('Erro ao carregar servidores','error');}
+}
+function renderTranspServidores(){
+  let busca=(document.getElementById('transp-busca-servidor').value||'').trim();
+  let nb=s=>(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  let lista=TRANSP_SERV;
+  if(busca){
+    let p=nb(busca).split(/\s+/).filter(Boolean);
+    let soNum=busca.replace(/\D/g,'');
+    lista=lista.filter(s=>{
+      if(soNum.length>=2&&String(s.matricula||'').includes(soNum))return true;
+      let alvo=nb(s.nome+' '+s.funcao+' '+s.lotacao+' '+s.regime+' '+s.situacao+' '+s.matricula);
+      return p.every(x=>alvo.includes(x));
+    });
+  }
+  let cnt=document.getElementById('transp-serv-count');
+  if(cnt)cnt.textContent=TRANSP_SERV.length?(lista.length+' de '+TRANSP_SERV.length):'';
+  document.getElementById('transpServidoresGrid').innerHTML=lista.length?lista.slice(0,400).map(s=>
+    '<tr><td><b>'+s.nome+'</b></td><td>'+s.matricula+'</td><td>'+(s.funcao||'-')+'</td><td style="font-size:11px">'+(s.lotacao||'-')+'</td><td>'+(s.regime||'-')+'</td><td style="white-space:nowrap">'+(s.admissao||'-')+'</td>'
+    +'<td>'+(/ativo/i.test(s.situacao)?'<span style="color:var(--green)">'+s.situacao+'</span>':'<span style="color:var(--text3)">'+(s.situacao||'-')+'</span>')+'</td>'
+    +'<td><button class="btn btn-sm" style="background:var(--green);color:#fff" onclick="NR.verFichaServidor('+s.matricula+',\''+(s.nome||'').replace(/'/g,"\\'")+'\')" title="Ver ficha financeira (salários)"><i class="fas fa-file-invoice-dollar"></i></button></td></tr>'
+  ).join(''):'<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">'+(busca?'Nada encontrado':'Clique em "Carregar Servidores"')+'</td></tr>';
+}
+async function verFichaServidor(matricula,nome){
+  let body=document.getElementById('fichaServidorBody');
+  body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-spinner fa-spin" style="font-size:1.6rem"></i><br>Buscando ficha no portal...</div>';
+  document.getElementById('modalFichaServidor').style.display='flex';
+  let d=await api('GET','/api/transparencia/servidor/'+matricula);
+  if(d&&d.error){body.innerHTML='<p style="color:var(--red)">'+d.error+'</p>';return;}
+  let comps=d.competencias||[];
+  let totLiq=comps.reduce((s,c)=>s+c.liquido,0);
+  body.innerHTML='<h4 style="margin:0 0 2px">'+nome+'</h4><p style="color:var(--text3);font-size:.8rem;margin-bottom:14px">Matrícula '+matricula+' · exercício '+(d.exercicio||'')+' · <b>'+comps.length+'</b> competência(s) · Total líquido no ano: <b style="color:var(--green)">'+fmt(totLiq)+'</b></p>'
+    +(comps.length?comps.map(c=>{
+      let vp=(c.verbas_proventos||[]),vd=(c.verbas_descontos||[]);
+      return '<div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">'
+        +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><b>'+c.competencia+' — '+c.tipo_folha+'</b><span>Base: '+fmt(c.salario_base)+' · Líquido: <b style="color:var(--green)">'+fmt(c.liquido)+'</b></span></div>'
+        +'<div style="font-size:.8rem;color:var(--text3);margin-top:4px">Proventos '+fmt(c.proventos)+' − Descontos '+fmt(c.descontos)+'</div>'
+        +((vp.length||vd.length)?'<details style="margin-top:6px;font-size:.8rem"><summary style="cursor:pointer;color:var(--text2)">Verbas ('+vp.length+' prov / '+vd.length+' desc)</summary><div style="margin-top:4px">'
+          +vp.map(v=>'<div style="display:flex;justify-content:space-between"><span>'+(v.descricao_verba||v.descricao||'')+'</span><span style="color:var(--green)">'+fmt(v.valor)+'</span></div>').join('')
+          +vd.map(v=>'<div style="display:flex;justify-content:space-between"><span>'+(v.descricao_verba||v.descricao||'')+'</span><span style="color:var(--red)">−'+fmt(v.valor)+'</span></div>').join('')
+          +'</div></details>':'')
+        +'</div>';
+    }).join(''):'<p style="color:var(--text3)">Sem competências no exercício.</p>')
+    +'<p style="margin-top:10px;font-size:.75rem;color:var(--text3)"><i class="fas fa-database"></i> Dados públicos do portal de transparência do município (LAI).</p>';
+}
+function closeFichaServidor(){document.getElementById('modalFichaServidor').style.display='none';}
+async function carregarCargos(){
+  toast('Buscando cargos...','info');
+  let d=await api('GET','/api/transparencia/cargos');
+  if(d&&d.error){toast('Erro: '+d.error,'error');return;}
+  TRANSP_CARGOS=d.cargos||[];
+  document.getElementById('transpCargosGrid').innerHTML=TRANSP_CARGOS.length?TRANSP_CARGOS.map(c=>
+    '<tr><td><b>'+(c.funcao||'-')+'</b></td><td>'+(c.nivel||'-')+'</td><td style="font-size:11px">'+(c.grupo||'-')+'</td><td>'+(c.vagas_criadas!=null?c.vagas_criadas:'-')+'</td><td>'+(c.vagas_ocupadas!=null?c.vagas_ocupadas:'-')+'</td></tr>'
+  ).join(''):'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">Nenhum cargo retornado</td></tr>';
+  toast(TRANSP_CARGOS.length+' cargo(s) carregado(s)');
+}
+
+// Consulta pública de CNPJ (dados + sócios)
+async function consultarCnpj(cnpjRaw){
+  let cnpj=(cnpjRaw||'').replace(/\D/g,'');
+  if(cnpj.length!==14){toast('Digite um CNPJ com 14 dígitos','error');return;}
+  let body=document.getElementById('cnpjBody');
+  body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)"><i class="fas fa-spinner fa-spin" style="font-size:1.6rem"></i><br>Consultando a Receita Federal...</div>';
+  document.getElementById('modalCnpj').style.display='flex';
+  let d=await api('GET','/api/cnpj/'+cnpj);
+  if(d&&d.error){body.innerHTML='<p style="color:var(--red);padding:12px 0"><i class="fas fa-exclamation-triangle"></i> '+d.error+'</p>';return;}
+  let capital=d.capital_social?('R$ '+d.capital_social.toLocaleString('pt-BR',{minimumFractionDigits:2})):'-';
+  let sitCor=/ativa/i.test(d.situacao||'')?'var(--green)':'var(--red)';
+  let campos=[
+    ['CNPJ',fmtCnpj(d.cnpj)],
+    ['Nome Fantasia',d.nome_fantasia||'-'],
+    ['Situação','<span style="color:'+sitCor+'">'+(d.situacao||'-')+'</span>'],
+    ['Abertura',d.data_abertura?fD(d.data_abertura):'-'],
+    ['Capital Social','<b>'+capital+'</b>'],
+    ['Natureza Jurídica',d.natureza_juridica||'-'],
+    ['Porte',d.porte||'-'],
+    ['Simples Nacional',d.simples||'-'],
+    ['Atividade (CNAE)',d.cnae||'-'],
+    ['Endereço',d.endereco||'-'],
+    ['Telefone',d.telefone||'-'],
+    ['E-mail',d.email||'-']
+  ];
+  let socios=(d.socios||[]);
+  body.innerHTML='<h4 style="margin:0 0 4px">'+(d.razao_social||'-')+'</h4>'
+    +'<p style="color:var(--text3);font-size:.78rem;margin-bottom:14px"><i class="fas fa-database"></i> Fonte: '+(d.fonte||'dados públicos')+'</p>'
+    +'<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:.85rem;margin-bottom:16px">'
+    +campos.map(c=>'<div style="color:var(--text3)">'+c[0]+'</div><div>'+c[1]+'</div>').join('')+'</div>'
+    +'<div style="background:var(--bg3);border-radius:10px;padding:14px">'
+    +'<b><i class="fas fa-users" style="color:var(--amber)"></i> Quadro de Sócios ('+socios.length+')</b>'
+    +(socios.length?'<div style="margin-top:8px">'+socios.map(s=>'<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid var(--border);font-size:.85rem"><span><b>'+s.nome+'</b></span><span style="color:var(--text3);text-align:right">'+s.qualificacao+(s.entrada?' · desde '+fD(s.entrada):'')+'</span></div>').join('')+'</div>'
+      :'<p style="margin-top:6px;color:var(--text3);font-size:.82rem">Sem sócios listados na base pública (comum em MEI, empresa individual ou sociedade de advogados — que registra os sócios na OAB).</p>')
+    +'</div>'
+    +'<p style="margin-top:12px;font-size:.75rem;color:var(--text3)"><i class="fas fa-info-circle"></i> Dados públicos da Receita Federal. Use para conferência — a conclusão é sempre sua.</p>';
+}
+function closeCnpj(){document.getElementById('modalCnpj').style.display='none';}
 function openCadForn(){
   ['razao','fantasia','cnpj','telefone','email','responsavel','ie','endereco','municipio','uf','cep','obs'].forEach(k=>document.getElementById('cf-'+k).value='');
   delete document.getElementById('modalCadForn').dataset.editId;
@@ -3231,6 +3670,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
 checkAuth();
 })();

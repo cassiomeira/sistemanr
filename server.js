@@ -842,6 +842,71 @@ app.put('/api/notas-recebidas-multi', (req, res) => {
   res.json({ ok: true, count: ids.length });
 });
 
+// === TRANSPARÊNCIA MUNICIPAL (PNCP + portal da cidade) ===
+const transparencia = require('./transparencia');
+app.get('/api/transparencia/config', (req, res) => res.json(transparencia.getCfgTransp(req.emp)));
+app.put('/api/transparencia/config', adminOnly, (req, res) => {
+  const b = req.body || {};
+  const cfg = {
+    municipio: (b.municipio || '').trim(),
+    ibge: (b.ibge || '').replace(/\D/g, ''),
+    cnpj_orgao: (b.cnpj_orgao || '').replace(/\D/g, ''),
+    codigo: (b.codigo || '').trim(),
+    entidade: (b.entidade || '1').trim(),
+    exercicio: (b.exercicio || String(new Date().getFullYear())).trim(),
+  };
+  db.updateConfig(req.emp, 'transp_portal', JSON.stringify(cfg));
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Transparência', 'Configurou município ' + cfg.municipio);
+  res.json({ ok: true, cfg });
+});
+app.get('/api/transparencia/analise', async (req, res) => {
+  try { res.json(await transparencia.analisarMunicipio(req.emp, parseInt(req.query.meses) || 12)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/servidores', async (req, res) => {
+  try { res.json(await transparencia.listarServidores(req.emp, req.query)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/servidor/:matricula', async (req, res) => {
+  try { res.json(await transparencia.fichaServidor(req.emp, req.params.matricula, req.query.exercicio)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/sem-contrato', async (req, res) => {
+  try { res.json(await transparencia.semContrato(req.emp, req.query.exercicio, parseInt(req.query.meses) || 24)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/produtos-fornecedor', async (req, res) => {
+  try { res.json(await transparencia.produtosFornecedor(req.emp, req.query.doc, parseInt(req.query.meses) || 24)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/itens-fornecedor', async (req, res) => {
+  try { res.json(await transparencia.itensPorFornecedor(req.emp, req.query.doc, parseInt(req.query.meses) || 24)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/comparar-precos', async (req, res) => {
+  try { res.json(await transparencia.compararPrecos(req.emp, req.query.termo, parseInt(req.query.meses) || 24)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/dispensas', async (req, res) => {
+  try { res.json(await transparencia.analiseDispensas(req.emp, req.query.exercicio, parseInt(req.query.meses) || 36)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/pagamentos', async (req, res) => {
+  try { res.json(await transparencia.pagamentosDetalhados(req.emp, req.query.exercicio, req.query.doc)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/transparencia/cargos', async (req, res) => {
+  try { res.json(await transparencia.padraoRemuneratorio(req.emp)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// === CONSULTA PÚBLICA DE CNPJ (dados abertos da Receita) ===
+const cnpjConsulta = require('./cnpj');
+app.get('/api/cnpj/:cnpj', async (req, res) => {
+  try { res.json(await cnpjConsulta.consultarCnpj(req.params.cnpj)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // === FORNECEDORES (CADASTRO COMPLETO) ===
 app.get('/api/fornecedores-cad', (req, res) => res.json(db.getFornecedoresCad(req.emp)));
 app.post('/api/fornecedores-cad', (req, res) => {
