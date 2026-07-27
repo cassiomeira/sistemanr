@@ -162,7 +162,7 @@ async function delEmpresa(){
   confirmClear('Empresa "'+(emp?emp.nome:currentEmpresa)+'" e TODOS os dados','__empresa__');
 }
 // NAV
-document.querySelectorAll('.nav-link').forEach(l=>{l.addEventListener('click',e=>{e.preventDefault();let s=l.dataset.section;document.querySelectorAll('.nav-link').forEach(x=>x.classList.remove('active'));l.classList.add('active');document.querySelectorAll('.content-section').forEach(x=>x.classList.remove('active'));document.getElementById('section-'+s).classList.add('active');document.getElementById('pageTitle').textContent=MENU_MAP[s]||s;document.getElementById('sidebar').classList.remove('open');});});
+document.querySelectorAll('.nav-link').forEach(l=>{l.addEventListener('click',e=>{e.preventDefault();let s=l.dataset.section;document.querySelectorAll('.nav-link').forEach(x=>x.classList.remove('active'));l.classList.add('active');document.querySelectorAll('.content-section').forEach(x=>x.classList.remove('active'));document.getElementById('section-'+s).classList.add('active');document.getElementById('pageTitle').textContent=MENU_MAP[s]||s;document.getElementById('sidebar').classList.remove('open');if(s==='transparencia')try{restaurarTransparencia();}catch(e){}});});
 document.getElementById('menuToggle').addEventListener('click',()=>document.getElementById('sidebar').classList.toggle('open'));
 let now=new Date(),ms=document.getElementById('monthSelector');
 ms.value=now.getFullYear()+'-'+(now.getMonth()+1).toString().padStart(2,'0');
@@ -2865,6 +2865,32 @@ async function salvarTranspCfg(){
   if(r&&r.error){toast('Erro: '+r.error,'error');return;}
   toast('Configuração salva!');closeTranspCfg();carregarTransparencia();
 }
+// Cache local da última busca (por empresa) — os dados ficam salvos no navegador
+// e só mudam quando o usuário clica em Carregar/Analisar de novo.
+function transpCacheSave(chave,dados){
+  try{localStorage.setItem('transp_'+currentEmpresa+'_'+chave,JSON.stringify({t:Date.now(),d:dados}));}catch(e){}
+}
+function transpCacheLoad(chave){
+  try{const x=JSON.parse(localStorage.getItem('transp_'+currentEmpresa+'_'+chave)||'null');return x&&x.d;}catch(e){return null;}
+}
+function transpCacheQuando(chave){
+  try{const x=JSON.parse(localStorage.getItem('transp_'+currentEmpresa+'_'+chave)||'null');return x&&x.t;}catch(e){return 0;}
+}
+let transpRestaurada='';
+function restaurarTransparencia(){
+  if(transpRestaurada===currentEmpresa)return;
+  transpRestaurada=currentEmpresa;
+  let d=transpCacheLoad('analise');if(d){TRANSP=d;renderTransparencia();}
+  let s=transpCacheLoad('semctr');if(s)aplicarSemContrato(s);
+  let di=transpCacheLoad('dispensas');if(di)aplicarDispensas(di);
+  let sv=transpCacheLoad('servidores');if(sv)aplicarServidores(sv);
+  let cg=transpCacheLoad('cargos');if(cg)aplicarCargos(cg);
+  let t=transpCacheQuando('analise');
+  if(t){
+    let el=document.getElementById('transp-cache-info');
+    if(el)el.innerHTML='<i class="fas fa-clock-rotate-left"></i> Última busca: '+new Date(t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' — clique em Carregar para atualizar';
+  }
+}
 async function carregarTransparencia(){
   let btn=document.getElementById('btnTranspCarregar');
   btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Carregando...';
@@ -2872,9 +2898,13 @@ async function carregarTransparencia(){
     let meses=document.getElementById('transp-meses').value;
     let d=await api('GET','/api/transparencia/analise?meses='+meses);
     if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('transpAlertas').innerHTML='<p style="color:var(--amber);padding:16px"><i class="fas fa-cog"></i> '+d.error+' — clique em "Configurar".</p>';}
-    else{TRANSP=d;renderTransparencia();}
+    else{TRANSP=d;transpCacheSave('analise',d);renderTransparencia();}
   }catch(e){toast('Erro ao carregar','error');}
   btn.disabled=false;btn.innerHTML='<i class="fas fa-sync-alt"></i> Carregar';
+  let el=document.getElementById('transp-cache-info');
+  if(el)el.innerHTML='<i class="fas fa-clock-rotate-left"></i> Última busca: agora';
+  // Um clique atualiza todos os submenus em paralelo (cada um salva seu cache)
+  Promise.allSettled([carregarSemContrato(),carregarDispensas(),carregarServidores(),carregarCargos()]);
 }
 function renderTransparencia(){
   document.getElementById('transp-municipio').textContent=TRANSP.municipio||'—';
@@ -3088,18 +3118,22 @@ async function compararPrecos(){
 
 // --- Limite legal de dispensa (Lei 14.133/2021 art. 75) ---
 let DISPENSAS={};
+function aplicarDispensas(d){
+  DISPENSAS=d;
+  document.getElementById('disp-limites').innerHTML='<i class="fas fa-circle-info"></i> Limites de <b>'+d.exercicio+'</b> ('+d.decreto+'): Compras/Serviços <b>'+fmt(d.limite_compras)+'</b> · Obras/Engenharia <b>'+fmt(d.limite_engenharia)+'</b>';
+  document.getElementById('disp-resumo').innerHTML='<b style="color:var(--red)">'+d.qtd_criticos+'</b> crítico(s) · pago '+fmt(d.valor_critico)+' · <b style="color:var(--red)">'+fmt(d.excedente_total||0)+' acima do teto</b> · de '+d.qtd_grupos+' grupos';
+  let b=document.getElementById('disp-badge');
+  if(b){if(d.qtd_criticos){b.textContent=d.qtd_criticos;b.style.display='inline';}else b.style.display='none';}
+  renderDispensas();
+}
 async function carregarDispensas(){
   let ex=document.getElementById('disp-exercicio').value;
   document.getElementById('disp-resumo').innerHTML='<i class="fas fa-spinner fa-spin"></i> analisando...';
   try{
     let d=await api('GET','/api/transparencia/dispensas?exercicio='+ex+'&meses=36');
     if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('disp-resumo').textContent='';return;}
-    DISPENSAS=d;
-    document.getElementById('disp-limites').innerHTML='<i class="fas fa-circle-info"></i> Limites de <b>'+d.exercicio+'</b> ('+d.decreto+'): Compras/Serviços <b>'+fmt(d.limite_compras)+'</b> · Obras/Engenharia <b>'+fmt(d.limite_engenharia)+'</b>';
-    document.getElementById('disp-resumo').innerHTML='<b style="color:var(--red)">'+d.qtd_criticos+'</b> crítico(s) · pago '+fmt(d.valor_critico)+' · <b style="color:var(--red)">'+fmt(d.excedente_total||0)+' acima do teto</b> · de '+d.qtd_grupos+' grupos';
-    let b=document.getElementById('disp-badge');
-    if(b){if(d.qtd_criticos){b.textContent=d.qtd_criticos;b.style.display='inline';}else b.style.display='none';}
-    renderDispensas();
+    transpCacheSave('dispensas',d);
+    aplicarDispensas(d);
   }catch(e){toast('Erro ao analisar','error');document.getElementById('disp-resumo').textContent='';}
 }
 function renderDispensas(){
@@ -3141,19 +3175,23 @@ function verPagamentosDisp(doc,nome){
 
 // --- Sem contrato publicado (cruzamento pagamentos x PNCP) ---
 let SEM_CONTRATO=[];
+function aplicarSemContrato(d){
+  SEM_CONTRATO=d.fornecedores||[];
+  document.getElementById('semctr-resumo').innerHTML='<b style="color:var(--amber)">'+fmt(d.valor_descoberto||0)+'</b> descoberto em <b>'+d.qtd_descoberto+'</b> fornecedores ('+d.qtd_sem_contrato+' sem contrato algum) · de '+d.qtd_fornecedores_pagos+' pagos'
+    +(d.qtd_acima_limite?' · <b style="color:var(--red)">'+d.qtd_acima_limite+' acima do limite de dispensa</b>':'')
+    +'<br><span style="font-size:.78rem">Limite dispensa '+(d.exercicio||'')+': <b>'+fmt(d.limite_compras||0)+'</b> ('+(d.decreto||'')+')</span>';
+  let b=document.getElementById('semctr-badge');
+  if(b){if(d.qtd_descoberto){b.textContent=d.qtd_descoberto;b.style.display='inline';}else b.style.display='none';}
+  renderSemContrato();
+}
 async function carregarSemContrato(){
   let ex=document.getElementById('transp-semctr-exercicio').value;
   document.getElementById('semctr-resumo').innerHTML='<i class="fas fa-spinner fa-spin"></i> cruzando dados...';
   try{
     let d=await api('GET','/api/transparencia/sem-contrato?exercicio='+ex+'&meses=36');
     if(d&&d.error){toast('Erro: '+d.error,'error');document.getElementById('semctr-resumo').textContent='';return;}
-    SEM_CONTRATO=d.fornecedores||[];
-    document.getElementById('semctr-resumo').innerHTML='<b style="color:var(--amber)">'+fmt(d.valor_descoberto||0)+'</b> descoberto em <b>'+d.qtd_descoberto+'</b> fornecedores ('+d.qtd_sem_contrato+' sem contrato algum) · de '+d.qtd_fornecedores_pagos+' pagos'
-      +(d.qtd_acima_limite?' · <b style="color:var(--red)">'+d.qtd_acima_limite+' acima do limite de dispensa</b>':'')
-      +'<br><span style="font-size:.78rem">Limite dispensa '+(d.exercicio||'')+': <b>'+fmt(d.limite_compras||0)+'</b> ('+(d.decreto||'')+')</span>';
-    let b=document.getElementById('semctr-badge');
-    if(b){if(d.qtd_descoberto){b.textContent=d.qtd_descoberto;b.style.display='inline';}else b.style.display='none';}
-    renderSemContrato();
+    transpCacheSave('semctr',d);
+    aplicarSemContrato(d);
   }catch(e){toast('Erro ao analisar','error');document.getElementById('semctr-resumo').textContent='';}
 }
 function renderSemContrato(){
@@ -3213,14 +3251,18 @@ async function verPagamentos(doc,nome){
 }
 function closePagamentos(){document.getElementById('modalPagamentos').style.display='none';}
 
+function aplicarServidores(d){
+  TRANSP_SERV=d.servidores||[];
+  document.getElementById('transp-servidores').textContent=d.total||TRANSP_SERV.length;
+  renderTranspServidores();
+}
 async function carregarServidores(){
   toast('Buscando servidores no portal da cidade...','info');
   try{
     let d=await api('GET','/api/transparencia/servidores?top=1000');
     if(d&&d.error){toast('Erro: '+d.error,'error');return;}
-    TRANSP_SERV=d.servidores||[];
-    document.getElementById('transp-servidores').textContent=d.total||TRANSP_SERV.length;
-    renderTranspServidores();
+    transpCacheSave('servidores',d);
+    aplicarServidores(d);
     toast(TRANSP_SERV.length+' servidor(es) carregado(s)');
   }catch(e){toast('Erro ao carregar servidores','error');}
 }
@@ -3268,14 +3310,18 @@ async function verFichaServidor(matricula,nome){
     +'<p style="margin-top:10px;font-size:.75rem;color:var(--text3)"><i class="fas fa-database"></i> Dados públicos do portal de transparência do município (LAI).</p>';
 }
 function closeFichaServidor(){document.getElementById('modalFichaServidor').style.display='none';}
-async function carregarCargos(){
-  toast('Buscando cargos...','info');
-  let d=await api('GET','/api/transparencia/cargos');
-  if(d&&d.error){toast('Erro: '+d.error,'error');return;}
+function aplicarCargos(d){
   TRANSP_CARGOS=d.cargos||[];
   document.getElementById('transpCargosGrid').innerHTML=TRANSP_CARGOS.length?TRANSP_CARGOS.map(c=>
     '<tr><td><b>'+(c.funcao||'-')+'</b></td><td>'+(c.nivel||'-')+'</td><td style="font-size:11px">'+(c.grupo||'-')+'</td><td>'+(c.vagas_criadas!=null?c.vagas_criadas:'-')+'</td><td>'+(c.vagas_ocupadas!=null?c.vagas_ocupadas:'-')+'</td></tr>'
   ).join(''):'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">Nenhum cargo retornado</td></tr>';
+}
+async function carregarCargos(){
+  toast('Buscando cargos...','info');
+  let d=await api('GET','/api/transparencia/cargos');
+  if(d&&d.error){toast('Erro: '+d.error,'error');return;}
+  transpCacheSave('cargos',d);
+  aplicarCargos(d);
   toast(TRANSP_CARGOS.length+' cargo(s) carregado(s)');
 }
 

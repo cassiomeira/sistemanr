@@ -54,15 +54,35 @@ function decodeLinhaDigitavel(raw) {
 // Acha cada linha digitável, fatia o texto ao redor de cada uma e extrai os
 // demais dados (vencimento, CNPJ, beneficiário) do trecho correspondente.
 function parseBoletosPdf(text) {
-  const achados = []; // {linha, index}
-  const re = /[\d][\d.\s-]{44,72}[\d]/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
+  // Localiza as linhas digitáveis com padrões precisos (a estrutura de blocos
+  // impede que duas linhas próximas se "colem" numa só) + fallback genérico.
+  const achados = []; // {linha, index, end}
+  const sobrepoe = (ini, fim) => achados.some(a => ini < a.end && fim > a.index);
+  const registrar = (m) => {
     const d = m[0].replace(/\D/g, '');
-    if (d.length === 47 || d.length === 48 || d.length === 44) {
-      achados.push({ linha: d, index: m.index, end: m.index + m[0].length });
-    }
+    if (!sobrepoe(m.index, m.index + m[0].length)) achados.push({ linha: d, index: m.index, end: m.index + m[0].length });
+  };
+  let m;
+  // Título bancário (47 dígitos): blocos 5+5 · 5+6 · 5+6 · 1 · 14
+  const reTit = /\d{5}[.\s]?\d{5}[.\s]*\d{5}[.\s]?\d{6}[.\s]*\d{5}[.\s]?\d{6}[.\s]*\d[.\s]*\d{14}/g;
+  while ((m = reTit.exec(text)) !== null) {
+    if (m[0].replace(/\D/g, '').length === 47) registrar(m);
+    else reTit.lastIndex = m.index + 1; // não engole o texto seguinte
   }
+  // Arrecadação/convênio (48 dígitos): 4 blocos de 11+1
+  const reArr = /\d{11}[.\s-]?\d[.\s-]*\d{11}[.\s-]?\d[.\s-]*\d{11}[.\s-]?\d[.\s-]*\d{11}[.\s-]?\d/g;
+  while ((m = reArr.exec(text)) !== null) {
+    if (m[0].replace(/\D/g, '').length === 48) registrar(m);
+    else reArr.lastIndex = m.index + 1;
+  }
+  // Fallback genérico (código de barras 44 dígitos etc.), com backtracking
+  const reGen = /[\d][\d.\s-]{44,72}[\d]/g;
+  while ((m = reGen.exec(text)) !== null) {
+    const d = m[0].replace(/\D/g, '');
+    if (d.length === 47 || d.length === 48 || d.length === 44) registrar(m);
+    else reGen.lastIndex = m.index + 1;
+  }
+  achados.sort((a, b) => a.index - b.index);
   if (!achados.length) {
     // Sem linha digitável legível: tenta o parser antigo (campos em texto)
     const unico = parseBoletoPdf(text);

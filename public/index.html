@@ -641,7 +641,8 @@
                             <option value="48">Últimos 4 anos</option>
                         </select>
                         <button class="btn btn-outline btn-sm" onclick="NR.openTranspCfg()"><i class="fas fa-cog"></i> Configurar</button>
-                        <button class="btn btn-primary btn-sm" id="btnTranspCarregar" onclick="NR.carregarTransparencia()"><i class="fas fa-sync-alt"></i> Carregar</button>
+                        <button class="btn btn-primary btn-sm" id="btnTranspCarregar" onclick="NR.carregarTransparencia()" title="Atualiza todas as abas de uma vez"><i class="fas fa-sync-alt"></i> Carregar</button>
+                        <span id="transp-cache-info" style="font-size:.75rem;color:var(--text3)"></span>
                     </div>
                 </div>
                 <div style="padding:0 24px 16px">
@@ -1495,6 +1496,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=107"></script>
+    <script src="app.js?v=108"></script>
 </body>
 </html>
