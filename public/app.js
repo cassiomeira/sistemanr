@@ -579,7 +579,7 @@ document.getElementById('formDono').addEventListener('submit',async function(e){
 async function renderContaDono(){let items=await api('GET','/api/conta-dono?mes='+gM()),td=0,tc=0,sa=0;document.querySelector('#tabelaDono tbody').innerHTML=items.map(i=>{if(i.tipo==='debito'){td+=i.valor;sa+=i.valor;}else{tc+=i.valor;sa-=i.valor;}return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td class="tipo-'+i.tipo+'">'+(i.tipo==='debito'?'↑ Débito':'↓ Crédito')+'</td><td>'+i.descricao+'</td><td class="tipo-'+i.tipo+'">'+fmt(i.valor)+'</td><td>'+fmt(Math.abs(sa))+'</td><td><button class="btn-edit" onclick="NR.editRow(\'conta-dono\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.del(\'conta-dono\',\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');document.getElementById('dono-total-deb').textContent=fmt(td);document.getElementById('dono-total-cred').textContent=fmt(tc);let s=td-tc;document.getElementById('dono-saldo').textContent=fmt(Math.abs(s))+(s>0?' (Deve)':s<0?' (A receber)':' (Zerado)');}
 // COLABORADORES
 document.getElementById('formColab').addEventListener('submit',async function(e){e.preventDefault();await api('POST','/api/colaboradores',{nome:document.getElementById('colab-nome').value.trim(),percentual:parseFloat(document.getElementById('colab-pct').value)});this.reset();toast('Adicionado!');refreshAll();});
-async function renderColaboradores(){COLABS=await api('GET','/api/colaboradores');let d=await api('GET','/api/dashboard?mes='+gM()),l=d.summary.lojaEnt-d.summary.lojaSai,tp=0;COLABS.forEach(c=>tp+=c.percentual);document.getElementById('colabList').innerHTML=COLABS.map(c=>{let v=l*c.percentual/100,ini=c.nome.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();return'<div class="colab-card"><div class="avatar">'+ini+'</div><div class="colab-info"><div class="name">'+c.nome+'</div><div class="pct">'+c.percentual+'%</div><div class="commission">'+fmt(v)+'</div></div><button class="btn-remove" onclick="NR.delC('+c.id+')"><i class="fas fa-times"></i></button></div>';}).join('');document.getElementById('colab-total-pct').textContent=tp.toFixed(1)+'%';document.getElementById('colab-base-valor').textContent=fmt(l);}
+async function renderColaboradores(){COLABS=await api('GET','/api/colaboradores');let d=await api('GET','/api/dashboard?mes='+gM()),l=d.summary.lojaEnt-d.summary.lojaSai,tp=0;COLABS.forEach(c=>tp+=c.percentual);document.getElementById('colabList').innerHTML=COLABS.map(c=>{let v=l*c.percentual/100,ini=c.nome.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();return'<div class="colab-card"><div class="avatar">'+ini+'</div><div class="colab-info"><div class="name">'+c.nome+'</div><div class="pct">'+c.percentual+'%</div><div class="commission">'+fmt(v)+'</div></div><button class="btn btn-sm btn-outline" onclick="NR.openReciboColab('+c.id+')" title="Imprimir recibo" style="margin-right:6px;padding:4px 8px"><i class="fas fa-print"></i></button><button class="btn-remove" onclick="NR.delC('+c.id+')"><i class="fas fa-times"></i></button></div>';}).join('');document.getElementById('colab-total-pct').textContent=tp.toFixed(1)+'%';document.getElementById('colab-base-valor').textContent=fmt(l);}
 // DISTRIBUIÇÃO
 async function renderDistribuicao(){let d=await api('GET','/api/dashboard?mes='+gM()),s=d.summary,c=d.config,co=d.colaboradores;let ll=s.lojaEnt-s.lojaSai,ld=s.drogEnt-s.drogSai,lm=s.movEnt-s.movSai,lt=ll+ld+s.chqLucro-s.cpPago+lm;let vA=ll*c.pctAdmin/100,vD=ll*c.pctDono/100,vR=ll*c.pctReserva/100,tc=0;co.forEach(x=>tc+=ll*x.percentual/100);document.getElementById('distribGrid').innerHTML='<div class="distrib-item"><div class="distrib-bar" style="--pct:'+c.pctAdmin+'%;--clr:#00d4aa"><span>'+c.pctAdmin+'%</span></div><p>Cássio</p><h2>'+fmt(vA)+'</h2></div><div class="distrib-item"><div class="distrib-bar" style="--pct:'+c.pctDono+'%;--clr:#f59e0b"><span>'+c.pctDono+'%</span></div><p>Celso</p><h2>'+fmt(vD)+'</h2></div><div class="distrib-item"><div class="distrib-bar" style="--pct:'+c.pctReserva+'%;--clr:#6366f1"><span>'+c.pctReserva+'%</span></div><p>Reserva</p><h2>'+fmt(vR)+'</h2></div><div class="distrib-item" style="border-color:var(--pink)"><p>Comissões</p><h2 style="color:var(--pink)">'+fmt(tc)+'</h2><small style="color:var(--text3)">Base: Lucro Loja</small></div>';let h='<div class="line"><span>Receita Loja</span><b>'+fmt(s.lojaEnt)+'</b></div><div class="line"><span>(-) Despesas Loja</span><b>'+fmt(s.lojaSai)+'</b></div><div class="line"><span>= Lucro Loja</span><b>'+fmt(ll)+'</b></div><div class="line"><span>Lucro Drogaria</span><b>'+fmt(ld)+'</b></div><div class="line"><span>Lucro Cheques</span><b>'+fmt(s.chqLucro)+'</b></div><div class="line"><span>(-) Contas Pagas</span><b style="color:var(--red)">-'+fmt(s.cpPago)+'</b></div><div class="line"><span>Movimentação</span><b>'+fmt(lm)+'</b></div><div class="line total"><span>LUCRO TOTAL</span><b>'+fmt(lt)+'</b></div>';co.forEach(x=>h+='<div class="line comissao"><span>→ '+x.nome+' ('+x.percentual+'%)</span><b>'+fmt(ll*x.percentual/100)+'</b></div>');document.getElementById('calcSummary').innerHTML=h;}
 // DASHBOARD
@@ -1129,6 +1129,78 @@ function printRecibo(id){
   if(!iframe){iframe=document.createElement('iframe');iframe.id='printFrame';iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:450px;height:600px;border:none';document.body.appendChild(iframe);}
   iframe.contentDocument.open();iframe.contentDocument.write(html);iframe.contentDocument.close();
   setTimeout(function(){iframe.contentWindow.focus();iframe.contentWindow.print();},400);
+}
+// === RECIBO COMISSIONADO ===
+function openReciboColab(id){
+  let c=COLABS.find(x=>x.id===id);
+  if(!c){toast('Colaborador não encontrado','error');return;}
+  let mes=gM(),partes=mes.split('-'),dataHoje=new Date().toISOString().split('T')[0];
+  let baseEl=document.getElementById('colab-base-valor');
+  let baseText=baseEl?baseEl.textContent:'R$ 0,00';
+  let baseVal=parseFloat(baseText.replace(/[^\d,.-]/g,'').replace('.','').replace(',','.'));
+  if(isNaN(baseVal))baseVal=0;
+  let comissaoVal=baseVal*c.percentual/100;
+  let meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let mesNome=meses[parseInt(partes[1])-1]+'/'+partes[0];
+  let modal=document.getElementById('modalReciboColab');
+  if(!modal){
+    modal=document.createElement('div');modal.id='modalReciboColab';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
+    modal.innerHTML='<div style="background:var(--card);border-radius:16px;padding:28px;max-width:440px;width:95%;box-shadow:0 20px 60px rgba(0,0,0,.3)"><h3 style="margin:0 0 18px;color:var(--text1)"><i class="fas fa-print" style="color:var(--blue)"></i> Recibo de Comissão</h3>'
+      +'<div class="form-group"><label>Data do Recibo</label><input type="date" id="reciboColab-data" style="width:100%"></div>'
+      +'<div class="form-group"><label>Colaborador</label><input type="text" id="reciboColab-nome" readonly style="width:100%;background:var(--bg2)"></div>'
+      +'<div class="form-group"><label>Percentual</label><input type="text" id="reciboColab-pct" readonly style="width:100%;background:var(--bg2)"></div>'
+      +'<div class="form-group"><label>Base de Cálculo (Lucro Loja)</label><input type="text" id="reciboColab-base" readonly style="width:100%;background:var(--bg2)"></div>'
+      +'<div class="form-group"><label>Valor da Comissão</label><input type="text" id="reciboColab-valor" readonly style="width:100%;background:var(--bg2);font-weight:700;color:var(--green);font-size:1.1rem"></div>'
+      +'<div class="form-group"><label>Referência</label><input type="text" id="reciboColab-ref" readonly style="width:100%;background:var(--bg2)"></div>'
+      +'<div style="display:flex;gap:10px;margin-top:18px"><button class="btn btn-primary" onclick="NR.printReciboColab()" style="flex:1"><i class="fas fa-print"></i> Imprimir</button><button class="btn btn-outline" onclick="NR.closeReciboColab()" style="flex:1">Cancelar</button></div></div>';
+    document.body.appendChild(modal);
+  }
+  document.getElementById('reciboColab-data').value=dataHoje;
+  document.getElementById('reciboColab-nome').value=c.nome;
+  document.getElementById('reciboColab-pct').value=c.percentual+'%';
+  document.getElementById('reciboColab-base').value=fmt(baseVal);
+  document.getElementById('reciboColab-valor').value=fmt(comissaoVal);
+  document.getElementById('reciboColab-ref').value=mesNome;
+  modal._colab=c;modal._base=baseVal;modal._comissao=comissaoVal;
+  modal.style.display='flex';
+}
+function closeReciboColab(){let m=document.getElementById('modalReciboColab');if(m)m.style.display='none';}
+function printReciboColab(){
+  let modal=document.getElementById('modalReciboColab');
+  let c=modal._colab,base=modal._base,comissao=modal._comissao;
+  let dataRecibo=document.getElementById('reciboColab-data').value;
+  let ref=document.getElementById('reciboColab-ref').value;
+  let dataFmt=fD(dataRecibo);
+  let html='<html><head><title>Recibo de Comissão</title><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;padding:30px;color:#222;font-size:13px}'
+    +'.header{text-align:center;border-bottom:2px solid #333;padding-bottom:14px;margin-bottom:18px}'
+    +'.header h2{font-size:17px;margin-bottom:2px}'
+    +'.header small{color:#666;font-size:12px}'
+    +'.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dotted #ccc}'
+    +'.row .label{color:#555;font-weight:600}'
+    +'.row .val{font-weight:700;text-align:right}'
+    +'.total{background:#f0f0f0;padding:14px;border-radius:8px;margin-top:16px;text-align:center}'
+    +'.total .big{font-size:24px;font-weight:900;color:#006633}'
+    +'.total .sub{font-size:11px;color:#666;margin-top:2px}'
+    +'.assinatura{margin-top:40px;display:flex;justify-content:space-between;gap:40px}'
+    +'.assinatura div{flex:1;text-align:center;border-top:1px solid #333;padding-top:6px;font-size:11px;color:#555}'
+    +'.footer{margin-top:24px;text-align:center;font-size:10px;color:#999;border-top:1px solid #ccc;padding-top:10px}'
+    +'</style></head><body>';
+  html+='<div class="header"><h2>RECIBO DE COMISSÃO</h2><small>'+dataFmt+'</small></div>';
+  html+='<div class="row"><span class="label">Colaborador</span><span class="val">'+c.nome+'</span></div>';
+  html+='<div class="row"><span class="label">Referência</span><span class="val">'+ref+'</span></div>';
+  html+='<div class="row"><span class="label">Base de Cálculo (Lucro Loja)</span><span class="val">'+fmt(base)+'</span></div>';
+  html+='<div class="row"><span class="label">Percentual</span><span class="val">'+c.percentual+'%</span></div>';
+  html+='<div class="total"><div class="sub">VALOR DA COMISSÃO</div><div class="big">'+fmt(comissao)+'</div></div>';
+  html+='<div class="assinatura"><div>Responsável</div><div>'+c.nome+'</div></div>';
+  html+='<div class="footer"><p>Documento sem valor fiscal — uso interno</p></div></body></html>';
+  let iframe=document.getElementById('printFrame');
+  if(!iframe){iframe=document.createElement('iframe');iframe.id='printFrame';iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:450px;height:600px;border:none';document.body.appendChild(iframe);}
+  iframe.contentDocument.open();iframe.contentDocument.write(html);iframe.contentDocument.close();
+  setTimeout(function(){iframe.contentWindow.focus();iframe.contentWindow.print();},400);
+  closeReciboColab();
 }
 // === CONFIRMAR EXCLUSÃO MODAL ===
 let confirmDelTarget='';
@@ -3827,6 +3899,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab};
 checkAuth();
 })();
