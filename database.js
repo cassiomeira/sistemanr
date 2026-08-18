@@ -435,6 +435,15 @@ function initDB(dbInstance) {
     arquivo TEXT DEFAULT '',
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Tabela Documentos da Empresa (arquivo morto: contratos, CNPJ, CNH etc.)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS documentos (
+    id TEXT PRIMARY KEY,
+    descricao TEXT NOT NULL,
+    nome_arquivo TEXT NOT NULL,
+    mime TEXT DEFAULT '',
+    tamanho INTEGER DEFAULT 0,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1124,6 +1133,16 @@ module.exports = {
     run(slug, "UPDATE fechamentos SET status='recebido', data_recebido=? WHERE id=?", [dataRecebido, id]);
   },
   delFechamento(slug, id) { run(slug, 'DELETE FROM fechamentos WHERE id=?', [id]); },
+
+  // -- Documentos da Empresa --
+  getDocumentos(slug) { return query(slug, 'SELECT * FROM documentos ORDER BY criado_em DESC'); },
+  getDocumento(slug, id) { return query(slug, 'SELECT * FROM documentos WHERE id=?', [id])[0] || null; },
+  addDocumento(slug, d) {
+    run(slug, 'INSERT INTO documentos (id,descricao,nome_arquivo,mime,tamanho) VALUES (?,?,?,?,?)',
+      [d.id, d.descricao, d.nome_arquivo, d.mime || '', d.tamanho || 0]);
+  },
+  updateDocumento(slug, id, descricao) { run(slug, 'UPDATE documentos SET descricao=? WHERE id=?', [descricao, id]); },
+  delDocumento(slug, id) { run(slug, 'DELETE FROM documentos WHERE id=?', [id]); },
 
   // -- Auditoria --
   addAuditLog(slug, usuario, acao, secao, detalhes) {

@@ -951,6 +951,57 @@ app.post('/api/boleto/importar-pdf', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// === DOCUMENTOS DA EMPRESA (arquivo morto) ===
+const fsDocs = require('fs');
+const pathDocs = require('path');
+function docsDir(slug) {
+  const d = pathDocs.join(db.getDataDir(), 'documentos', slug);
+  if (!fsDocs.existsSync(d)) fsDocs.mkdirSync(d, { recursive: true });
+  return d;
+}
+app.get('/api/documentos', (req, res) => res.json(db.getDocumentos(req.emp)));
+app.post('/api/documentos', upload.single('arquivo'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    const descricao = (req.body.descricao || '').trim();
+    if (!descricao) return res.status(400).json({ error: 'Informe a descrição do documento' });
+    const id = uid();
+    fsDocs.writeFileSync(pathDocs.join(docsDir(req.emp), id), req.file.buffer);
+    db.addDocumento(req.emp, { id, descricao, nome_arquivo: req.file.originalname, mime: req.file.mimetype || '', tamanho: req.file.size || 0 });
+    db.addAuditLog(req.emp, req.user.nome, 'criou', 'Documentos', descricao + ' (' + req.file.originalname + ')');
+    res.json({ ok: true, id });
+  } catch (e) {
+    console.error('Erro ao arquivar documento:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+app.get('/api/documentos/:id/download', (req, res) => {
+  const doc = db.getDocumento(req.emp, req.params.id);
+  if (!doc) return res.status(404).json({ error: 'Documento não encontrado' });
+  const file = pathDocs.join(docsDir(req.emp), doc.id);
+  if (!fsDocs.existsSync(file)) return res.status(404).json({ error: 'Arquivo não encontrado no servidor' });
+  res.setHeader('Content-Type', doc.mime || 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + encodeURIComponent(doc.nome_arquivo) + '"');
+  res.send(fsDocs.readFileSync(file));
+});
+app.put('/api/documentos/:id', (req, res) => {
+  const descricao = (req.body.descricao || '').trim();
+  if (!descricao) return res.status(400).json({ error: 'Descrição não pode ficar vazia' });
+  db.updateDocumento(req.emp, req.params.id, descricao);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Documentos', 'ID: ' + req.params.id + ' - ' + descricao);
+  res.json({ ok: true });
+});
+app.delete('/api/documentos/:id', (req, res) => {
+  const doc = db.getDocumento(req.emp, req.params.id);
+  if (doc) {
+    const file = pathDocs.join(docsDir(req.emp), doc.id);
+    try { if (fsDocs.existsSync(file)) fsDocs.unlinkSync(file); } catch (e) {}
+  }
+  db.delDocumento(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Documentos', doc ? doc.descricao + ' (' + doc.nome_arquivo + ')' : 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
+
 // === FECHAMENTOS DE FRETE (TRANSPORTES) ===
 const fechamento = require('./fechamento');
 app.get('/api/fechamentos', (req, res) => res.json(db.getFechamentos(req.emp)));

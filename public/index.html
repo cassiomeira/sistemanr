@@ -53,6 +53,7 @@
             <li><a href="#" class="nav-link" data-section="contas-pagar" id="nav-contas-pagar"><i class="fas fa-file-invoice-dollar"></i><span>Contas a Pagar</span></a></li>
             <li><a href="#" class="nav-link" data-section="a-chegar" id="nav-a-chegar"><i class="fas fa-truck-loading"></i><span>Produtos a Chegar</span><span class="badge-count" id="badge-achegar" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
             <li><a href="#" class="nav-link" data-section="fechamentos" id="nav-fechamentos"><i class="fas fa-truck"></i><span>Fechamentos (Frete)</span></a></li>
+            <li><a href="#" class="nav-link" data-section="documentos" id="nav-documentos"><i class="fas fa-folder-open"></i><span>Documentos</span></a></li>
             <li><a href="#" class="nav-link" data-section="movimentacao" id="nav-movimentacao"><i class="fas fa-exchange-alt"></i><span>Movimentação</span></a></li>
             <li><a href="#" class="nav-link" data-section="drogaria" id="nav-drogaria"><i class="fas fa-pills"></i><span>Drogaria</span></a></li>
             <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
@@ -375,6 +376,25 @@
                     <div class="summary-badges"><span class="badge badge-orange">Aguardando PIX: <b id="fech-total-aguardando">R$ 0,00</b></span><span class="badge badge-green">Recebido: <b id="fech-total-recebido">R$ 0,00</b></span></div>
                 </div>
                 <div id="fechamentosList"></div>
+            </div>
+        </section>
+
+        <!-- DOCUMENTOS DA EMPRESA -->
+        <section class="content-section" id="section-documentos">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-file-upload"></i> Arquivar Documento</h3></div>
+                <p class="config-desc">Guarde aqui os documentos da empresa: contrato social, cartão CNPJ, CNH dos sócios, certidões etc. Cada empresa tem seu próprio arquivo.</p>
+                <form id="formDocumento" class="form-inline">
+                    <div class="form-group" style="flex:1;min-width:220px"><label>Descrição do Documento</label><input type="text" id="doc-descricao" placeholder="Ex: Contrato Social, CNH do Celso" required></div>
+                    <div class="form-group"><label>Arquivo</label><input type="file" id="doc-arquivo" required style="padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);width:260px"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-archive"></i> Arquivar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-folder-open"></i> Documentos Arquivados</h3>
+                    <div class="summary-badges"><span class="badge badge-blue">Total: <b id="doc-total">0</b></span></div>
+                </div>
+                <div class="table-wrap"><table class="data-table" id="tabelaDocumentos"><thead><tr><th>Descrição</th><th>Arquivo</th><th>Tamanho</th><th>Arquivado em</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
             </div>
         </section>
 
@@ -1513,6 +1533,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=111"></script>
+    <script src="app.js?v=112"></script>
 </body>
 </html>
