@@ -52,6 +52,7 @@
             <li><a href="#" class="nav-link" data-section="fat" id="nav-fat"><i class="fas fa-redo"></i><span>Fat (Recorrentes)</span></a></li>
             <li><a href="#" class="nav-link" data-section="contas-pagar" id="nav-contas-pagar"><i class="fas fa-file-invoice-dollar"></i><span>Contas a Pagar</span></a></li>
             <li><a href="#" class="nav-link" data-section="a-chegar" id="nav-a-chegar"><i class="fas fa-truck-loading"></i><span>Produtos a Chegar</span><span class="badge-count" id="badge-achegar" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
+            <li><a href="#" class="nav-link" data-section="fechamentos" id="nav-fechamentos"><i class="fas fa-truck"></i><span>Fechamentos (Frete)</span></a></li>
             <li><a href="#" class="nav-link" data-section="movimentacao" id="nav-movimentacao"><i class="fas fa-exchange-alt"></i><span>Movimentação</span></a></li>
             <li><a href="#" class="nav-link" data-section="drogaria" id="nav-drogaria"><i class="fas fa-pills"></i><span>Drogaria</span></a></li>
             <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
@@ -358,6 +359,22 @@
                     <div class="summary-badges"><span class="badge badge-amber" style="background:var(--amber);color:#000">Pendentes: <b id="achegar-total">0</b></span></div>
                 </div>
                 <div class="table-wrap"><table class="data-table" id="tabelaAChegar"><thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Fornecedor</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- FECHAMENTOS DE FRETE -->
+        <section class="content-section" id="section-fechamentos">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-file-import"></i> Importar Fechamento (PDF)</h3></div>
+                <p class="config-desc">Importe o PDF de fechamento mensal enviado pela transportadora. O sistema identifica as viagens, o faturamento bruto, as despesas descontadas e o valor líquido a receber.</p>
+                <button class="btn btn-primary" onclick="document.getElementById('fechamentoPdfInput').click()"><i class="fas fa-file-pdf"></i> Selecionar PDF do Fechamento</button>
+                <input type="file" id="fechamentoPdfInput" accept="application/pdf" multiple style="display:none">
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-truck"></i> Fechamentos Importados</h3>
+                    <div class="summary-badges"><span class="badge badge-orange">Aguardando PIX: <b id="fech-total-aguardando">R$ 0,00</b></span><span class="badge badge-green">Recebido: <b id="fech-total-recebido">R$ 0,00</b></span></div>
+                </div>
+                <div id="fechamentosList"></div>
             </div>
         </section>
 
@@ -1496,6 +1513,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=110"></script>
+    <script src="app.js?v=111"></script>
 </body>
 </html>

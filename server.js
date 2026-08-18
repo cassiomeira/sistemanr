@@ -951,6 +951,54 @@ app.post('/api/boleto/importar-pdf', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// === FECHAMENTOS DE FRETE (TRANSPORTES) ===
+const fechamento = require('./fechamento');
+app.get('/api/fechamentos', (req, res) => res.json(db.getFechamentos(req.emp)));
+app.post('/api/fechamentos/importar-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum PDF enviado' });
+    const r = await fechamento.parseFechamentoPdf(req.file.buffer);
+    if (r.error) return res.status(422).json(r);
+    const jaExiste = r.conjunto && r.mes ? db.getFechamentoByConjuntoMes(req.emp, r.conjunto, r.mes) : null;
+    res.json({ ...r, arquivo: req.file.originalname, jaImportado: !!jaExiste });
+  } catch (e) {
+    console.error('Erro importar fechamento PDF:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post('/api/fechamentos', (req, res) => {
+  const b = req.body;
+  if (!b.mes || !b.conjunto) return res.status(400).json({ error: 'Mês e conjunto são obrigatórios' });
+  if (db.getFechamentoByConjuntoMes(req.emp, b.conjunto, b.mes)) {
+    return res.status(400).json({ error: 'Fechamento do conjunto ' + b.conjunto + ' no mês ' + b.mes + ' já foi importado' });
+  }
+  const item = { id: uid(), mes: b.mes, conjunto: b.conjunto, bruto: b.bruto || 0, liquido: b.liquido || 0, viagens: b.viagens || [], despesas: b.despesas || [], arquivo: b.arquivo || '' };
+  db.addFechamento(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Fechamentos', 'Conjunto ' + item.conjunto + ' mês ' + item.mes + ' - Líquido: ' + item.liquido);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/fechamentos/:id/receber', (req, res) => {
+  const f = db.getFechamento(req.emp, req.params.id);
+  if (!f) return res.status(404).json({ error: 'Fechamento não encontrado' });
+  if (f.status === 'recebido') return res.status(400).json({ error: 'Este fechamento já foi marcado como recebido' });
+  const data = req.body.data || new Date().toISOString().split('T')[0];
+  const mesBr = f.mes.split('-')[1] + '/' + f.mes.split('-')[0];
+  db.receberFechamento(req.emp, req.params.id, data);
+  const acertoItem = {
+    id: uid(), data, descricao: 'Fechamento frete ' + f.conjunto + ' (' + mesBr + ')',
+    entrada: f.liquido, saida: 0, categoria: 'Frete', tipo_nota: '',
+  };
+  db.addAcerto(req.emp, acertoItem);
+  db.addAuditLog(req.emp, req.user.nome, 'recebeu', 'Fechamentos', 'Conjunto ' + f.conjunto + ' mês ' + f.mes + ' - Entrada no acerto: ' + f.liquido);
+  res.json({ ok: true, acertoId: acertoItem.id });
+});
+app.delete('/api/fechamentos/:id', (req, res) => {
+  const f = db.getFechamento(req.emp, req.params.id);
+  db.delFechamento(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Fechamentos', f ? 'Conjunto ' + f.conjunto + ' mês ' + f.mes : 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
+
 // === LICITAÇÕES (PNCP) ===
 const licitacoes = require('./licitacoes');
 app.get('/api/licitacoes', (req, res) => res.json(db.getLicitacoes(req.emp)));

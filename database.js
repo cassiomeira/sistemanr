@@ -421,6 +421,20 @@ function initDB(dbInstance) {
     origem TEXT DEFAULT 'manual',
     data_cadastro DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Tabela Fechamentos de Frete (transportes)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS fechamentos (
+    id TEXT PRIMARY KEY,
+    mes TEXT NOT NULL,
+    conjunto TEXT NOT NULL,
+    bruto REAL NOT NULL DEFAULT 0,
+    liquido REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'aguardando',
+    data_recebido TEXT DEFAULT '',
+    viagens_json TEXT DEFAULT '[]',
+    despesas_json TEXT DEFAULT '[]',
+    arquivo TEXT DEFAULT '',
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1087,6 +1101,29 @@ module.exports = {
   delSomaItem(slug, id) {
     run(slug, 'DELETE FROM soma_itens WHERE id=?', [id]);
   },
+
+  // -- Fechamentos de Frete --
+  getFechamentos(slug) {
+    return query(slug, 'SELECT * FROM fechamentos ORDER BY mes DESC, conjunto').map(f => ({
+      ...f, viagens: JSON.parse(f.viagens_json || '[]'), despesas: JSON.parse(f.despesas_json || '[]'),
+    }));
+  },
+  getFechamento(slug, id) {
+    const f = query(slug, 'SELECT * FROM fechamentos WHERE id=?', [id])[0];
+    if (!f) return null;
+    return { ...f, viagens: JSON.parse(f.viagens_json || '[]'), despesas: JSON.parse(f.despesas_json || '[]') };
+  },
+  getFechamentoByConjuntoMes(slug, conjunto, mes) {
+    return query(slug, 'SELECT * FROM fechamentos WHERE conjunto=? AND mes=?', [conjunto, mes])[0] || null;
+  },
+  addFechamento(slug, f) {
+    run(slug, 'INSERT INTO fechamentos (id,mes,conjunto,bruto,liquido,status,viagens_json,despesas_json,arquivo) VALUES (?,?,?,?,?,?,?,?,?)',
+      [f.id, f.mes, f.conjunto, f.bruto, f.liquido, 'aguardando', JSON.stringify(f.viagens || []), JSON.stringify(f.despesas || []), f.arquivo || '']);
+  },
+  receberFechamento(slug, id, dataRecebido) {
+    run(slug, "UPDATE fechamentos SET status='recebido', data_recebido=? WHERE id=?", [dataRecebido, id]);
+  },
+  delFechamento(slug, id) { run(slug, 'DELETE FROM fechamentos WHERE id=?', [id]); },
 
   // -- Auditoria --
   addAuditLog(slug, usuario, acao, secao, detalhes) {
