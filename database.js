@@ -444,6 +444,22 @@ function initDB(dbInstance) {
     tamanho INTEGER DEFAULT 0,
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  // Tabela Pedidos (aguardando faturamento)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS pedidos (
+    id TEXT PRIMARY KEY,
+    data TEXT DEFAULT '',
+    numero TEXT DEFAULT '',
+    fornecedor TEXT DEFAULT '',
+    descricao TEXT DEFAULT '',
+    valor REAL DEFAULT 0,
+    itens_json TEXT DEFAULT '[]',
+    observacoes TEXT DEFAULT '',
+    status TEXT DEFAULT 'aguardando',
+    data_faturado TEXT DEFAULT '',
+    arquivo TEXT DEFAULT '',
+    mime TEXT DEFAULT '',
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1143,6 +1159,38 @@ module.exports = {
   },
   updateDocumento(slug, id, descricao) { run(slug, 'UPDATE documentos SET descricao=? WHERE id=?', [descricao, id]); },
   delDocumento(slug, id) { run(slug, 'DELETE FROM documentos WHERE id=?', [id]); },
+
+  // -- Pedidos --
+  getPedidos(slug) {
+    return query(slug, 'SELECT * FROM pedidos ORDER BY status, data DESC, criado_em DESC').map(p => ({
+      ...p, itens: JSON.parse(p.itens_json || '[]'),
+    }));
+  },
+  getPedido(slug, id) {
+    const p = query(slug, 'SELECT * FROM pedidos WHERE id=?', [id])[0];
+    if (!p) return null;
+    return { ...p, itens: JSON.parse(p.itens_json || '[]') };
+  },
+  addPedido(slug, p) {
+    run(slug, 'INSERT INTO pedidos (id,data,numero,fornecedor,descricao,valor,itens_json,observacoes,arquivo,mime) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [p.id, p.data || '', p.numero || '', p.fornecedor || '', p.descricao || '', p.valor || 0, JSON.stringify(p.itens || []), p.observacoes || '', p.arquivo || '', p.mime || '']);
+  },
+  updatePedido(slug, id, fields) {
+    const sets = [], vals = [];
+    for (const k of ['data', 'numero', 'fornecedor', 'descricao', 'valor', 'observacoes']) {
+      if (fields[k] !== undefined) { sets.push(k + '=?'); vals.push(fields[k]); }
+    }
+    if (!sets.length) return;
+    vals.push(id);
+    run(slug, 'UPDATE pedidos SET ' + sets.join(',') + ' WHERE id=?', vals);
+  },
+  faturarPedido(slug, id, dataFaturado) {
+    run(slug, "UPDATE pedidos SET status='faturado', data_faturado=? WHERE id=?", [dataFaturado, id]);
+  },
+  desfaturarPedido(slug, id) {
+    run(slug, "UPDATE pedidos SET status='aguardando', data_faturado='' WHERE id=?", [id]);
+  },
+  delPedido(slug, id) { run(slug, 'DELETE FROM pedidos WHERE id=?', [id]); },
 
   // -- Auditoria --
   addAuditLog(slug, usuario, acao, secao, detalhes) {

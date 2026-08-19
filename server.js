@@ -1002,6 +1002,81 @@ app.delete('/api/documentos/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// === PEDIDOS (aguardando faturamento) ===
+const pedidosIA = require('./pedidos');
+function pedidosDir(slug) {
+  const d = pathDocs.join(db.getDataDir(), 'pedidos', slug);
+  if (!fsDocs.existsSync(d)) fsDocs.mkdirSync(d, { recursive: true });
+  return d;
+}
+app.get('/api/pedidos', (req, res) => res.json(db.getPedidos(req.emp)));
+app.post('/api/pedidos/importar', upload.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    const r = await pedidosIA.lerPedido(req.file.buffer, req.file.mimetype, req.emp);
+    if (r.error) return res.status(422).json(r);
+    // guarda o arquivo temporariamente junto com um id de preview
+    const previewId = uid();
+    fsDocs.writeFileSync(pathDocs.join(pedidosDir(req.emp), 'tmp_' + previewId), req.file.buffer);
+    res.json({ ...r, previewId, arquivo: req.file.originalname, mime: req.file.mimetype });
+  } catch (e) {
+    console.error('Erro importar pedido:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post('/api/pedidos', (req, res) => {
+  const b = req.body;
+  const id = uid();
+  const item = {
+    id, data: b.data || '', numero: b.numero || '', fornecedor: (b.fornecedor || '').trim(),
+    descricao: (b.descricao || '').trim(), valor: parseFloat(b.valor) || 0,
+    itens: b.itens || [], observacoes: (b.observacoes || '').trim(),
+    arquivo: b.arquivo || '', mime: b.mime || '',
+  };
+  if (!item.fornecedor && !item.descricao) return res.status(400).json({ error: 'Informe pelo menos o fornecedor ou a descrição' });
+  // move o arquivo temporário do preview para o definitivo
+  if (b.previewId) {
+    const tmp = pathDocs.join(pedidosDir(req.emp), 'tmp_' + b.previewId);
+    if (fsDocs.existsSync(tmp)) fsDocs.renameSync(tmp, pathDocs.join(pedidosDir(req.emp), id));
+  }
+  db.addPedido(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Pedidos', item.fornecedor + ' - ' + item.valor);
+  res.json({ ok: true, id });
+});
+app.put('/api/pedidos/:id', (req, res) => {
+  db.updatePedido(req.emp, req.params.id, req.body);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Pedidos', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+app.put('/api/pedidos/:id/faturar', (req, res) => {
+  const p = db.getPedido(req.emp, req.params.id);
+  if (!p) return res.status(404).json({ error: 'Pedido não encontrado' });
+  const data = req.body.data || new Date().toISOString().split('T')[0];
+  db.faturarPedido(req.emp, req.params.id, data);
+  db.addAuditLog(req.emp, req.user.nome, 'faturou', 'Pedidos', p.fornecedor + ' - ' + p.valor);
+  res.json({ ok: true });
+});
+app.put('/api/pedidos/:id/desfaturar', (req, res) => {
+  db.desfaturarPedido(req.emp, req.params.id);
+  res.json({ ok: true });
+});
+app.get('/api/pedidos/:id/arquivo', (req, res) => {
+  const p = db.getPedido(req.emp, req.params.id);
+  if (!p || !p.arquivo) return res.status(404).json({ error: 'Arquivo não encontrado' });
+  const file = pathDocs.join(pedidosDir(req.emp), p.id);
+  if (!fsDocs.existsSync(file)) return res.status(404).json({ error: 'Arquivo não encontrado no servidor' });
+  res.setHeader('Content-Type', p.mime || 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + encodeURIComponent(p.arquivo) + '"');
+  res.send(fsDocs.readFileSync(file));
+});
+app.delete('/api/pedidos/:id', (req, res) => {
+  const p = db.getPedido(req.emp, req.params.id);
+  if (p) { try { const f = pathDocs.join(pedidosDir(req.emp), p.id); if (fsDocs.existsSync(f)) fsDocs.unlinkSync(f); } catch (e) {} }
+  db.delPedido(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Pedidos', p ? p.fornecedor + ' - ' + p.valor : 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
+
 // === FECHAMENTOS DE FRETE (TRANSPORTES) ===
 const fechamento = require('./fechamento');
 app.get('/api/fechamentos', (req, res) => res.json(db.getFechamentos(req.emp)));

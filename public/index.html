@@ -54,6 +54,7 @@
             <li><a href="#" class="nav-link" data-section="a-chegar" id="nav-a-chegar"><i class="fas fa-truck-loading"></i><span>Produtos a Chegar</span><span class="badge-count" id="badge-achegar" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
             <li><a href="#" class="nav-link" data-section="fechamentos" id="nav-fechamentos"><i class="fas fa-truck"></i><span>Fechamentos (Frete)</span></a></li>
             <li><a href="#" class="nav-link" data-section="documentos" id="nav-documentos"><i class="fas fa-folder-open"></i><span>Documentos</span></a></li>
+            <li><a href="#" class="nav-link" data-section="pedidos" id="nav-pedidos"><i class="fas fa-clipboard-list"></i><span>Pedidos</span><span class="badge-count" id="badge-pedidos" style="display:none;background:var(--amber);color:#000;border-radius:50%;font-size:11px;font-weight:700;padding:2px 7px;margin-left:8px"></span></a></li>
             <li><a href="#" class="nav-link" data-section="movimentacao" id="nav-movimentacao"><i class="fas fa-exchange-alt"></i><span>Movimentação</span></a></li>
             <li><a href="#" class="nav-link" data-section="drogaria" id="nav-drogaria"><i class="fas fa-pills"></i><span>Drogaria</span></a></li>
             <li><a href="#" class="nav-link" data-section="cheques" id="nav-cheques"><i class="fas fa-money-check-alt"></i><span>Troca de Cheques</span></a></li>
@@ -395,6 +396,34 @@
                     <div class="summary-badges"><span class="badge badge-blue">Total: <b id="doc-total">0</b></span></div>
                 </div>
                 <div class="table-wrap"><table class="data-table" id="tabelaDocumentos"><thead><tr><th>Descrição</th><th>Arquivo</th><th>Tamanho</th><th>Arquivado em</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+            </div>
+        </section>
+
+        <!-- PEDIDOS -->
+        <section class="content-section" id="section-pedidos">
+            <div class="panel">
+                <div class="panel-header"><h3><i class="fas fa-robot"></i> Importar Pedido (PDF ou Foto)</h3></div>
+                <p class="config-desc">Envie o PDF ou a foto do pedido feito ao fornecedor. A IA lê o documento e identifica fornecedor, itens e valor. O pedido fica <b>aguardando faturamento</b> até a nota chegar.</p>
+                <button class="btn btn-primary" onclick="document.getElementById('pedidoArquivoInput').click()"><i class="fas fa-file-import"></i> Selecionar PDF ou Imagem</button>
+                <input type="file" id="pedidoArquivoInput" accept="application/pdf,image/*" multiple style="display:none">
+                <span id="pedidoGeminiAviso" style="display:none;margin-left:12px;color:var(--orange);font-size:.85rem"><i class="fas fa-exclamation-triangle"></i> Configure a chave do Gemini em Configurações</span>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-plus-circle"></i> Lançar Pedido Manual</h3></div>
+                <form id="formPedido" class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="ped-data"></div>
+                    <div class="form-group"><label>Fornecedor</label><input type="text" id="ped-fornecedor" required></div>
+                    <div class="form-group"><label>Descrição</label><input type="text" id="ped-descricao" placeholder="Ex: Pedido de bebidas"></div>
+                    <div class="form-group"><label>Valor (R$)</label><input type="number" id="ped-valor" step="0.01" min="0"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+            <div class="panel mt-20">
+                <div class="panel-header"><h3><i class="fas fa-clipboard-list"></i> Pedidos</h3>
+                    <div class="summary-badges"><span class="badge badge-orange">Aguardando: <b id="ped-total-aguardando">R$ 0,00</b></span><span class="badge badge-green">Faturados: <b id="ped-total-faturado">0</b></span></div>
+                </div>
+                <div class="filter-bar"><label>Mostrar:</label><select id="pedFiltro" class="inline-select"><option value="aguardando" selected>Aguardando faturamento</option><option value="faturado">Faturados</option><option value="todos">Todos</option></select></div>
+                <div class="table-wrap"><table class="data-table" id="tabelaPedidos"><thead><tr><th>Data</th><th>Fornecedor</th><th>Descrição / Nº</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
             </div>
         </section>
 
@@ -1145,6 +1174,16 @@
             </div>
 
             <div class="panel mt-20">
+                <h3><i class="fas fa-robot"></i> IA para Leitura de Pedidos (Gemini)</h3>
+                <p class="config-desc">Usada no módulo Pedidos para ler PDF/foto dos pedidos. Crie uma chave <b>gratuita</b> em <b>aistudio.google.com</b> (basta conta Google) e cole abaixo. A chave configurada na empresa padrão vale para todas as empresas.</p>
+                <form id="formGeminiCfg" class="form-grid">
+                    <div class="form-group" style="grid-column:span 2"><label>Chave da API do Gemini</label><input type="password" id="cfg-gemini-key" placeholder="AIza..." autocomplete="off"></div>
+                    <div class="form-group"><label>Modelo</label><input type="text" id="cfg-gemini-model" placeholder="gemini-2.5-flash"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+
+            <div class="panel mt-20">
                 <h3><i class="fas fa-cloud-upload-alt"></i> Backup Automático</h3>
                 <p class="config-desc">Configure o backup automático diário (7h, 12h, 16h e 20h). Os backups são enviados para FTP e/ou Google Drive.</p>
                 <div id="backupStatusBox" style="margin:12px 0;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:13px;color:var(--text2)">
@@ -1533,6 +1572,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=112"></script>
+    <script src="app.js?v=113"></script>
 </body>
 </html>

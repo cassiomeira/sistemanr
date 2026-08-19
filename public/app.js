@@ -4,8 +4,8 @@ let CFG={pctAdmin:23,pctDono:36,pctReserva:30,categoriasLoja:[],categoriasDrog:[
 let currentEmpresa='nunesrocha';
 let empresasList=[],chequePagContaId='',chequePagContas=[],chequePagContext='contas-pagar',acertoFinanceiroGeral=[],ocultarContasPagas=true;
 let currentUser=null,authToken=localStorage.getItem('authToken')||'';
-const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','fechamentos':'Fechamentos (Frete)','documentos':'Documentos','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','licitacoes':'Licitações','transparencia':'Transparência','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
-const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','fechamentos':'fa-truck','documentos':'fa-folder-open','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','licitacoes':'fa-gavel','transparencia':'fa-search-dollar','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
+const MENU_MAP={'dashboard':'Painel Geral','acerto':'Acerto Financeiro','abastecimentos':'Abastecimentos','fat':'Fat (Recorrentes)','contas-pagar':'Contas a Pagar','a-chegar':'Produtos a Chegar','fechamentos':'Fechamentos (Frete)','documentos':'Documentos','pedidos':'Pedidos','movimentacao':'Movimentação','drogaria':'Drogaria','cheques':'Troca de Cheques','conta-dono':'Conta do Celso','distribuicao':'Distribuição','notas-nfe':'Notas CNPJ','licitacoes':'Licitações','transparencia':'Transparência','fornecedores-cad':'Fornecedores','folha':'Folha Pagamento','colaboradores':'Comissionados','relatorios':'Relatórios','configuracoes':'Configurações','caixas':'Caixas','somas':'Somas','usuarios':'Usuários'};
+const MENU_ICONS={'dashboard':'fa-chart-pie','acerto':'fa-cash-register','abastecimentos':'fa-gas-pump','fat':'fa-redo','contas-pagar':'fa-file-invoice-dollar','a-chegar':'fa-truck-loading','fechamentos':'fa-truck','documentos':'fa-folder-open','pedidos':'fa-clipboard-list','movimentacao':'fa-exchange-alt','drogaria':'fa-pills','cheques':'fa-money-check-alt','conta-dono':'fa-user-tie','distribuicao':'fa-percentage','notas-nfe':'fa-file-download','licitacoes':'fa-gavel','transparencia':'fa-search-dollar','fornecedores-cad':'fa-address-book','folha':'fa-file-invoice-dollar','colaboradores':'fa-users','relatorios':'fa-file-alt','configuracoes':'fa-cog','caixas':'fa-cash-register','somas':'fa-calculator','usuarios':'fa-users-cog'};
 const COLORS=['#00d4aa','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f43f5e','#14b8a6','#6366f1'];
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fD(d){if(!d)return'-';d=d.split('T')[0];let p=d.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -606,7 +606,7 @@ async function renderDashboard(){let d=await api('GET','/api/dashboard?mes='+gM(
   dc.innerHTML=caixas.map(cx=>{let cor=cx.saldo>=0?'card-green':'card-red';return'<div class="card '+cor+'"><div class="card-icon"><i class="fas fa-cash-register"></i></div><div class="card-info"><span class="card-label">'+cx.nome+'</span><span class="card-value">'+fmt(cx.saldo)+'</span></div></div>';}).join('');
 }
 // CONFIG
-async function renderConfig(){CFG=await api('GET','/api/config');if(CFG.categoriasLoja)CFG.categoriasLoja.sort((a,b)=>a.localeCompare(b));if(CFG.categoriasDrog)CFG.categoriasDrog.sort((a,b)=>a.localeCompare(b));if(CFG.fornecedores)CFG.fornecedores.sort((a,b)=>a.localeCompare(b));document.getElementById('cfg-pct-admin').value=CFG.pctAdmin;document.getElementById('cfg-pct-dono').value=CFG.pctDono;document.getElementById('cfg-pct-reserva').value=CFG.pctReserva;let t=CFG.pctAdmin+CFG.pctDono+CFG.pctReserva;document.getElementById('cfg-pct-total').value=t.toFixed(1)+'%'+(t===100?' ✓':t<100?' (falta '+(100-t).toFixed(1)+'%)':' (excede)');document.getElementById('catLojaList').innerHTML=CFG.categoriasLoja.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCL('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('catDrogList').innerHTML=CFG.categoriasDrog.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCD('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('fornList').innerHTML=(CFG.fornecedores||[]).map((f,i)=>'<div class="tag-item"><span>'+f+'</span><button class="tag-remove" onclick="NR.delForn('+i+')"><i class="fas fa-times"></i></button></div>').join('');populateCats();document.getElementById('cfg-ftp-host').value=CFG.ftp_host||'';document.getElementById('cfg-ftp-user').value=CFG.ftp_user||'';document.getElementById('cfg-ftp-pass').value=CFG.ftp_pass||'';document.getElementById('cfg-ftp-path').value=CFG.ftp_path||'/backups';document.getElementById('cfg-google-credentials').value=CFG.google_credentials||'';document.getElementById('cfg-google-folder').value=CFG.google_folder_id||'';loadBackupStatus();}
+async function renderConfig(){CFG=await api('GET','/api/config');if(CFG.categoriasLoja)CFG.categoriasLoja.sort((a,b)=>a.localeCompare(b));if(CFG.categoriasDrog)CFG.categoriasDrog.sort((a,b)=>a.localeCompare(b));if(CFG.fornecedores)CFG.fornecedores.sort((a,b)=>a.localeCompare(b));document.getElementById('cfg-pct-admin').value=CFG.pctAdmin;document.getElementById('cfg-pct-dono').value=CFG.pctDono;document.getElementById('cfg-pct-reserva').value=CFG.pctReserva;let t=CFG.pctAdmin+CFG.pctDono+CFG.pctReserva;document.getElementById('cfg-pct-total').value=t.toFixed(1)+'%'+(t===100?' ✓':t<100?' (falta '+(100-t).toFixed(1)+'%)':' (excede)');document.getElementById('catLojaList').innerHTML=CFG.categoriasLoja.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCL('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('catDrogList').innerHTML=CFG.categoriasDrog.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCD('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('fornList').innerHTML=(CFG.fornecedores||[]).map((f,i)=>'<div class="tag-item"><span>'+f+'</span><button class="tag-remove" onclick="NR.delForn('+i+')"><i class="fas fa-times"></i></button></div>').join('');populateCats();document.getElementById('cfg-gemini-key').value=CFG.gemini_api_key||'';document.getElementById('cfg-gemini-model').value=CFG.gemini_model||'';let avisoGem=document.getElementById('pedidoGeminiAviso');if(avisoGem)avisoGem.style.display=CFG.gemini_api_key?'none':'inline';document.getElementById('cfg-ftp-host').value=CFG.ftp_host||'';document.getElementById('cfg-ftp-user').value=CFG.ftp_user||'';document.getElementById('cfg-ftp-pass').value=CFG.ftp_pass||'';document.getElementById('cfg-ftp-path').value=CFG.ftp_path||'/backups';document.getElementById('cfg-google-credentials').value=CFG.google_credentials||'';document.getElementById('cfg-google-folder').value=CFG.google_folder_id||'';loadBackupStatus();}
 document.getElementById('formPercentuais').addEventListener('submit',async function(e){e.preventDefault();await api('PUT','/api/config',{pctAdmin:parseFloat(document.getElementById('cfg-pct-admin').value),pctDono:parseFloat(document.getElementById('cfg-pct-dono').value),pctReserva:parseFloat(document.getElementById('cfg-pct-reserva').value)});toast('Salvo!');refreshAll();});
 document.getElementById('formCatLoja').addEventListener('submit',async function(e){e.preventDefault();let v=document.getElementById('cfg-cat-loja').value.trim();if(!v)return;CFG.categoriasLoja.push(v);await api('PUT','/api/config',{categoriasLoja:CFG.categoriasLoja});document.getElementById('cfg-cat-loja').value='';toast('Adicionada!');refreshAll();});
 document.getElementById('formCatDrog').addEventListener('submit',async function(e){e.preventDefault();let v=document.getElementById('cfg-cat-drog').value.trim();if(!v)return;CFG.categoriasDrog.push(v);await api('PUT','/api/config',{categoriasDrog:CFG.categoriasDrog});document.getElementById('cfg-cat-drog').value='';toast('Adicionada!');refreshAll();});
@@ -816,6 +816,174 @@ async function delDocumento(id){
   await api('DELETE','/api/documentos/'+id);
   toast('Documento excluído!','info');renderDocumentos();
 }
+// === PEDIDOS (aguardando faturamento) ===
+let PEDIDOS=[],pedPreview=null,pedQueue=[];
+async function renderPedidos(){
+  try{PEDIDOS=await api('GET','/api/pedidos');}catch(e){return;}
+  let tb=document.querySelector('#tabelaPedidos tbody');if(!tb)return;
+  let aguardando=PEDIDOS.filter(p=>p.status==='aguardando');
+  let totalAg=aguardando.reduce((s,p)=>s+p.valor,0);
+  document.getElementById('ped-total-aguardando').textContent=fmt(totalAg);
+  document.getElementById('ped-total-faturado').textContent=PEDIDOS.filter(p=>p.status==='faturado').length;
+  let badge=document.getElementById('badge-pedidos');
+  if(badge){if(aguardando.length){badge.textContent=aguardando.length;badge.style.display='inline';}else{badge.style.display='none';}}
+  let filtro=document.getElementById('pedFiltro')?document.getElementById('pedFiltro').value:'aguardando';
+  let lista=filtro==='todos'?PEDIDOS:PEDIDOS.filter(p=>p.status===filtro);
+  if(!lista.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text3)">Nenhum pedido '+(filtro==='aguardando'?'aguardando faturamento':filtro==='faturado'?'faturado':'')+'</td></tr>';return;}
+  tb.innerHTML=lista.map(p=>{
+    let st=p.status==='faturado'?'<span class="badge badge-green" style="font-size:.7rem">Faturado '+fD(p.data_faturado)+'</span>':'<span class="badge badge-orange" style="font-size:.7rem">Aguardando</span>';
+    let desc=(p.descricao||'')+(p.numero?(p.descricao?' • ':'')+'Nº '+p.numero:'');
+    return '<tr'+(p.status==='faturado'?' style="opacity:.65"':'')+'><td>'+fD(p.data)+'</td><td><b>'+(p.fornecedor||'-')+'</b></td><td style="color:var(--text2)">'+(desc||'-')+'</td><td><b>'+fmt(p.valor)+'</b></td><td>'+st+'</td>'
+      +'<td><button class="btn btn-sm btn-outline" onclick="NR.verPedido(\''+p.id+'\')" title="Ver detalhes"><i class="fas fa-eye"></i></button> '
+      +(p.arquivo?'<button class="btn btn-sm btn-outline" onclick="NR.baixarPedArquivo(\''+p.id+'\')" title="Baixar arquivo original"><i class="fas fa-download"></i></button> ':'')
+      +(p.status==='aguardando'?'<button class="btn btn-sm btn-primary" onclick="NR.faturarPed(\''+p.id+'\')" title="Marcar como faturado"><i class="fas fa-check"></i> Faturado</button> ':'<button class="btn btn-sm btn-outline" onclick="NR.desfaturarPed(\''+p.id+'\')" title="Voltar para aguardando"><i class="fas fa-undo"></i></button> ')
+      +'<button class="btn btn-sm btn-danger" onclick="NR.delPed(\''+p.id+'\')" title="Excluir"><i class="fas fa-trash"></i></button></td></tr>';
+  }).join('');
+}
+document.getElementById('pedFiltro').addEventListener('change',renderPedidos);
+document.getElementById('formPedido').addEventListener('submit',async function(e){
+  e.preventDefault();
+  const r=await api('POST','/api/pedidos',{
+    data:document.getElementById('ped-data').value,
+    fornecedor:document.getElementById('ped-fornecedor').value.trim(),
+    descricao:document.getElementById('ped-descricao').value.trim(),
+    valor:parseFloat(document.getElementById('ped-valor').value)||0,
+  });
+  if(r.error){toast(r.error,'error');return;}
+  toast('Pedido lançado!');this.reset();renderPedidos();
+});
+document.getElementById('pedidoArquivoInput').addEventListener('change',function(){
+  pedQueue=Array.from(this.files);this.value='';
+  processNextPed();
+});
+async function processNextPed(){
+  if(!pedQueue.length)return;
+  const file=pedQueue.shift();
+  const fd=new FormData();fd.append('arquivo',file);
+  toast('Lendo '+file.name+' com IA...','info');
+  try{
+    const resp=await fetch('/api/pedidos/importar',{method:'POST',headers:{'Authorization':'Bearer '+authToken,'X-Empresa':currentEmpresa},body:fd});
+    const r=await resp.json();
+    if(r.error){toast(r.error,'error');processNextPed();return;}
+    abrirPreviewPed(r);
+  }catch(e){toast('Erro ao importar: '+e.message,'error');processNextPed();}
+}
+function abrirPreviewPed(r){
+  pedPreview=r;
+  let modal=document.getElementById('modalPedPreview');
+  if(!modal){modal=document.createElement('div');modal.id='modalPedPreview';modal.className='modal-overlay';document.body.appendChild(modal);}
+  let itensHtml=(r.itens&&r.itens.length)?r.itens.map(i=>'<tr><td>'+i.produto+'</td><td style="text-align:right">'+(i.qtd||'')+'</td><td style="text-align:right">'+(i.valor_unit?fmt(i.valor_unit):'')+'</td><td style="text-align:right">'+fmt(i.valor)+'</td></tr>').join(''):'<tr><td colspan="4" style="color:var(--text3)">Itens não identificados</td></tr>';
+  modal.innerHTML='<div class="modal-card" style="width:640px">'
+    +'<div class="modal-header"><h3><i class="fas fa-robot" style="color:var(--green)"></i> Pedido lido pela IA — confira os dados</h3><button class="modal-close" onclick="NR.fecharPreviewPed()"><i class="fas fa-times"></i></button></div>'
+    +'<div style="padding:16px 24px">'
+    +'<div class="form-grid">'
+    +'<div class="form-group"><label>Fornecedor</label><input type="text" id="pedprev-fornecedor" value="'+(r.fornecedor||'').replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="form-group"><label>Data do Pedido</label><input type="date" id="pedprev-data" value="'+(r.data||'')+'"></div>'
+    +'<div class="form-group"><label>Nº do Pedido</label><input type="text" id="pedprev-numero" value="'+(r.numero||'').replace(/"/g,'&quot;')+'"></div>'
+    +'<div class="form-group"><label>Valor Total (R$)</label><input type="number" id="pedprev-valor" step="0.01" value="'+(r.valor||0)+'"></div>'
+    +'</div>'
+    +'<div class="form-group" style="margin-top:10px"><label>Observações</label><input type="text" id="pedprev-obs" value="'+(r.observacoes||'').replace(/"/g,'&quot;')+'"></div>'
+    +'<h4 style="margin:14px 0 6px">Itens identificados ('+(r.itens?r.itens.length:0)+')</h4>'
+    +'<div class="table-wrap" style="max-height:220px;overflow-y:auto"><table class="data-table" style="min-width:0"><thead><tr><th>Produto</th><th style="text-align:right">Qtd</th><th style="text-align:right">Vl. Unit</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+itensHtml+'</tbody></table></div>'
+    +'</div>'
+    +'<div class="modal-footer"><button class="btn btn-outline" onclick="NR.fecharPreviewPed()">Cancelar</button><button class="btn btn-primary" onclick="NR.salvarPedidoPreview()"><i class="fas fa-save"></i> Salvar Pedido</button></div>'
+    +'</div>';
+  modal.style.display='flex';
+}
+function fecharPreviewPed(){let m=document.getElementById('modalPedPreview');if(m)m.style.display='none';pedPreview=null;processNextPed();}
+async function salvarPedidoPreview(){
+  if(!pedPreview)return;
+  const r=await api('POST','/api/pedidos',{
+    data:document.getElementById('pedprev-data').value,
+    fornecedor:document.getElementById('pedprev-fornecedor').value.trim(),
+    numero:document.getElementById('pedprev-numero').value.trim(),
+    valor:parseFloat(document.getElementById('pedprev-valor').value)||0,
+    observacoes:document.getElementById('pedprev-obs').value.trim(),
+    itens:pedPreview.itens||[],
+    previewId:pedPreview.previewId,
+    arquivo:pedPreview.arquivo,
+    mime:pedPreview.mime,
+  });
+  if(r.error){toast(r.error,'error');return;}
+  toast('Pedido salvo! Aguardando faturamento.');
+  let m=document.getElementById('modalPedPreview');if(m)m.style.display='none';pedPreview=null;
+  await renderPedidos();
+  processNextPed();
+}
+function verPedido(id){
+  let p=PEDIDOS.find(x=>x.id===id);if(!p)return;
+  let modal=document.getElementById('modalPedVer');
+  if(!modal){modal=document.createElement('div');modal.id='modalPedVer';modal.className='modal-overlay';document.body.appendChild(modal);}
+  let itensHtml=(p.itens&&p.itens.length)?p.itens.map(i=>'<tr><td>'+i.produto+'</td><td style="text-align:right">'+(i.qtd||'')+'</td><td style="text-align:right">'+(i.valor_unit?fmt(i.valor_unit):'')+'</td><td style="text-align:right">'+fmt(i.valor)+'</td></tr>').join(''):'<tr><td colspan="4" style="color:var(--text3)">Sem itens registrados</td></tr>';
+  modal.innerHTML='<div class="modal-card" style="width:620px">'
+    +'<div class="modal-header"><h3><i class="fas fa-clipboard-list"></i> '+(p.fornecedor||'Pedido')+'</h3><button class="modal-close" onclick="NR.fecharVerPed()"><i class="fas fa-times"></i></button></div>'
+    +'<div class="cpag-info-box">'
+    +'<div class="cpag-info-line"><span>Data do Pedido</span><b>'+fD(p.data)+'</b></div>'
+    +(p.numero?'<div class="cpag-info-line"><span>Nº do Pedido</span><b>'+p.numero+'</b></div>':'')
+    +'<div class="cpag-info-line"><span>Valor</span><b style="color:var(--green)">'+fmt(p.valor)+'</b></div>'
+    +'<div class="cpag-info-line"><span>Status</span><b>'+(p.status==='faturado'?'Faturado em '+fD(p.data_faturado):'Aguardando faturamento')+'</b></div>'
+    +(p.observacoes?'<div class="cpag-info-line"><span>Observações</span><b>'+p.observacoes+'</b></div>':'')
+    +(p.descricao?'<div class="cpag-info-line"><span>Descrição</span><b>'+p.descricao+'</b></div>':'')
+    +'</div>'
+    +'<div style="padding:0 24px 16px"><h4 style="margin:0 0 6px">Itens</h4>'
+    +'<div class="table-wrap" style="max-height:240px;overflow-y:auto"><table class="data-table" style="min-width:0"><thead><tr><th>Produto</th><th style="text-align:right">Qtd</th><th style="text-align:right">Vl. Unit</th><th style="text-align:right">Valor</th></tr></thead><tbody>'+itensHtml+'</tbody></table></div></div>'
+    +'<div class="modal-footer">'+(p.arquivo?'<button class="btn btn-outline" onclick="NR.baixarPedArquivo(\''+p.id+'\')"><i class="fas fa-download"></i> Baixar Original</button>':'')+'<button class="btn btn-primary" onclick="NR.fecharVerPed()">Fechar</button></div>'
+    +'</div>';
+  modal.style.display='flex';
+}
+function fecharVerPed(){let m=document.getElementById('modalPedVer');if(m)m.style.display='none';}
+function faturarPed(id){
+  let p=PEDIDOS.find(x=>x.id===id);if(!p)return;
+  let hoje=new Date().toISOString().split('T')[0];
+  let modal=document.getElementById('modalPedFaturar');
+  if(!modal){modal=document.createElement('div');modal.id='modalPedFaturar';modal.className='modal-overlay';document.body.appendChild(modal);}
+  modal.innerHTML='<div class="modal-card" style="width:400px">'
+    +'<div class="modal-header"><h3><i class="fas fa-check-circle" style="color:var(--green)"></i> Confirmar Faturamento</h3><button class="modal-close" onclick="NR.fecharFaturarPed()"><i class="fas fa-times"></i></button></div>'
+    +'<div style="padding:16px 24px">'
+    +'<p style="color:var(--text2);margin-bottom:12px">Pedido de <b>'+(p.fornecedor||'-')+'</b> no valor de <b style="color:var(--green)">'+fmt(p.valor)+'</b></p>'
+    +'<div class="form-group"><label>Data do Faturamento</label><input type="date" id="pedFaturar-data" value="'+hoje+'" style="width:100%"></div>'
+    +'</div>'
+    +'<div class="modal-footer"><button class="btn btn-outline" onclick="NR.fecharFaturarPed()">Cancelar</button><button class="btn btn-primary" onclick="NR.confirmarFaturarPed(\''+p.id+'\')"><i class="fas fa-check"></i> Confirmar</button></div>'
+    +'</div>';
+  modal.style.display='flex';
+}
+function fecharFaturarPed(){let m=document.getElementById('modalPedFaturar');if(m)m.style.display='none';}
+async function confirmarFaturarPed(id){
+  let data=document.getElementById('pedFaturar-data').value;
+  const r=await api('PUT','/api/pedidos/'+id+'/faturar',{data});
+  if(r.error){toast(r.error,'error');return;}
+  fecharFaturarPed();toast('Pedido faturado!');renderPedidos();
+}
+async function desfaturarPed(id){
+  if(!confirm('Voltar este pedido para "aguardando faturamento"?'))return;
+  await api('PUT','/api/pedidos/'+id+'/desfaturar');
+  toast('Pedido voltou para aguardando','info');renderPedidos();
+}
+async function baixarPedArquivo(id){
+  let p=PEDIDOS.find(x=>x.id===id);if(!p)return;
+  try{
+    const resp=await fetch('/api/pedidos/'+id+'/arquivo',{headers:{'Authorization':'Bearer '+authToken,'X-Empresa':currentEmpresa}});
+    if(!resp.ok){toast('Arquivo não disponível','error');return;}
+    const blob=await resp.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=p.arquivo||'pedido';
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);
+  }catch(e){toast('Erro ao baixar: '+e.message,'error');}
+}
+async function delPed(id){
+  let p=PEDIDOS.find(x=>x.id===id);if(!p)return;
+  if(!confirm('Excluir o pedido de "'+(p.fornecedor||'-')+'" ('+fmt(p.valor)+')?'))return;
+  await api('DELETE','/api/pedidos/'+id);
+  toast('Pedido excluído!','info');renderPedidos();
+}
+document.getElementById('formGeminiCfg').addEventListener('submit',async function(e){
+  e.preventDefault();
+  await api('PUT','/api/config',{
+    gemini_api_key:document.getElementById('cfg-gemini-key').value.trim(),
+    gemini_model:document.getElementById('cfg-gemini-model').value.trim()||'gemini-2.5-flash',
+  });
+  toast('Configuração da IA salva!');renderConfig();
+});
 // === FECHAMENTOS DE FRETE ===
 let FECHAMENTOS=[],fechPreview=null,fechQueue=[];
 async function renderFechamentos(){
@@ -990,7 +1158,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas(),renderLicitacoes(),renderFechamentos(),renderDocumentos()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas(),renderLicitacoes(),renderFechamentos(),renderDocumentos(),renderPedidos()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -1108,7 +1276,7 @@ document.getElementById('formLembrete').addEventListener('submit', async functio
 });
 
 // === USUÁRIOS ===
-const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','fechamentos','documentos','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','licitacoes','transparencia','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
+const ALL_PERMS=['dashboard-geral','dashboard','acerto','abastecimentos','fat','contas-pagar','a-chegar','fechamentos','documentos','pedidos','movimentacao','drogaria','cheques','conta-dono','distribuicao','notas-nfe','licitacoes','transparencia','fornecedores-cad','folha','colaboradores','relatorios','configuracoes','caixas','fiscal','somas'];
 let newUserPerms=[...ALL_PERMS];
 function renderPermsGrid(){
   document.getElementById('permsGrid').innerHTML=ALL_PERMS.map(p=>{
@@ -4079,6 +4247,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview};
 checkAuth();
 })();
