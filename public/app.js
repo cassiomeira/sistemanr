@@ -980,7 +980,7 @@ document.getElementById('formGeminiCfg').addEventListener('submit',async functio
   e.preventDefault();
   await api('PUT','/api/config',{
     gemini_api_key:document.getElementById('cfg-gemini-key').value.trim(),
-    gemini_model:document.getElementById('cfg-gemini-model').value.trim()||'gemini-2.5-flash',
+    gemini_model:document.getElementById('cfg-gemini-model').value.trim()||'gemini-flash-latest',
   });
   toast('Configuração da IA salva!');renderConfig();
 });

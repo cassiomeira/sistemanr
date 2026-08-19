@@ -10,7 +10,7 @@ function getGeminiConfig(slug) {
   const cfgPadrao = slug !== 'nunesrocha' ? db.getConfig('nunesrocha') : cfg;
   return {
     apiKey: cfg.gemini_api_key || cfgPadrao.gemini_api_key || '',
-    model: cfg.gemini_model || cfgPadrao.gemini_model || 'gemini-2.5-flash',
+    model: cfg.gemini_model || cfgPadrao.gemini_model || 'gemini-flash-latest',
   };
 }
 
@@ -48,21 +48,32 @@ async function lerPedido(buffer, mimeType, slug) {
     generationConfig: { response_mime_type: 'application/json', temperature: 0 },
   });
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  let resp, data;
-  try {
-    resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-    data = await resp.json();
-  } catch (e) {
-    return { error: 'Falha ao conectar na API do Gemini: ' + e.message };
+  // Tenta o modelo configurado; se estiver sobrecarregado/indisponível, cai para os alternativos
+  const candidatos = [...new Set([model, 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'])];
+  let data = null, ultimoErro = null;
+  for (const m of candidatos) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    let d;
+    try {
+      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      d = await resp.json();
+    } catch (e) {
+      ultimoErro = 'Falha ao conectar na API do Gemini: ' + e.message;
+      continue;
+    }
+    if (d.error) {
+      const msg = d.error.message || d.error.status || 'erro desconhecido';
+      if (d.error.code === 400 && /API key/i.test(msg)) return { error: 'Chave da API do Gemini inválida. Confira em Configurações.' };
+      // 503 (sobrecarga), 429 (limite) e 404 (modelo não existe): tenta o próximo modelo
+      if (d.error.code === 503) { ultimoErro = 'Modelos do Gemini sobrecarregados no momento. Tente novamente em alguns minutos.'; continue; }
+      if (d.error.code === 429) { ultimoErro = 'Limite gratuito do Gemini atingido. Tente novamente em alguns minutos.'; continue; }
+      if (d.error.code === 404) { ultimoErro = 'Modelo "' + m + '" não encontrado na API do Gemini.'; continue; }
+      return { error: 'Gemini: ' + msg };
+    }
+    data = d;
+    break;
   }
-  if (data.error) {
-    const msg = data.error.message || data.error.status || 'erro desconhecido';
-    if (data.error.code === 400 && /API key/i.test(msg)) return { error: 'Chave da API do Gemini inválida. Confira em Configurações.' };
-    if (data.error.code === 429) return { error: 'Limite gratuito do Gemini atingido. Tente novamente em alguns minutos.' };
-    if (data.error.code === 404) return { error: 'Modelo "' + model + '" não encontrado na API do Gemini. Ajuste o modelo em Configurações.' };
-    return { error: 'Gemini: ' + msg };
-  }
+  if (!data) return { error: ultimoErro || 'Não foi possível consultar a API do Gemini.' };
 
   const text = (((data.candidates || [])[0] || {}).content || {}).parts?.map(p => p.text || '').join('') || '';
   if (!text) return { error: 'A IA não conseguiu ler o documento. Tente uma imagem mais nítida.' };
