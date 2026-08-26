@@ -1032,6 +1032,7 @@ app.post('/api/pedidos', (req, res) => {
     descricao: (b.descricao || '').trim(), valor: parseFloat(b.valor) || 0,
     itens: b.itens || [], observacoes: (b.observacoes || '').trim(),
     arquivo: b.arquivo || '', mime: b.mime || '',
+    forma_pagamento: ['cheque', 'boleto'].includes(b.forma_pagamento) ? b.forma_pagamento : '',
   };
   if (!item.fornecedor && !item.descricao) return res.status(400).json({ error: 'Informe pelo menos o fornecedor ou a descrição' });
   // move o arquivo temporário do preview para o definitivo

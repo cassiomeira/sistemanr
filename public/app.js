@@ -833,7 +833,8 @@ async function renderPedidos(){
   tb.innerHTML=lista.map(p=>{
     let st=p.status==='faturado'?'<span class="badge badge-green" style="font-size:.7rem">Faturado '+fD(p.data_faturado)+'</span>':'<span class="badge badge-orange" style="font-size:.7rem">Aguardando</span>';
     let desc=(p.descricao||'')+(p.numero?(p.descricao?' • ':'')+'Nº '+p.numero:'');
-    return '<tr'+(p.status==='faturado'?' style="opacity:.65"':'')+'><td>'+fD(p.data)+'</td><td><b>'+(p.fornecedor||'-')+'</b></td><td style="color:var(--text2)">'+(desc||'-')+'</td><td><b>'+fmt(p.valor)+'</b></td><td>'+st+'</td>'
+    let fp=p.forma_pagamento==='cheque'?' <span class="badge badge-purple" style="font-size:.65rem;padding:2px 8px">Cheque</span>':p.forma_pagamento==='boleto'?' <span class="badge badge-blue" style="font-size:.65rem;padding:2px 8px">Boleto</span>':'';
+    return '<tr'+(p.status==='faturado'?' style="opacity:.65"':'')+'><td>'+fD(p.data)+'</td><td><b>'+(p.fornecedor||'-')+'</b>'+fp+'</td><td style="color:var(--text2)">'+(desc||'-')+'</td><td><b>'+fmt(p.valor)+'</b></td><td>'+st+'</td>'
       +'<td><button class="btn btn-sm btn-outline" onclick="NR.verPedido(\''+p.id+'\')" title="Ver detalhes"><i class="fas fa-eye"></i></button> '
       +(p.arquivo?'<button class="btn btn-sm btn-outline" onclick="NR.baixarPedArquivo(\''+p.id+'\')" title="Baixar arquivo original"><i class="fas fa-download"></i></button> ':'')
       +(p.status==='aguardando'?'<button class="btn btn-sm btn-primary" onclick="NR.faturarPed(\''+p.id+'\')" title="Marcar como faturado"><i class="fas fa-check"></i> Faturado</button> ':'<button class="btn btn-sm btn-outline" onclick="NR.desfaturarPed(\''+p.id+'\')" title="Voltar para aguardando"><i class="fas fa-undo"></i></button> ')
@@ -848,6 +849,7 @@ document.getElementById('formPedido').addEventListener('submit',async function(e
     fornecedor:document.getElementById('ped-fornecedor').value.trim(),
     descricao:document.getElementById('ped-descricao').value.trim(),
     valor:parseFloat(document.getElementById('ped-valor').value)||0,
+    forma_pagamento:document.getElementById('ped-forma').value,
   });
   if(r.error){toast(r.error,'error');return;}
   toast('Pedido lançado!');this.reset();renderPedidos();
@@ -881,6 +883,7 @@ function abrirPreviewPed(r){
     +'<div class="form-group"><label>Data do Pedido</label><input type="date" id="pedprev-data" value="'+(r.data||'')+'"></div>'
     +'<div class="form-group"><label>Nº do Pedido</label><input type="text" id="pedprev-numero" value="'+(r.numero||'').replace(/"/g,'&quot;')+'"></div>'
     +'<div class="form-group"><label>Valor Total (R$)</label><input type="number" id="pedprev-valor" step="0.01" value="'+(r.valor||0)+'"></div>'
+    +'<div class="form-group"><label>Pagamento Combinado</label><select id="pedprev-forma"><option value="">— Não definido —</option><option value="cheque">Cheque</option><option value="boleto">Boleto</option></select></div>'
     +'</div>'
     +'<div class="form-group" style="margin-top:10px"><label>Observações</label><input type="text" id="pedprev-obs" value="'+(r.observacoes||'').replace(/"/g,'&quot;')+'"></div>'
     +'<h4 style="margin:14px 0 6px">Itens identificados ('+(r.itens?r.itens.length:0)+')</h4>'
@@ -899,6 +902,7 @@ async function salvarPedidoPreview(){
     numero:document.getElementById('pedprev-numero').value.trim(),
     valor:parseFloat(document.getElementById('pedprev-valor').value)||0,
     observacoes:document.getElementById('pedprev-obs').value.trim(),
+    forma_pagamento:document.getElementById('pedprev-forma').value,
     itens:pedPreview.itens||[],
     previewId:pedPreview.previewId,
     arquivo:pedPreview.arquivo,
@@ -922,6 +926,7 @@ function verPedido(id){
     +(p.numero?'<div class="cpag-info-line"><span>Nº do Pedido</span><b>'+p.numero+'</b></div>':'')
     +'<div class="cpag-info-line"><span>Valor</span><b style="color:var(--green)">'+fmt(p.valor)+'</b></div>'
     +'<div class="cpag-info-line"><span>Status</span><b>'+(p.status==='faturado'?'Faturado em '+fD(p.data_faturado):'Aguardando faturamento')+'</b></div>'
+    +'<div class="cpag-info-line"><span>Pagamento Combinado</span><b>'+(p.forma_pagamento==='cheque'?'Cheque':p.forma_pagamento==='boleto'?'Boleto':'Não definido')+'</b></div>'
     +(p.observacoes?'<div class="cpag-info-line"><span>Observações</span><b>'+p.observacoes+'</b></div>':'')
     +(p.descricao?'<div class="cpag-info-line"><span>Descrição</span><b>'+p.descricao+'</b></div>':'')
     +'</div>'

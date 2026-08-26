@@ -415,6 +415,7 @@
                     <div class="form-group"><label>Fornecedor</label><input type="text" id="ped-fornecedor" required></div>
                     <div class="form-group"><label>Descrição</label><input type="text" id="ped-descricao" placeholder="Ex: Pedido de bebidas"></div>
                     <div class="form-group"><label>Valor (R$)</label><input type="number" id="ped-valor" step="0.01" min="0"></div>
+                    <div class="form-group"><label>Pagamento Combinado</label><select id="ped-forma"><option value="">— Não definido —</option><option value="cheque">Cheque</option><option value="boleto">Boleto</option></select></div>
                     <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
                 </form>
             </div>
@@ -1572,6 +1573,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=113"></script>
+    <script src="app.js?v=114"></script>
 </body>
 </html>

@@ -458,8 +458,10 @@ function initDB(dbInstance) {
     data_faturado TEXT DEFAULT '',
     arquivo TEXT DEFAULT '',
     mime TEXT DEFAULT '',
+    forma_pagamento TEXT DEFAULT '',
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+  try { dbInstance.run("ALTER TABLE pedidos ADD COLUMN forma_pagamento TEXT DEFAULT ''"); } catch(e) {}
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1172,12 +1174,12 @@ module.exports = {
     return { ...p, itens: JSON.parse(p.itens_json || '[]') };
   },
   addPedido(slug, p) {
-    run(slug, 'INSERT INTO pedidos (id,data,numero,fornecedor,descricao,valor,itens_json,observacoes,arquivo,mime) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [p.id, p.data || '', p.numero || '', p.fornecedor || '', p.descricao || '', p.valor || 0, JSON.stringify(p.itens || []), p.observacoes || '', p.arquivo || '', p.mime || '']);
+    run(slug, 'INSERT INTO pedidos (id,data,numero,fornecedor,descricao,valor,itens_json,observacoes,arquivo,mime,forma_pagamento) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      [p.id, p.data || '', p.numero || '', p.fornecedor || '', p.descricao || '', p.valor || 0, JSON.stringify(p.itens || []), p.observacoes || '', p.arquivo || '', p.mime || '', p.forma_pagamento || '']);
   },
   updatePedido(slug, id, fields) {
     const sets = [], vals = [];
-    for (const k of ['data', 'numero', 'fornecedor', 'descricao', 'valor', 'observacoes']) {
+    for (const k of ['data', 'numero', 'fornecedor', 'descricao', 'valor', 'observacoes', 'forma_pagamento']) {
       if (fields[k] !== undefined) { sets.push(k + '=?'); vals.push(fields[k]); }
     }
     if (!sets.length) return;
