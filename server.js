@@ -1045,6 +1045,7 @@ app.post('/api/pedidos', (req, res) => {
   res.json({ ok: true, id });
 });
 app.put('/api/pedidos/:id', (req, res) => {
+  if (req.body.forma_pagamento !== undefined && !['cheque', 'boleto', ''].includes(req.body.forma_pagamento)) req.body.forma_pagamento = '';
   db.updatePedido(req.emp, req.params.id, req.body);
   db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Pedidos', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
   res.json({ ok: true });
