@@ -4178,24 +4178,25 @@ async function analisarBipe(){
 }
 async function importarBoletoPdf(file){
   let st=document.getElementById('boleto-pdf-status');
-  st.innerHTML='<i class="fas fa-spinner fa-spin"></i> Lendo PDF...';
+  st.innerHTML='<i class="fas fa-spinner fa-spin"></i> Lendo arquivo... (boletos escaneados usam IA e podem levar alguns segundos)';
   let fd=new FormData();fd.append('pdf',file);
   try{
     let hdrs={};if(authToken)hdrs['Authorization']='Bearer '+authToken;hdrs['X-Empresa']=currentEmpresa;
     let r=await fetch('/api/boleto/importar-pdf',{method:'POST',headers:hdrs,body:fd});
     let data=await r.json();
     if(data.error){st.innerHTML='<span style="color:var(--red)">'+data.error+'</span>';return;}
+    let selo=data.via_ia?' <span style="color:var(--purple)"><i class="fas fa-robot"></i> lido com IA — confira os dados</span>':'';
     if(data.boletos&&data.boletos.length>1){
       boletosMulti=data.boletos.map(b=>({...b,lancado:false}));
-      st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> '+boletosMulti.length+' boletos encontrados no PDF!</span>';
+      st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> '+boletosMulti.length+' boletos encontrados!</span>'+selo;
       document.getElementById('boleto-multi').style.display='';
       document.getElementById('boleto-multi-qtd').textContent=boletosMulti.length;
       preencherBoletoMulti(0);
     }else{
-      st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> Boleto lido!</span>';
+      st.innerHTML='<span style="color:var(--green)"><i class="fas fa-check"></i> Boleto lido!</span>'+selo;
       preencherBoleto(data);
     }
-  }catch(e){st.innerHTML='<span style="color:var(--red)">Erro ao ler PDF</span>';}
+  }catch(e){st.innerHTML='<span style="color:var(--red)">Erro ao ler arquivo</span>';}
 }
 // --- Vários boletos no mesmo PDF ---
 let boletosMulti=[],boletoMultiIdx=-1;

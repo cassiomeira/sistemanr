@@ -1488,12 +1488,12 @@
                 </div>
                 <!-- Entrada PDF -->
                 <div id="boleto-entrada-pdf" style="display:none">
-                    <p style="margin-bottom:10px;color:var(--text2);font-size:.88rem"><i class="fas fa-file-pdf" style="color:var(--red)"></i> Selecione o <b>PDF do boleto</b> (o arquivo que o fornecedor enviou). O sistema lê fornecedor, valor e vencimento.</p>
+                    <p style="margin-bottom:10px;color:var(--text2);font-size:.88rem"><i class="fas fa-file-pdf" style="color:var(--red)"></i> Selecione o <b>PDF ou foto do boleto</b> (o arquivo que o fornecedor enviou). O sistema lê fornecedor, valor e vencimento — boletos escaneados são lidos com IA.</p>
                     <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer" onclick="document.getElementById('boleto-pdf-file').click()">
                         <i class="fas fa-cloud-upload-alt" style="font-size:1.8rem;color:var(--red);margin-bottom:6px;display:block"></i>
-                        <p style="color:var(--text2);font-size:.9rem">Clique para selecionar o PDF</p>
+                        <p style="color:var(--text2);font-size:.9rem">Clique para selecionar o PDF ou imagem</p>
                         <p id="boleto-pdf-nome" style="color:var(--text3);font-size:.8rem;margin-top:4px">Nenhum arquivo</p>
-                        <input type="file" id="boleto-pdf-file" accept=".pdf" style="display:none">
+                        <input type="file" id="boleto-pdf-file" accept=".pdf,image/*" style="display:none">
                     </div>
                     <p id="boleto-pdf-status" style="margin-top:8px;font-size:.82rem;color:var(--text3)"></p>
                 </div>
@@ -1573,6 +1573,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=115"></script>
+    <script src="app.js?v=116"></script>
 </body>
 </html>

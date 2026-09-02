@@ -938,13 +938,27 @@ app.post('/api/boleto/analisar', (req, res) => {
 });
 app.post('/api/boleto/importar-pdf', upload.single('pdf'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Nenhum PDF enviado' });
-    const pdf = await pdfParse(req.file.buffer);
-    const lista = boleto.parseBoletosPdf(pdf.text);
-    if (!lista.length) return res.status(422).json({ error: 'Não consegui ler os dados do boleto neste PDF. Pode ser um PDF só de imagem (escaneado).' });
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    let lista = [];
+    let viaIA = false;
+    // 1) Leitura por texto (PDFs normais): rápida e gratuita
+    if (req.file.mimetype === 'application/pdf') {
+      try {
+        const pdf = await pdfParse(req.file.buffer);
+        lista = boleto.parseBoletosPdf(pdf.text);
+      } catch (e) { /* PDF ilegível por texto — tenta IA abaixo */ }
+    }
+    // 2) Fallback com IA (PDF escaneado/imagem ou foto do boleto)
+    if (!lista.length) {
+      const r = await pedidosIA.lerBoletos(req.file.buffer, req.file.mimetype, req.emp);
+      if (r.error) return res.status(422).json({ error: 'Não consegui ler por texto e a IA também não conseguiu: ' + r.error });
+      if (!r.boletos.length) return res.status(422).json({ error: 'A IA não encontrou boletos neste arquivo. Tente uma imagem mais nítida.' });
+      lista = r.boletos;
+      viaIA = true;
+    }
     const boletos = lista.map(d => boleto.enriquecer(req.emp, d));
     // Compatibilidade: mantém os campos do primeiro boleto na raiz da resposta
-    res.json({ ...boletos[0], boletos, total: boletos.length });
+    res.json({ ...boletos[0], boletos, total: boletos.length, via_ia: viaIA });
   } catch (e) {
     console.error('Erro importar boleto PDF:', e.message);
     res.status(500).json({ error: e.message });
