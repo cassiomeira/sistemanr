@@ -86,7 +86,7 @@ function parseXmlNota(xml) {
 }
 
 // ===== Processamento e armazenamento =====
-function processarNota(slug, notaId) {
+function processarNota(slug, notaId, persistir = true) {
   const nota = db.getNotaRecebidaById(slug, notaId);
   if (!nota || !nota.xml || nota.tipo !== 'completa') return 0;
   const p = parseXmlNota(nota.xml);
@@ -100,23 +100,38 @@ function processarNota(slug, notaId) {
     uf: p.uf,
     data_emissao: p.data_emissao || nota.data_emissao || '',
   }));
-  db.replaceFiscalItens(slug, nota.id, rows);
+  db.replaceFiscalItens(slug, nota.id, rows, persistir);
   return rows.length;
 }
 
+// Trava simples contra reprocessamento concorrente (requisições paralelas)
+const emProcessamento = new Set();
+
 function reprocessarTudo(slug) {
-  let notas = 0, itens = 0;
-  for (const n of db.getNotasComXmlIds(slug)) {
-    const q = processarNota(slug, n.id);
-    if (q > 0) { notas++; itens += q; }
-  }
-  return { notas, itens };
+  if (emProcessamento.has(slug)) return { notas: 0, itens: 0, ocupado: true };
+  emProcessamento.add(slug);
+  try {
+    let notas = 0, itens = 0;
+    for (const n of db.getNotasComXmlIds(slug)) {
+      const q = processarNota(slug, n.id, false); // grava em memória
+      if (q > 0) { notas++; itens += q; }
+    }
+    db.persistFiscal(slug); // uma única escrita em disco no final
+    return { notas, itens };
+  } finally { emProcessamento.delete(slug); }
 }
 
-// Backfill preguiçoso: garante que o histórico está processado
+// Backfill preguiçoso incremental: processa só as notas com XML que ainda não têm itens fiscais
 function garantirDados(slug) {
-  if (db.countFiscalItens(slug) === 0) return reprocessarTudo(slug);
-  return null;
+  if (emProcessamento.has(slug)) return null;
+  const pendentes = db.getNotasFiscalPendentes(slug);
+  if (!pendentes.length) return null;
+  emProcessamento.add(slug);
+  try {
+    for (const n of pendentes) processarNota(slug, n.id, false);
+    db.persistFiscal(slug);
+    return { notas: pendentes.length };
+  } finally { emProcessamento.delete(slug); }
 }
 
 // ===== Agregações =====
