@@ -1061,6 +1061,20 @@ async function analisePed(id){
     for(const s of a.sensibilidade)h+='<tr'+(s.acrescimo===0?' style="background:var(--green-bg)"':'')+'><td>+'+s.acrescimo+'%</td><td style="text-align:right">'+fmt(s.preco)+'</td><td style="text-align:right"><b>'+fmt(s.custo_liquido)+'</b></td></tr>';
     h+='</tbody></table></div>';
   }
+  // Simulador Nota Cheia × Meia Nota (usa as alíquotas do fornecedor; editáveis)
+  if(a.regime!=='sem_credito'){
+    let pIc=a.perfil?a.perfil.aliq_icms_destacada:12;
+    let pIp=a.perfil?Math.round(a.perfil.ipi_efetivo*10000)/100:3.25;
+    h+='<h4 style="margin:14px 0 6px">Simulador: Nota Cheia × Meia Nota</h4>';
+    h+='<p style="font-size:.78rem;color:var(--text3);margin-bottom:8px">Digite as duas propostas do fornecedor. O crédito de ICMS e o IPI incidem apenas sobre o valor <b>documentado</b> — por isso a meia nota costuma sair mais cara do que parece. A nota cheia ainda documenta o estoque e evita risco fiscal.</p>';
+    h+='<div class="form-grid" style="margin-bottom:8px">'
+      +'<div class="form-group"><label>Preço com NOTA CHEIA (R$)</label><input type="number" id="sim-cheia" step="0.01" min="0" oninput="NR.calcSimNota()"></div>'
+      +'<div class="form-group"><label>Preço na MEIA NOTA (R$)</label><input type="number" id="sim-meia" step="0.01" min="0" oninput="NR.calcSimNota()"></div>'
+      +'<div class="form-group"><label>% documentado na meia nota</label><input type="number" id="sim-frac" step="5" min="0" max="100" value="50" oninput="NR.calcSimNota()"></div>'
+      +'<div class="form-group"><label>ICMS destacado (%)</label><input type="number" id="sim-icms" step="0.1" min="0" value="'+pIc+'" oninput="NR.calcSimNota()"></div>'
+      +'<div class="form-group"><label>IPI (%)</label><input type="number" id="sim-ipi" step="0.01" min="0" value="'+pIp+'" oninput="NR.calcSimNota()"></div>'
+      +'</div><div id="simNotaResultado"></div>';
+  }
   let itensComInfo=(a.itens||[]).filter(i=>i.badge||i.comparador.length||i.match);
   if(itensComInfo.length){
     h+='<h4 style="margin:14px 0 6px">Itens do pedido × histórico</h4>';
@@ -1079,6 +1093,37 @@ async function analisePed(id){
   modal.querySelector('.modal-card').innerHTML=h;
 }
 function fecharAnalisePed(){let m=document.getElementById('modalAnaliseFiscal');if(m)m.style.display='none';}
+function calcSimNota(){
+  let out=document.getElementById('simNotaResultado');if(!out)return;
+  let P1=parseFloat(document.getElementById('sim-cheia').value);
+  let P2=parseFloat(document.getElementById('sim-meia').value);
+  let F=(parseFloat(document.getElementById('sim-frac').value)||0)/100;
+  let i=(parseFloat(document.getElementById('sim-icms').value)||0)/100;
+  let p=(parseFloat(document.getElementById('sim-ipi').value)||0)/100;
+  if(isNaN(P1)&&isNaN(P2)){out.innerHTML='';return;}
+  let h='<div style="display:flex;gap:10px;flex-wrap:wrap">';
+  let custoA=null,custoB=null;
+  if(!isNaN(P1)&&P1>0){
+    custoA=P1*(1+p-i);
+    h+='<div style="flex:1;min-width:220px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:.72rem;color:var(--text3)">NOTA CHEIA — custo líquido</div><div style="font-size:1.25rem;font-weight:800">'+fmt(custoA)+'</div><div style="font-size:.72rem;color:var(--text2)">crédito ICMS '+fmt(P1*i)+' • IPI '+fmt(P1*p)+'</div></div>';
+  }
+  if(!isNaN(P2)&&P2>0){
+    custoB=P2*(1+F*(p-i));
+    h+='<div style="flex:1;min-width:220px;background:var(--bg3);border-radius:8px;padding:10px;text-align:center"><div style="font-size:.72rem;color:var(--text3)">MEIA NOTA ('+Math.round(F*100)+'% documentado) — custo líquido</div><div style="font-size:1.25rem;font-weight:800">'+fmt(custoB)+'</div><div style="font-size:.72rem;color:var(--text2)">crédito ICMS '+fmt(P2*F*i)+' • IPI '+fmt(P2*F*p)+'</div></div>';
+  }
+  h+='</div>';
+  if(custoA!==null&&custoB!==null){
+    let dif=Math.abs(custoA-custoB);
+    if(Math.abs(custoA-custoB)<0.005)h+='<div style="margin-top:8px;padding:10px;border-radius:8px;background:var(--bg3);text-align:center"><b>Empate técnico</b> — as duas formas custam o mesmo.</div>';
+    else if(custoA<custoB)h+='<div style="margin-top:8px;padding:10px;border-radius:8px;background:var(--green-bg);color:var(--green);text-align:center"><i class="fas fa-trophy"></i> <b>NOTA CHEIA vence</b> — economia real de '+fmt(dif)+' apesar do preço maior</div>';
+    else h+='<div style="margin-top:8px;padding:10px;border-radius:8px;background:var(--orange-bg);color:var(--orange);text-align:center"><b>Meia nota sai '+fmt(dif)+' mais barata no caixa</b> — mas sem documentação do estoque e com risco fiscal; considere também o preço de equilíbrio abaixo.</div>';
+  }
+  if(custoB!==null&&(1+p-i)>0){
+    let equil=custoB/(1+p-i);
+    h+='<div style="margin-top:6px;font-size:.8rem;color:var(--text2);text-align:center">Preço de equilíbrio: pagando até <b>'+fmt(equil)+'</b> com nota cheia, você empata ou ganha da proposta de meia nota.</div>';
+  }
+  out.innerHTML=h;
+}
 async function renderAnaliseFiscal(){
   let el=document.getElementById('painelAnaliseFiscal');if(!el)return;
   try{
@@ -4382,6 +4427,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal,calcSimNota};
 checkAuth();
 })();
