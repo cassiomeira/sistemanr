@@ -462,6 +462,36 @@ function initDB(dbInstance) {
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   try { dbInstance.run("ALTER TABLE pedidos ADD COLUMN forma_pagamento TEXT DEFAULT ''"); } catch(e) {}
+  // Tabela Itens Fiscais (análise fiscal de compras — extraídos dos XMLs das NF-e)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS fiscal_itens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nota_id TEXT NOT NULL,
+    chave TEXT DEFAULT '',
+    cnpj TEXT DEFAULT '',
+    emitente TEXT DEFAULT '',
+    uf TEXT DEFAULT '',
+    data_emissao TEXT DEFAULT '',
+    cprod TEXT DEFAULT '',
+    ncm TEXT DEFAULT '',
+    descricao TEXT DEFAULT '',
+    cfop TEXT DEFAULT '',
+    cst TEXT DEFAULT '',
+    qtd REAL DEFAULT 0,
+    vunit REAL DEFAULT 0,
+    vprod REAL DEFAULT 0,
+    picms REAL DEFAULT 0,
+    vicms REAL DEFAULT 0,
+    vicmsst REAL DEFAULT 0,
+    pipi REAL DEFAULT 0,
+    vipi REAL DEFAULT 0,
+    pibs REAL DEFAULT 0,
+    vibs REAL DEFAULT 0,
+    pcbs REAL DEFAULT 0,
+    vcbs REAL DEFAULT 0,
+    st INTEGER DEFAULT 0
+  )`);
+  try { dbInstance.run('CREATE INDEX IF NOT EXISTS idx_fiscal_cnpj ON fiscal_itens(cnpj)'); } catch(e) {}
+  try { dbInstance.run('CREATE INDEX IF NOT EXISTS idx_fiscal_nota ON fiscal_itens(nota_id)'); } catch(e) {}
   // Tabela Auditoria
   dbInstance.run(`CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1193,6 +1223,21 @@ module.exports = {
     run(slug, "UPDATE pedidos SET status='aguardando', data_faturado='' WHERE id=?", [id]);
   },
   delPedido(slug, id) { run(slug, 'DELETE FROM pedidos WHERE id=?', [id]); },
+
+  // -- Análise Fiscal --
+  replaceFiscalItens(slug, notaId, rows) {
+    run(slug, 'DELETE FROM fiscal_itens WHERE nota_id=?', [notaId]);
+    for (const i of rows) {
+      run(slug, `INSERT INTO fiscal_itens (nota_id,chave,cnpj,emitente,uf,data_emissao,cprod,ncm,descricao,cfop,cst,qtd,vunit,vprod,picms,vicms,vicmsst,pipi,vipi,pibs,vibs,pcbs,vcbs,st)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [i.nota_id, i.chave, i.cnpj, i.emitente, i.uf, i.data_emissao, i.cprod, i.ncm, i.descricao, i.cfop, i.cst,
+         i.qtd, i.vunit, i.vprod, i.picms, i.vicms, i.vicmsst, i.pipi, i.vipi, i.pibs, i.vibs, i.pcbs, i.vcbs, i.st]);
+    }
+  },
+  getFiscalItens(slug) { return query(slug, 'SELECT * FROM fiscal_itens'); },
+  getFiscalItensByCnpj(slug, cnpj) { return query(slug, 'SELECT * FROM fiscal_itens WHERE cnpj=?', [cnpj]); },
+  countFiscalItens(slug) { return scalar(slug, 'SELECT COUNT(*) FROM fiscal_itens') || 0; },
+  getNotasComXmlIds(slug) { return query(slug, "SELECT id FROM notas_recebidas WHERE tipo='completa' AND xml IS NOT NULL AND xml != ''"); },
 
   // -- Auditoria --
   addAuditLog(slug, usuario, acao, secao, detalhes) {

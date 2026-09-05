@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { DistribuicaoDFe, RecepcaoEvento } = require('node-mde');
 const db = require('./database');
 const telegram = require('./telegram');
+const fiscal = require('./fiscal');
 
 const certsDir = path.join(__dirname, 'data', 'certs');
 if (!fs.existsSync(certsDir)) fs.mkdirSync(certsDir, { recursive: true });
@@ -105,16 +106,19 @@ function processarProcNFe(slug, doc) {
   if (existente) {
     if (existente.tipo === 'completa') return null;
     db.updateNotaRecebida(slug, existente.id, dados);
+    try { fiscal.processarNota(slug, existente.id); } catch (e) { console.error('Fiscal: erro processando nota', existente.id, e.message); }
     return { atualizada: true };
   }
+  const novaId = uid();
   db.addNotaRecebida(slug, {
-    id: uid(), chave, status: 'nova', manifestada: 1,
+    id: novaId, chave, status: 'nova', manifestada: 1,
     tipo: 'completa', nsu: doc.nsu || '', numero: dados.numero,
     emitente: dados.emitente, emitente_cnpj: dados.emitente_cnpj,
     valor: dados.valor, data_emissao: dados.data_emissao,
     duplicatas: dups, itens, xml: doc.xml || '',
     forma_pagamento: formaPagamento, pagamentos: detPags,
   });
+  try { fiscal.processarNota(slug, novaId); } catch (e) { console.error('Fiscal: erro processando nota', novaId, e.message); }
   return { nova: true };
 }
 

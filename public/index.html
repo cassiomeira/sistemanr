@@ -568,6 +568,13 @@
 
         <!-- NOTAS CNPJ (NF-e SEFAZ) -->
         <section class="content-section" id="section-notas-nfe">
+            <div class="panel" style="margin-bottom:20px">
+                <div class="panel-header">
+                    <h3><i class="fas fa-balance-scale"></i> Análise Fiscal do Mês</h3>
+                    <button class="btn btn-outline btn-sm" onclick="NR.reprocessarFiscal()" title="Reprocessar todos os XMLs das notas"><i class="fas fa-sync-alt"></i> Reprocessar Histórico</button>
+                </div>
+                <div id="painelAnaliseFiscal" style="padding:0 4px"><p style="color:var(--text3)">Carregando...</p></div>
+            </div>
             <div class="panel">
                 <div class="panel-header">
                     <h3><i class="fas fa-file-download"></i> Notas Emitidas Contra o CNPJ</h3>
@@ -1185,6 +1192,16 @@
             </div>
 
             <div class="panel mt-20">
+                <h3><i class="fas fa-balance-scale"></i> Análise Fiscal</h3>
+                <p class="config-desc">Parâmetros da análise fiscal de compras. A alíquota de CBS é usada na simulação da reforma tributária ("2027"); o limite de alerta dispara aviso quando o preço unitário de uma nota fica abaixo desse % da mediana histórica.</p>
+                <form id="formFiscalCfg" class="form-grid">
+                    <div class="form-group"><label>Alíquota CBS 2027 (%)</label><input type="number" id="cfg-fiscal-cbs" step="0.1" min="0" placeholder="8.8"></div>
+                    <div class="form-group"><label>Alerta preço abaixo de (% da mediana)</label><input type="number" id="cfg-fiscal-alerta" step="1" min="1" max="100" placeholder="60"></div>
+                    <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                </form>
+            </div>
+
+            <div class="panel mt-20">
                 <h3><i class="fas fa-cloud-upload-alt"></i> Backup Automático</h3>
                 <p class="config-desc">Configure o backup automático diário (7h, 12h, 16h e 20h). Os backups são enviados para FTP e/ou Google Drive.</p>
                 <div id="backupStatusBox" style="margin:12px 0;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);font-size:13px;color:var(--text2)">
@@ -1573,6 +1590,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=116"></script>
+    <script src="app.js?v=117"></script>
 </body>
 </html>

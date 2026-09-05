@@ -606,7 +606,7 @@ async function renderDashboard(){let d=await api('GET','/api/dashboard?mes='+gM(
   dc.innerHTML=caixas.map(cx=>{let cor=cx.saldo>=0?'card-green':'card-red';return'<div class="card '+cor+'"><div class="card-icon"><i class="fas fa-cash-register"></i></div><div class="card-info"><span class="card-label">'+cx.nome+'</span><span class="card-value">'+fmt(cx.saldo)+'</span></div></div>';}).join('');
 }
 // CONFIG
-async function renderConfig(){CFG=await api('GET','/api/config');if(CFG.categoriasLoja)CFG.categoriasLoja.sort((a,b)=>a.localeCompare(b));if(CFG.categoriasDrog)CFG.categoriasDrog.sort((a,b)=>a.localeCompare(b));if(CFG.fornecedores)CFG.fornecedores.sort((a,b)=>a.localeCompare(b));document.getElementById('cfg-pct-admin').value=CFG.pctAdmin;document.getElementById('cfg-pct-dono').value=CFG.pctDono;document.getElementById('cfg-pct-reserva').value=CFG.pctReserva;let t=CFG.pctAdmin+CFG.pctDono+CFG.pctReserva;document.getElementById('cfg-pct-total').value=t.toFixed(1)+'%'+(t===100?' ✓':t<100?' (falta '+(100-t).toFixed(1)+'%)':' (excede)');document.getElementById('catLojaList').innerHTML=CFG.categoriasLoja.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCL('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('catDrogList').innerHTML=CFG.categoriasDrog.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCD('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('fornList').innerHTML=(CFG.fornecedores||[]).map((f,i)=>'<div class="tag-item"><span>'+f+'</span><button class="tag-remove" onclick="NR.delForn('+i+')"><i class="fas fa-times"></i></button></div>').join('');populateCats();document.getElementById('cfg-gemini-key').value=CFG.gemini_api_key||'';document.getElementById('cfg-gemini-model').value=CFG.gemini_model||'';let avisoGem=document.getElementById('pedidoGeminiAviso');if(avisoGem)avisoGem.style.display=CFG.gemini_api_key?'none':'inline';document.getElementById('cfg-ftp-host').value=CFG.ftp_host||'';document.getElementById('cfg-ftp-user').value=CFG.ftp_user||'';document.getElementById('cfg-ftp-pass').value=CFG.ftp_pass||'';document.getElementById('cfg-ftp-path').value=CFG.ftp_path||'/backups';document.getElementById('cfg-google-credentials').value=CFG.google_credentials||'';document.getElementById('cfg-google-folder').value=CFG.google_folder_id||'';loadBackupStatus();}
+async function renderConfig(){CFG=await api('GET','/api/config');if(CFG.categoriasLoja)CFG.categoriasLoja.sort((a,b)=>a.localeCompare(b));if(CFG.categoriasDrog)CFG.categoriasDrog.sort((a,b)=>a.localeCompare(b));if(CFG.fornecedores)CFG.fornecedores.sort((a,b)=>a.localeCompare(b));document.getElementById('cfg-pct-admin').value=CFG.pctAdmin;document.getElementById('cfg-pct-dono').value=CFG.pctDono;document.getElementById('cfg-pct-reserva').value=CFG.pctReserva;let t=CFG.pctAdmin+CFG.pctDono+CFG.pctReserva;document.getElementById('cfg-pct-total').value=t.toFixed(1)+'%'+(t===100?' ✓':t<100?' (falta '+(100-t).toFixed(1)+'%)':' (excede)');document.getElementById('catLojaList').innerHTML=CFG.categoriasLoja.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCL('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('catDrogList').innerHTML=CFG.categoriasDrog.map((c,i)=>'<div class="tag-item"><span>'+c+'</span><button class="tag-remove" onclick="NR.delCD('+i+')"><i class="fas fa-times"></i></button></div>').join('');document.getElementById('fornList').innerHTML=(CFG.fornecedores||[]).map((f,i)=>'<div class="tag-item"><span>'+f+'</span><button class="tag-remove" onclick="NR.delForn('+i+')"><i class="fas fa-times"></i></button></div>').join('');populateCats();document.getElementById('cfg-gemini-key').value=CFG.gemini_api_key||'';document.getElementById('cfg-gemini-model').value=CFG.gemini_model||'';document.getElementById('cfg-fiscal-cbs').value=CFG.fiscal_cbs_aliq||'';document.getElementById('cfg-fiscal-alerta').value=CFG.fiscal_alerta_preco_pct||'';let avisoGem=document.getElementById('pedidoGeminiAviso');if(avisoGem)avisoGem.style.display=CFG.gemini_api_key?'none':'inline';document.getElementById('cfg-ftp-host').value=CFG.ftp_host||'';document.getElementById('cfg-ftp-user').value=CFG.ftp_user||'';document.getElementById('cfg-ftp-pass').value=CFG.ftp_pass||'';document.getElementById('cfg-ftp-path').value=CFG.ftp_path||'/backups';document.getElementById('cfg-google-credentials').value=CFG.google_credentials||'';document.getElementById('cfg-google-folder').value=CFG.google_folder_id||'';loadBackupStatus();}
 document.getElementById('formPercentuais').addEventListener('submit',async function(e){e.preventDefault();await api('PUT','/api/config',{pctAdmin:parseFloat(document.getElementById('cfg-pct-admin').value),pctDono:parseFloat(document.getElementById('cfg-pct-dono').value),pctReserva:parseFloat(document.getElementById('cfg-pct-reserva').value)});toast('Salvo!');refreshAll();});
 document.getElementById('formCatLoja').addEventListener('submit',async function(e){e.preventDefault();let v=document.getElementById('cfg-cat-loja').value.trim();if(!v)return;CFG.categoriasLoja.push(v);await api('PUT','/api/config',{categoriasLoja:CFG.categoriasLoja});document.getElementById('cfg-cat-loja').value='';toast('Adicionada!');refreshAll();});
 document.getElementById('formCatDrog').addEventListener('submit',async function(e){e.preventDefault();let v=document.getElementById('cfg-cat-drog').value.trim();if(!v)return;CFG.categoriasDrog.push(v);await api('PUT','/api/config',{categoriasDrog:CFG.categoriasDrog});document.getElementById('cfg-cat-drog').value='';toast('Adicionada!');refreshAll();});
@@ -837,6 +837,7 @@ async function renderPedidos(){
     return '<tr'+(p.status==='faturado'?' style="opacity:.65"':'')+'><td>'+fD(p.data)+'</td><td><b>'+(p.fornecedor||'-')+'</b>'+fp+'</td><td style="color:var(--text2)">'+(desc||'-')+'</td><td><b>'+fmt(p.valor)+'</b></td><td>'+st+'</td>'
       +'<td><button class="btn btn-sm btn-outline" onclick="NR.verPedido(\''+p.id+'\')" title="Ver detalhes"><i class="fas fa-eye"></i></button> '
       +'<button class="btn-edit" onclick="NR.editPed(\''+p.id+'\')" title="Editar"><i class="fas fa-edit"></i></button> '
+      +'<button class="btn btn-sm btn-outline" onclick="NR.analisePed(\''+p.id+'\')" title="Análise fiscal: custo líquido após créditos" style="color:var(--teal);border-color:var(--teal)"><i class="fas fa-balance-scale"></i></button> '
       +(p.arquivo?'<button class="btn btn-sm btn-outline" onclick="NR.baixarPedArquivo(\''+p.id+'\')" title="Baixar arquivo original"><i class="fas fa-download"></i></button> ':'')
       +(p.status==='aguardando'?'<button class="btn btn-sm btn-primary" onclick="NR.faturarPed(\''+p.id+'\')" title="Marcar como faturado"><i class="fas fa-check"></i> Faturado</button> ':'<button class="btn btn-sm btn-outline" onclick="NR.desfaturarPed(\''+p.id+'\')" title="Voltar para aguardando"><i class="fas fa-undo"></i></button> ')
       +'<button class="btn btn-sm btn-danger" onclick="NR.delPed(\''+p.id+'\')" title="Excluir"><i class="fas fa-trash"></i></button></td></tr>';
@@ -1025,6 +1026,98 @@ document.getElementById('formGeminiCfg').addEventListener('submit',async functio
   });
   toast('Configuração da IA salva!');renderConfig();
 });
+// === ANÁLISE FISCAL DE COMPRAS ===
+async function analisePed(id){
+  let modal=document.getElementById('modalAnaliseFiscal');
+  if(!modal){modal=document.createElement('div');modal.id='modalAnaliseFiscal';modal.className='modal-overlay';document.body.appendChild(modal);}
+  modal.innerHTML='<div class="modal-card" style="width:760px"><div class="modal-header"><h3><i class="fas fa-balance-scale" style="color:var(--teal)"></i> Análise Fiscal da Compra</h3><button class="modal-close" onclick="NR.fecharAnalisePed()"><i class="fas fa-times"></i></button></div><div style="padding:24px;color:var(--text2)"><i class="fas fa-spinner fa-spin"></i> Analisando histórico fiscal do fornecedor...</div></div>';
+  modal.style.display='flex';
+  let a;
+  try{a=await api('GET','/api/pedidos/'+id+'/analise');}catch(e){a={error:e.message};}
+  if(a.error){modal.querySelector('.modal-card').innerHTML='<div class="modal-header"><h3>Análise Fiscal</h3><button class="modal-close" onclick="NR.fecharAnalisePed()"><i class="fas fa-times"></i></button></div><div style="padding:24px;color:var(--red)">'+a.error+'</div>';return;}
+  let h='<div class="modal-header"><h3><i class="fas fa-balance-scale" style="color:var(--teal)"></i> Análise Fiscal — '+(a.fornecedor||'Pedido')+'</h3><button class="modal-close" onclick="NR.fecharAnalisePed()"><i class="fas fa-times"></i></button></div>';
+  h+='<div style="padding:16px 24px;max-height:75vh;overflow-y:auto">';
+  if(a.divergencia)h+='<div style="background:var(--red-bg);color:var(--red);padding:10px 14px;border-radius:8px;margin-bottom:12px"><i class="fas fa-exclamation-triangle"></i> '+a.divergencia+'</div>';
+  if(a.regime==='sem_credito'){
+    h+='<div style="background:var(--orange-bg);color:var(--orange);padding:12px 14px;border-radius:8px;margin-bottom:12px"><i class="fas fa-info-circle"></i> '+a.mensagem+'</div>';
+    h+='<div style="background:var(--bg3);border-radius:8px;padding:14px;text-align:center;margin-bottom:12px"><div style="font-size:.8rem;color:var(--text3)">CUSTO = PREÇO (sem créditos)</div><div style="font-size:1.5rem;font-weight:800">'+fmt(a.valor)+'</div></div>';
+  }else if(a.mensagem){
+    h+='<div style="background:var(--orange-bg);color:var(--orange);padding:12px 14px;border-radius:8px;margin-bottom:12px"><i class="fas fa-info-circle"></i> '+a.mensagem+'</div>';
+  }else{
+    let p=a.perfil;
+    h+='<div style="font-size:.85rem;color:var(--text2);margin-bottom:10px"><b>'+p.emitente+'</b> ('+p.uf+', CNPJ '+a.cnpj+') — base: '+p.notas+' notas / '+p.itens+' itens'
+      +' <span class="badge badge-blue" style="font-size:.7rem">ICMS destacado '+p.aliq_icms_destacada+'%</span>'
+      +(p.st_pct>0?' <span class="badge badge-orange" style="font-size:.7rem">ST '+Math.round(p.st_pct*100)+'%</span>':'')
+      +' <span class="badge badge-purple" style="font-size:.7rem">IPI '+(p.ipi_efetivo*100).toFixed(2)+'%</span></div>';
+    h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">';
+    h+='<div style="flex:1;min-width:240px;background:var(--green-bg);border:1px solid var(--green);border-radius:10px;padding:14px;text-align:center"><div style="font-size:.75rem;color:var(--text3)">CUSTO LÍQUIDO ESTIMADO (HOJE)</div><div style="font-size:1.7rem;font-weight:900;color:var(--green)">'+fmt(a.custo_liquido)+'</div>'
+      +'<div style="font-size:.78rem;color:var(--text2);margin-top:6px">'+fmt(a.valor)+' + IPI '+fmt(a.ipi_estimado)+' − crédito ICMS '+fmt(a.credito_icms)+'</div></div>';
+    h+='<div style="flex:1;min-width:240px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center"><div style="font-size:.75rem;color:var(--text3)">SIMULAÇÃO 2027 (reforma)</div><div style="font-size:1.7rem;font-weight:900;color:var(--blue)">'+fmt(a.custo_liquido_2027)+'</div>'
+      +'<div style="font-size:.78rem;color:var(--text2);margin-top:6px">IPI zerado − crédito ICMS − CBS '+a.cbs_aliq+'% ('+fmt(a.credito_cbs_2027)+')</div></div>';
+    h+='</div>';
+    h+='<h4 style="margin:8px 0 6px">Até onde vale negociar (nota cheia)</h4>';
+    h+='<p style="font-size:.78rem;color:var(--text3);margin-bottom:6px">Com crédito de ICMS, cada 1% a mais no preço vira menos de 1% no custo líquido — a tabela mostra o custo real para cada acréscimo aceito na negociação.</p>';
+    h+='<div class="table-wrap" style="max-height:180px;overflow-y:auto"><table class="data-table" style="min-width:0"><thead><tr><th>Acréscimo</th><th style="text-align:right">Preço</th><th style="text-align:right">Custo líquido</th></tr></thead><tbody>';
+    for(const s of a.sensibilidade)h+='<tr'+(s.acrescimo===0?' style="background:var(--green-bg)"':'')+'><td>+'+s.acrescimo+'%</td><td style="text-align:right">'+fmt(s.preco)+'</td><td style="text-align:right"><b>'+fmt(s.custo_liquido)+'</b></td></tr>';
+    h+='</tbody></table></div>';
+  }
+  let itensComInfo=(a.itens||[]).filter(i=>i.badge||i.comparador.length||i.match);
+  if(itensComInfo.length){
+    h+='<h4 style="margin:14px 0 6px">Itens do pedido × histórico</h4>';
+    for(const i of itensComInfo){
+      h+='<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:8px">';
+      h+='<div><b>'+i.produto+'</b>'+(i.badge?' <span class="badge badge-orange" style="font-size:.68rem">'+i.badge+'</span>':'')+(i.match?' <span style="color:var(--text3);font-size:.75rem">↔ '+i.match.descricao+' (NCM '+i.match.ncm+')</span>':'')+'</div>';
+      if(i.comparador.length){
+        h+='<div class="table-wrap" style="margin-top:6px"><table class="data-table" style="min-width:0;font-size:.8rem"><thead><tr><th>Fornecedor</th><th>UF</th><th>ICMS</th><th style="text-align:right">Preço mediano</th><th style="text-align:right">Último</th><th style="text-align:right">Custo líquido unit.</th></tr></thead><tbody>';
+        i.comparador.forEach((c,ix)=>{h+='<tr><td>'+(ix===0?'<i class="fas fa-crown" style="color:var(--amber)"></i> ':'')+c.emitente+'</td><td>'+c.uf+'</td><td>'+c.aliq_icms+'%'+(c.st_pct>0?' <span style="color:var(--orange);font-size:.68rem">ST '+c.st_pct+'%</span>':'')+'</td><td style="text-align:right">'+fmt(c.preco_mediano)+'</td><td style="text-align:right" title="'+fD(c.ultima_data)+'">'+fmt(c.ultimo_preco)+'</td><td style="text-align:right"><b>'+fmt(c.custo_liquido_unit)+'</b></td></tr>';});
+        h+='</tbody></table></div>';
+      }
+      h+='</div>';
+    }
+  }
+  h+='</div><div class="modal-footer"><button class="btn btn-primary" onclick="NR.fecharAnalisePed()">Fechar</button></div>';
+  modal.querySelector('.modal-card').innerHTML=h;
+}
+function fecharAnalisePed(){let m=document.getElementById('modalAnaliseFiscal');if(m)m.style.display='none';}
+async function renderAnaliseFiscal(){
+  let el=document.getElementById('painelAnaliseFiscal');if(!el)return;
+  try{
+    let a=await api('GET','/api/analise-fiscal/alertas?mes='+gM());
+    let h='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">';
+    if(a.regime==='presumido_icms'){
+      h+='<div style="flex:1;min-width:200px;background:var(--green-bg);border-radius:10px;padding:12px;text-align:center"><div style="font-size:.72rem;color:var(--text3)">CRÉDITO DE ICMS GERADO NO MÊS</div><div style="font-size:1.4rem;font-weight:800;color:var(--green)">'+fmt(a.credito_icms_mes)+'</div></div>';
+      h+='<div style="flex:1;min-width:200px;background:var(--bg3);border-radius:10px;padding:12px;text-align:center"><div style="font-size:.72rem;color:var(--text3)">COMPRAS (BASE) NO MÊS</div><div style="font-size:1.4rem;font-weight:800">'+fmt(a.compras_mes)+'</div></div>';
+      h+='<div style="flex:1;min-width:200px;background:var(--bg3);border-radius:10px;padding:12px;text-align:center"><div style="font-size:.72rem;color:var(--text3)">IPI (CUSTO) NO MÊS</div><div style="font-size:1.4rem;font-weight:800;color:var(--orange)">'+fmt(a.ipi_mes)+'</div></div>';
+    }else{
+      h+='<div style="flex:1;background:var(--orange-bg);border-radius:10px;padding:12px;color:var(--orange)"><i class="fas fa-info-circle"></i> Empresa sem créditos fiscais (ST/monofásico) — decisão de compra apenas por preço e prazo.</div>';
+    }
+    h+='</div>';
+    if(a.alertas.length){
+      h+='<h4 style="margin:6px 0"><i class="fas fa-exclamation-triangle" style="color:var(--red)"></i> Alertas de conformidade</h4>';
+      h+='<div class="table-wrap"><table class="data-table" style="min-width:0;font-size:.8rem"><thead><tr><th>NF</th><th>Fornecedor</th><th>Produto</th><th style="text-align:right">Preço na nota</th><th style="text-align:right">Mediana hist.</th><th></th></tr></thead><tbody>';
+      for(const al of a.alertas)h+='<tr><td>'+al.numero+'</td><td>'+al.emitente+'</td><td>'+al.produto+'</td><td style="text-align:right;color:var(--red)"><b>'+fmt(al.vunit)+'</b> ('+al.pct+'%)</td><td style="text-align:right">'+fmt(al.mediana)+'</td><td style="color:var(--red);font-size:.75rem">'+al.msg+'</td></tr>';
+      h+='</tbody></table></div>';
+    }else{
+      h+='<p style="color:var(--text3);font-size:.82rem"><i class="fas fa-check-circle" style="color:var(--green)"></i> Nenhum alerta de preço no mês ('+a.notas_processadas+' notas no histórico fiscal).</p>';
+    }
+    el.innerHTML=h;
+  }catch(e){el.innerHTML='<p style="color:var(--text3)">Análise fiscal indisponível.</p>';}
+}
+async function reprocessarFiscal(){
+  toast('Reprocessando XMLs das notas...','info');
+  const r=await api('POST','/api/analise-fiscal/reprocessar');
+  if(r.error){toast(r.error,'error');return;}
+  toast(r.notas+' notas processadas ('+r.itens+' itens fiscais)');
+  renderAnaliseFiscal();
+}
+document.getElementById('formFiscalCfg').addEventListener('submit',async function(e){
+  e.preventDefault();
+  await api('PUT','/api/config',{
+    fiscal_cbs_aliq:document.getElementById('cfg-fiscal-cbs').value||'8.8',
+    fiscal_alerta_preco_pct:document.getElementById('cfg-fiscal-alerta').value||'60',
+  });
+  toast('Parâmetros fiscais salvos!');renderAnaliseFiscal();
+});
 // === FECHAMENTOS DE FRETE ===
 let FECHAMENTOS=[],fechPreview=null,fechQueue=[];
 async function renderFechamentos(){
@@ -1199,7 +1292,7 @@ async function renderFiscal(){
 }
 async function delFisc(id){if(!confirm('Excluir lançamento fiscal?'))return;await api('DELETE','/api/fiscal/'+id);toast('Excluído!');renderFiscal();}
 // REFRESH
-async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas(),renderLicitacoes(),renderFechamentos(),renderDocumentos(),renderPedidos()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
+async function refreshAll(){await renderConfig();COLABS=await api('GET','/api/colaboradores');await Promise.all([renderDashboardGeral(),renderAcerto(),renderFat(),renderContasPagar(),renderAChegar(),renderDrogaria(),renderCheques(),renderContaDono(),renderColaboradores(),renderCaixas(),renderMovimentacao(),renderFiscal(),renderLembretes(),renderVeiculos(),renderAbastecimentos(),renderSomas(),renderFolha(),renderNotasNfe(),renderFornecedoresCad(),renderAlertas(),renderLicitacoes(),renderFechamentos(),renderDocumentos(),renderPedidos(),renderAnaliseFiscal()]);fillTelegramCfg();await Promise.all([renderDistribuicao(),renderDashboard()]);if(currentUser&&currentUser.role==='admin'){renderUsuarios();renderAuditoria();}}
 
 // === VEICULOS ===
 let VEICULOS=[];
@@ -4289,6 +4382,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal};
 checkAuth();
 })();

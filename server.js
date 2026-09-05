@@ -1016,6 +1016,39 @@ app.delete('/api/documentos/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// === ANÁLISE FISCAL DE COMPRAS ===
+const fiscal = require('./fiscal');
+app.get('/api/analise-fiscal/fornecedor/:cnpj', (req, res) => {
+  try {
+    const p = fiscal.perfilFornecedor(req.emp, req.params.cnpj);
+    if (!p) return res.status(404).json({ error: 'Fornecedor sem histórico de notas com XML' });
+    res.json(p);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/analise-fiscal/fornecedores', (req, res) => {
+  try { res.json(fiscal.listarPerfis(req.emp)); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/analise-fiscal/alertas', (req, res) => {
+  try {
+    const mes = req.query.mes || new Date().toISOString().substring(0, 7);
+    res.json(fiscal.alertasMes(req.emp, mes));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/analise-fiscal/reprocessar', (req, res) => {
+  try {
+    const r = fiscal.reprocessarTudo(req.emp);
+    db.addAuditLog(req.emp, req.user.nome, 'reprocessou', 'Análise Fiscal', r.notas + ' notas, ' + r.itens + ' itens');
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/pedidos/:id/analise', (req, res) => {
+  try {
+    const pedido = db.getPedido(req.emp, req.params.id);
+    if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado' });
+    res.json(fiscal.analisarPedido(req.emp, pedido));
+  } catch (e) { console.error('Erro análise fiscal:', e.message); res.status(500).json({ error: e.message }); }
+});
+
 // === PEDIDOS (aguardando faturamento) ===
 const pedidosIA = require('./pedidos');
 function pedidosDir(slug) {
