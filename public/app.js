@@ -252,12 +252,20 @@ async function renderAcerto(){
 }
 document.getElementById('formFat').addEventListener('submit',async function(e){
   e.preventDefault();
-  await api('POST','/api/acerto',{data:document.getElementById('fat-data').value,descricao:document.getElementById('fat-desc').value,entrada:0,saida:parseFloat(document.getElementById('fat-valor').value)||0,categoria:document.getElementById('fat-cat').value,fornecedor:'',recorrente:1,tipo_nota:document.getElementById('fat-nota').value});
-  this.reset();setToday('fat-data');populateCats();toast('Gasto recorrente salvo!');refreshAll();
+  // Lançamento direto no Fat: vai para a tabela própria do Fat, NÃO entra no Acerto
+  const r=await api('POST','/api/fat',{data:document.getElementById('fat-data').value,descricao:document.getElementById('fat-desc').value,valor:parseFloat(document.getElementById('fat-valor').value)||0,categoria:document.getElementById('fat-cat').value,tipo_nota:document.getElementById('fat-nota').value});
+  if(r.error){toast(r.error,'error');return;}
+  this.reset();setToday('fat-data');populateCats();toast('Lançado no Fat (não entra no Acerto)!');refreshAll();
 });
 async function renderFat(){
   let items=await api('GET','/api/fat?mes='+gM()),total=0;
-  document.querySelector('#tabelaFat tbody').innerHTML=items.map(i=>{total+=i.saida||0;return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td><td><button class="btn-edit" onclick="NR.editRow(\'fat\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';}).join('');
+  document.querySelector('#tabelaFat tbody').innerHTML=items.map(i=>{total+=i.saida||0;
+    let direto=i.origem==='fat';
+    let selo=direto?'<span class="badge badge-purple" style="font-size:.62rem;padding:1px 7px;margin-left:6px" title="Lançado direto no Fat — não entra no Acerto">Fat</span>':'<span class="badge" style="font-size:.62rem;padding:1px 7px;margin-left:6px;background:var(--bg3);color:var(--text3)" title="Marcado como recorrente no Acerto Financeiro">Acerto</span>';
+    let acoes=direto
+      ?'<button class="btn-edit" onclick="NR.editRow(\'fat-direto\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delFatDir(\''+i.id+'\')"><i class="fas fa-trash"></i></button>'
+      :'<button class="btn-edit" onclick="NR.editRow(\'fat\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button>';
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+selo+'</td><td class="tipo-saida">'+fmt(i.saida)+'</td><td>'+i.categoria+'</td><td>'+acoes+'</td></tr>';}).join('');
   document.getElementById('fat-total').textContent=fmt(total);
   // Chart por categoria
   let agr={};items.forEach(i=>{let c=i.categoria||'Outros';agr[c]=(agr[c]||0)+(i.saida||0);});
@@ -620,6 +628,7 @@ async function loadBackupStatus(){try{let s=await api('GET','/api/backup/status'
 async function del(c,id){if(!confirm('Excluir?'))return;await api('DELETE','/api/'+c+'/'+id);toast('Excluído!','info');refreshAll();}
 async function delAc(id){if(!confirm('Excluir?'))return;await api('DELETE','/api/acerto/'+id);toast('Excluído!','info');refreshAll();}
 async function delC(id){if(!confirm('Remover?'))return;await api('DELETE','/api/colaboradores/'+id);toast('Removido!','info');refreshAll();}
+async function delFatDir(id){if(!confirm('Excluir este lançamento do Fat?'))return;await api('DELETE','/api/fat/'+id);toast('Excluído!','info');refreshAll();}
 async function delCP(id){
   let conta=chequePagContas.find(c=>c.id===id);
   if(conta&&conta.grupo_parcela){
@@ -2115,7 +2124,7 @@ async function salvarParcelas(){
 // === INLINE EDITING ===
 let editCache={};
 function editRow(section,id){
-  const tableMap = {'acerto':'#tabelaAcerto','fat':'#tabelaFat','contas-pagar':'#tabelaContasPagar','drogaria':'#tabelaDrogaria','conta-dono':'#tabelaDono','movimentacao':'#tabelaMov','cheques':'#tabelaCheques','fiscal':'#tabelaFiscal'};
+  const tableMap = {'acerto':'#tabelaAcerto','fat':'#tabelaFat','fat-direto':'#tabelaFat','contas-pagar':'#tabelaContasPagar','drogaria':'#tabelaDrogaria','conta-dono':'#tabelaDono','movimentacao':'#tabelaMov','cheques':'#tabelaCheques','fiscal':'#tabelaFiscal'};
   const sel = tableMap[section] || '';
   const tr=document.querySelector(sel+' tr[data-id="'+id+'"]');
   if(!tr)return;
@@ -2173,6 +2182,13 @@ function getEditFields(section,d){
       {field:'categoria',type:'select',value:d.categoria,options:catOpts},
       {skip:true}
     ];
+    case 'fat-direto':return[
+      {field:'data',type:'date',value:d.data?d.data.split('T')[0]:''},
+      {field:'descricao',type:'text',value:d.descricao},
+      {field:'valor',type:'number',value:d.valor||d.saida||0,step:'0.01'},
+      {field:'categoria',type:'select',value:d.categoria,options:catOpts},
+      {skip:true}
+    ];
     case 'contas-pagar':return[
       {field:'vencimento',type:'date',value:d.vencimento?d.vencimento.split('T')[0]:''},
       {field:'descricao',type:'text',value:d.descricao},
@@ -2223,7 +2239,7 @@ function getEditFields(section,d){
   }
 }
 async function saveRow(section,id){
-  const tableMap = {'acerto':'#tabelaAcerto','fat':'#tabelaFat','contas-pagar':'#tabelaContasPagar','drogaria':'#tabelaDrogaria','conta-dono':'#tabelaDono','movimentacao':'#tabelaMov','cheques':'#tabelaCheques','fiscal':'#tabelaFiscal'};
+  const tableMap = {'acerto':'#tabelaAcerto','fat':'#tabelaFat','fat-direto':'#tabelaFat','contas-pagar':'#tabelaContasPagar','drogaria':'#tabelaDrogaria','conta-dono':'#tabelaDono','movimentacao':'#tabelaMov','cheques':'#tabelaCheques','fiscal':'#tabelaFiscal'};
   const sel = tableMap[section] || '';
   const tr=document.querySelector(sel+' tr[data-id="'+id+'"]');
   if(!tr)return;
@@ -2240,7 +2256,7 @@ async function saveRow(section,id){
     const d2=updates.vencimento||editCache.data.vencimento;
     if(d1&&d2)updates.dias=Math.max(Math.round((new Date(d2)-new Date(d1))/86400000),1);
   }
-  const apiMap={'acerto':'acerto','fat':'acerto','contas-pagar':'contas-pagar','drogaria':'drogaria','conta-dono':'conta-dono','movimentacao':'movimentacao','cheques':'cheques','fiscal':'fiscal'};
+  const apiMap={'acerto':'acerto','fat':'acerto','fat-direto':'fat','contas-pagar':'contas-pagar','drogaria':'drogaria','conta-dono':'conta-dono','movimentacao':'movimentacao','cheques':'cheques','fiscal':'fiscal'};
   const endpoint=apiMap[section];
   if(!endpoint)return;
   try{
@@ -4427,6 +4443,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal,calcSimNota};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal,calcSimNota,delFatDir};
 checkAuth();
 })();

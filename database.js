@@ -462,6 +462,16 @@ function initDB(dbInstance) {
     criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   try { dbInstance.run("ALTER TABLE pedidos ADD COLUMN forma_pagamento TEXT DEFAULT ''"); } catch(e) {}
+  // Tabela Fat Direto (lançamentos feitos direto na aba Fat — NÃO entram no Acerto)
+  dbInstance.run(`CREATE TABLE IF NOT EXISTS fat_direto (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    valor REAL NOT NULL DEFAULT 0,
+    categoria TEXT DEFAULT 'Outros',
+    tipo_nota TEXT DEFAULT '',
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
   // Tabela Itens Fiscais (análise fiscal de compras — extraídos dos XMLs das NF-e)
   dbInstance.run(`CREATE TABLE IF NOT EXISTS fiscal_itens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -661,6 +671,26 @@ module.exports = {
     if (mes) return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' AND data LIKE ? ORDER BY data DESC", [mes + '%']);
     return query(slug, "SELECT * FROM acerto WHERE categoria='Abastecimento' ORDER BY data DESC");
   },
+  // -- Fat Direto (não entra no acerto) --
+  getFatDireto(slug, mes) {
+    if (mes) return query(slug, 'SELECT * FROM fat_direto WHERE data LIKE ? ORDER BY data DESC', [mes + '%']);
+    return query(slug, 'SELECT * FROM fat_direto ORDER BY data DESC');
+  },
+  addFatDireto(slug, f) {
+    run(slug, 'INSERT INTO fat_direto (id,data,descricao,valor,categoria,tipo_nota) VALUES (?,?,?,?,?,?)',
+      [f.id, f.data, f.descricao, f.valor || 0, f.categoria || 'Outros', f.tipo_nota || '']);
+  },
+  updateFatDireto(slug, id, fields) {
+    const sets = [], vals = [];
+    for (const k of ['data', 'descricao', 'valor', 'categoria', 'tipo_nota']) {
+      if (fields[k] !== undefined) { sets.push(k + '=?'); vals.push(fields[k]); }
+    }
+    if (!sets.length) return;
+    vals.push(id);
+    run(slug, 'UPDATE fat_direto SET ' + sets.join(',') + ' WHERE id=?', vals);
+  },
+  delFatDireto(slug, id) { run(slug, 'DELETE FROM fat_direto WHERE id=?', [id]); },
+
   getRecorrentes(slug, mes) {
     if (mes) return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 AND data LIKE ? ORDER BY data DESC', [mes + '%']);
     return query(slug, 'SELECT * FROM acerto WHERE recorrente=1 ORDER BY data DESC');
@@ -1024,7 +1054,7 @@ module.exports = {
 
   // -- Clear All --
   clearAcerto(slug) { run(slug, 'DELETE FROM acerto'); },
-  clearFat(slug) { run(slug, "DELETE FROM acerto WHERE recorrente=1"); },
+  clearFat(slug) { run(slug, "DELETE FROM acerto WHERE recorrente=1"); run(slug, 'DELETE FROM fat_direto'); },
   clearContasPagar(slug) { run(slug, 'DELETE FROM contas_pagar'); },
   clearDrogaria(slug) { run(slug, "DELETE FROM lancamentos WHERE origem='drogaria'"); },
   clearCheques(slug) { run(slug, 'DELETE FROM cheques'); },

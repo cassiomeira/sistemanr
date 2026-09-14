@@ -164,7 +164,32 @@ app.delete('/api/acerto/:id', (req, res) => {
 });
 
 // === FAT (RECORRENTES) ===
-app.get('/api/fat', (req, res) => res.json(db.getRecorrentes(req.emp, req.query.mes)));
+// Fat = lançamentos diretos (tabela própria, NÃO entram no acerto) + itens marcados recorrentes no acerto
+app.get('/api/fat', (req, res) => {
+  const diretos = db.getFatDireto(req.emp, req.query.mes).map(i => ({ ...i, saida: i.valor, recorrente: 1, origem: 'fat' }));
+  const doAcerto = db.getRecorrentes(req.emp, req.query.mes).map(i => ({ ...i, origem: 'acerto' }));
+  res.json([...diretos, ...doAcerto].sort((a, b) => String(b.data).localeCompare(String(a.data))));
+});
+app.post('/api/fat', (req, res) => {
+  const b = req.body;
+  if (!b.descricao || !b.data) return res.status(400).json({ error: 'Data e descrição são obrigatórias' });
+  const item = { id: uid(), data: b.data, descricao: b.descricao, valor: parseFloat(b.valor) || 0, categoria: b.categoria || 'Outros', tipo_nota: b.tipo_nota || '' };
+  db.addFatDireto(req.emp, item);
+  db.addAuditLog(req.emp, req.user.nome, 'criou', 'Fat', item.descricao + ' - ' + item.valor);
+  res.json({ ok: true, id: item.id });
+});
+app.put('/api/fat/:id', (req, res) => {
+  const b = { ...req.body };
+  if (b.saida !== undefined && b.valor === undefined) b.valor = b.saida; // edição inline usa "saida"
+  db.updateFatDireto(req.emp, req.params.id, b);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Fat', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+app.delete('/api/fat/:id', (req, res) => {
+  db.delFatDireto(req.emp, req.params.id);
+  db.addAuditLog(req.emp, req.user.nome, 'excluiu', 'Fat', 'ID: ' + req.params.id);
+  res.json({ ok: true });
+});
 
 // === ABASTECIMENTOS ===
 app.get('/api/abastecimentos', (req, res) => res.json(db.getAbastecimentos(req.emp, req.query.mes)));
