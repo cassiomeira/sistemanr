@@ -2148,8 +2148,11 @@ function editRow(section,id){
   lastCell.innerHTML='<div style="display:flex;gap:4px"><button class="btn-save" onclick="NR.saveRow(\''+section+'\',\''+id+'\')" title="Salvar"><i class="fas fa-check"></i></button><button class="btn-cancel" onclick="NR.cancelEdit(\''+section+'\')" title="Cancelar"><i class="fas fa-times"></i></button></div>';
 }
 function getEditFields(section,d){
-  const catOpts=[{v:'',l:'\u2014'}].concat(CFG.categoriasLoja.map(c=>({v:c,l:c})));
-  const fornOpts=[{v:'',l:'\u2014'}].concat((CFG.fornecedores||[]).map(f=>({v:f,l:f})));
+  // Garante que o valor atual do registro sempre exista como op\u00e7\u00e3o \u2014 sem isso,
+  // um fornecedor/categoria fora da lista cadastrada era apagado ao salvar a edi\u00e7\u00e3o
+  const comAtual=(opts,val)=>{val=val||'';return(val&&!opts.some(o=>o.v===val))?opts.concat([{v:val,l:val}]):opts;};
+  const catOpts=comAtual([{v:'',l:'\u2014'}].concat(CFG.categoriasLoja.map(c=>({v:c,l:c}))),d.categoria);
+  const fornOpts=comAtual([{v:'',l:'\u2014'}].concat((CFG.fornecedores||[]).map(f=>({v:f,l:f}))),d.fornecedor);
   const dfOpts=[{v:'',l:'\u2014'},{v:'D',l:'D'},{v:'F',l:'F'}];
   const recOpts=[{v:'0',l:'N\u00e3o'},{v:'1',l:'Sim'}];
   const tipoOpts=[{v:'entrada',l:'Cr\u00e9dito'},{v:'saida',l:'D\u00e9bito'}];
