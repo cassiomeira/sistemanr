@@ -190,11 +190,13 @@ function populateCats(){
   let acCatList=document.getElementById('ac-cat-list'); if(acCatList) acCatList.innerHTML=catDatalistOpts;
   let cpCatList=document.getElementById('cp-cat-list'); if(cpCatList) cpCatList.innerHTML=catDatalistOpts;
   let fatCatList=document.getElementById('fat-cat-list'); if(fatCatList) fatCatList.innerHTML=catDatalistOpts;
+  let movAcCatList=document.getElementById('mov-ac-cat-list'); if(movAcCatList) movAcCatList.innerHTML=catDatalistOpts;
   let drogCat=document.getElementById('drog-cat');if(drogCat)drogCat.innerHTML='<option value="">—</option>'+CFG.categoriasDrog.map(c=>'<option>'+c+'</option>').join('');
   document.getElementById('rel-cat').innerHTML='<option value="">Todas</option>'+CFG.categoriasLoja.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
   let fornDatalistOpts=(CFG.fornecedores||[]).map(f=>'<option value="'+f+'">').join('');
   let acFornList=document.getElementById('ac-forn-list'); if(acFornList) acFornList.innerHTML=fornDatalistOpts;
   let cpFornList=document.getElementById('cp-forn-list'); if(cpFornList) cpFornList.innerHTML=fornDatalistOpts;
+  let movAcFornList=document.getElementById('mov-ac-forn-list'); if(movAcFornList) movAcFornList.innerHTML=fornDatalistOpts;
 }
 async function addCatInline(selId,tipo){
   let v=prompt('Nome da nova categoria:');if(!v||!v.trim())return;v=v.trim();
@@ -1557,9 +1559,16 @@ document.getElementById('formMov').addEventListener('submit',async function(e){
   let sai=parseFloat(document.getElementById('mov-saida').value)||0;
   let dif=parseFloat(document.getElementById('mov-diferenca-form').value)||0;
   if(!ent&&!sai&&!dif){toast('Preencha entrada, saída ou diferença','error');return;}
-  await api('POST','/api/movimentacao',{data:document.getElementById('mov-data').value,descricao:document.getElementById('mov-desc').value,entrada:ent,saida:sai,diferenca:dif});
+  let data=document.getElementById('mov-data').value,desc=document.getElementById('mov-desc').value;
+  let noAcerto=document.getElementById('mov-acerto').value==='1';
+  if(noAcerto&&!ent&&!sai){toast('Para lançar no Acerto informe entrada ou saída','error');return;}
+  await api('POST','/api/movimentacao',{data,descricao:desc,entrada:ent,saida:sai,diferenca:dif});
+  if(noAcerto){
+    await api('POST','/api/acerto',{data,descricao:desc,entrada:ent,saida:sai,categoria:document.getElementById('mov-ac-cat').value,fornecedor:document.getElementById('mov-ac-forn').value,recorrente:document.getElementById('mov-ac-rec').value==='1',tipo_nota:document.getElementById('mov-ac-nota').value,a_chegar:document.getElementById('mov-ac-achegar').value==='1'});
+  }
   this.reset();setToday('mov-data');document.getElementById('mov-entrada').value='0';document.getElementById('mov-saida').value='0';document.getElementById('mov-diferenca-form').value='0';
-  toast('Lançamento salvo!');refreshAll();
+  document.getElementById('movAcertoFields').style.display='none';
+  toast(noAcerto?'Lançado na Movimentação e no Acerto!':'Lançamento salvo!');refreshAll();
 });
 async function renderMovimentacao(){
   let mes=gM();
