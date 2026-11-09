@@ -513,7 +513,19 @@
                     <div class="form-group"><label>Saída (R$)</label><input type="number" id="mov-saida" step="0.01" min="0" value="0"></div>
                     <div class="form-group"><label>Diferença (R$)</label><input type="number" id="mov-diferenca-form" step="0.01" value="0"></div>
                     <div class="form-group"><label>Lançar no Acerto?</label><select id="mov-acerto" onchange="document.getElementById('movAcertoFields').style.display=this.value==='1'?'block':'none'"><option value="0">Não</option><option value="1">Sim</option></select></div>
+                    <div class="form-group"><label>Lançar na Conta do Celso?</label><select id="mov-dono" onchange="NR.toggleMovDono(this.value==='1')"><option value="0">Não</option><option value="1">Sim</option></select></div>
                     <div class="form-group form-actions"><label>&nbsp;</label><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button></div>
+                    <!-- CAMPOS DA CONTA DO CELSO (ocultos por padrão) -->
+                    <div id="movDonoFields" style="display:none;grid-column:1/-1">
+                        <div style="border-top:1px solid var(--border);margin:8px 0 12px;padding-top:12px">
+                            <span style="font-weight:600;color:var(--blue);font-size:13px"><i class="fas fa-user-tie"></i> Dados da Conta do Celso</span>
+                            <span style="font-size:12px;color:var(--text3);margin-left:8px">A data e a descrição acima serão copiadas. O valor vem da entrada/saída, mas pode ser ajustado.</span>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group"><label>Tipo</label><select id="mov-dono-tipo"><option value="debito">Débito (Celso deve)</option><option value="credito">Crédito (Celso pagou)</option></select></div>
+                            <div class="form-group"><label>Valor (R$)</label><input type="number" id="mov-dono-valor" step="0.01" min="0" placeholder="0,00"></div>
+                        </div>
+                    </div>
                     <!-- CAMPOS DO ACERTO (ocultos por padrão) -->
                     <div id="movAcertoFields" style="display:none;grid-column:1/-1">
                         <div style="border-top:1px solid var(--border);margin:8px 0 12px;padding-top:12px">
@@ -1606,6 +1618,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=121"></script>
+    <script src="app.js?v=122"></script>
 </body>
 </html>
