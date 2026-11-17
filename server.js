@@ -772,13 +772,35 @@ function parseHolerite(text) {
 const nfe = require('./nfe');
 app.get('/api/nfe/config', adminOnly, (req, res) => {
   const cfg = nfe.getNfeConfig(req.emp);
-  res.json({ cnpj: cfg.cnpj, uf: cfg.uf, auto: cfg.auto, temCert: cfg.temCert, temSenha: !!cfg.senha, ultNSU: cfg.ultNSU, ultimaConsulta: cfg.ultimaConsulta, ultimoErro: cfg.ultimoErro, proxConsulta: cfg.proxConsulta });
+  const cert = cfg.temCert ? nfe.certInfo(req.emp) : {};
+  res.json({ cnpj: cfg.cnpj, uf: cfg.uf, auto: cfg.auto, temCert: cfg.temCert, temSenha: !!cfg.senha, ultNSU: cfg.ultNSU, ultimaConsulta: cfg.ultimaConsulta, ultimoErro: cfg.ultimoErro, proxConsulta: cfg.proxConsulta,
+    certNome: cert.nome || '', certCnpj: cert.cnpj || '', certValidoAte: cert.validoAte || '', certErro: cert.erro || '' });
 });
 app.post('/api/nfe/config', adminOnly, upload.single('pfx'), (req, res) => {
   try {
+    const atual = nfe.getNfeConfig(req.emp);
+    const senha = req.body.senha || atual.senha;
+    let cnpj = req.body.cnpj !== undefined ? (req.body.cnpj || '').replace(/\D/g, '') : atual.cnpj;
+    // Confere certificado + senha antes de gravar qualquer coisa
+    let buf = req.file ? req.file.buffer : null;
+    if (!buf && atual.temCert) { try { buf = fs.readFileSync(nfe.certPath(req.emp)); } catch (e) {} }
+    if (buf && (req.file || req.body.senha)) {
+      const info = nfe.lerCertificado(buf, senha);
+      if (info.erro) return res.status(400).json({ error: info.erro });
+      if (info.cnpj) {
+        if (!cnpj || cnpj.length !== 14) cnpj = info.cnpj;
+        else if (info.cnpj.slice(0, 8) !== cnpj.slice(0, 8)) return res.status(400).json({ error: 'Este certificado é do CNPJ ' + info.cnpj + ' (' + info.nome + '), diferente do CNPJ informado ' + cnpj + '.' });
+      }
+    } else if (buf && cnpj && cnpj.length !== 14) {
+      const info = nfe.lerCertificado(buf, senha);
+      if (info.cnpj) cnpj = info.cnpj;
+    }
+    if (cnpj && cnpj.length !== 14) return res.status(400).json({ error: 'CNPJ deve ter 14 dígitos (informado: ' + cnpj.length + ').' });
     if (req.file) fs.writeFileSync(nfe.certPath(req.emp), req.file.buffer);
     if (req.body.senha) db.updateConfig(req.emp, 'nfe_senha', req.body.senha);
-    if (req.body.cnpj !== undefined) db.updateConfig(req.emp, 'nfe_cnpj', (req.body.cnpj || '').replace(/\D/g, ''));
+    if (cnpj !== atual.cnpj) db.updateConfig(req.emp, 'nfe_cnpj', cnpj);
+    // Certificado/CNPJ novo: limpa erro e espera antigos para a próxima consulta automática tentar já
+    if (req.file || cnpj !== atual.cnpj) { db.updateConfig(req.emp, 'nfe_ultimo_erro', ''); db.updateConfig(req.emp, 'nfe_prox_consulta', ''); }
     if (req.body.uf) db.updateConfig(req.emp, 'nfe_uf', req.body.uf);
     if (req.body.auto !== undefined) db.updateConfig(req.emp, 'nfe_auto', req.body.auto === '1' || req.body.auto === true || req.body.auto === 'true' ? '1' : '0');
     db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Notas CNPJ', 'Atualizou configuração NF-e' + (req.file ? ' (novo certificado)' : ''));

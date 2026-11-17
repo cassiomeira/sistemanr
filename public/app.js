@@ -3067,6 +3067,7 @@ async function renderNotasNfe(semFetch){
     let cfg=await api('GET','/api/nfe/config');
     let info=[];
     if(!cfg.temCert)info.push('⚠️ Certificado não enviado');
+    if(cfg.certValidoAte){let dias=Math.floor((new Date(cfg.certValidoAte).getTime()-Date.now())/86400000);if(dias<0)info.push('⛔ Certificado vencido em '+new Date(cfg.certValidoAte).toLocaleDateString('pt-BR'));else if(dias<=30)info.push('⚠️ Certificado vence em '+dias+' dia(s)');}
     if(cfg.ultimaConsulta)info.push('Última consulta: '+new Date(cfg.ultimaConsulta).toLocaleString('pt-BR'));
     if(cfg.proxConsulta&&new Date(cfg.proxConsulta).getTime()>Date.now())info.push('⏳ Em dia — próxima consulta liberada às '+new Date(cfg.proxConsulta).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}));
     if(cfg.auto)info.push('Consulta automática ativa (a cada hora)');
@@ -3087,6 +3088,16 @@ async function nfeConsultar(){
   btn.disabled=false;btn.innerHTML='<i class="fas fa-sync-alt"></i> Consultar Agora';
   renderNotasNfe();
 }
+function certStatusHtml(cfg){
+  if(!cfg.temCert)return '';
+  if(cfg.certErro)return '<span style="color:var(--red)"><i class="fas fa-times-circle"></i> '+cfg.certErro+'</span>';
+  if(!cfg.certValidoAte)return '';
+  let dias=Math.floor((new Date(cfg.certValidoAte).getTime()-Date.now())/86400000),dt=new Date(cfg.certValidoAte).toLocaleDateString('pt-BR');
+  let quem=(cfg.certNome||'')+(cfg.certCnpj?' ('+fmtCnpj(cfg.certCnpj)+')':'');
+  if(dias<0)return '<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Certificado de '+quem+' VENCIDO em '+dt+' — envie o certificado renovado</span>';
+  if(dias<=30)return '<span style="color:var(--amber)"><i class="fas fa-exclamation-triangle"></i> Certificado de '+quem+' vence em '+dt+' ('+dias+' dias)</span>';
+  return '<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Certificado de '+quem+', válido até '+dt+'</span>';
+}
 async function openNfeConfig(){
   try{
     let cfg=await api('GET','/api/nfe/config');
@@ -3098,7 +3109,10 @@ async function openNfeConfig(){
     let st=[];
     st.push(cfg.temCert?'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Certificado enviado</span>':'<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Certificado ainda não enviado</span>');
     st.push(cfg.temSenha?'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Senha salva</span>':'<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Senha não salva</span>');
+    let cs=certStatusHtml(cfg);if(cs)st.push(cs);
+    if(cfg.certCnpj&&cfg.cnpj&&cfg.certCnpj!==cfg.cnpj)st.push('<span style="color:var(--amber)"><i class="fas fa-exclamation-triangle"></i> CNPJ configurado ('+cfg.cnpj+') diferente do certificado ('+cfg.certCnpj+')</span>');
     if(cfg.ultimaConsulta)st.push('Última consulta: '+new Date(cfg.ultimaConsulta).toLocaleString('pt-BR'));
+    if(cfg.ultimoErro)st.push('<span style="color:var(--red)">Último erro: '+cfg.ultimoErro+'</span>');
     document.getElementById('nfe-cfg-status').innerHTML=st.join('<br>');
   }catch(e){toast('Apenas administradores podem configurar','error');return;}
   document.getElementById('modalNfeConfig').style.display='flex';

@@ -14,6 +14,44 @@ const uid = () => 'nf_' + crypto.randomBytes(6).toString('hex');
 
 function certPath(slug) { return path.join(certsDir, slug + '.pfx'); }
 
+let forge = null;
+try { forge = require('node-forge'); } catch (e) { /* dependência transitiva do node-mde */ }
+
+// Abre o .pfx e devolve titular, CNPJ e validade. { erro } quando a senha não confere ou o arquivo é inválido.
+function lerCertificado(buf, senha) {
+  if (!forge) return {};
+  try {
+    const p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(buf.toString('binary')), senha || '');
+    const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || [];
+    const localKeyIds = new Set(keyBags.map(b => b.attributes && b.attributes.localKeyId && b.attributes.localKeyId[0]).filter(Boolean));
+    const certs = (p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] || []).filter(b => b.cert);
+    // O certificado do titular é o que tem a chave privada (ou, na falta, o que tem CNPJ no CN)
+    const titular = certs.find(b => b.attributes && b.attributes.localKeyId && localKeyIds.has(b.attributes.localKeyId[0]))
+      || certs.find(b => /:\d{14}$/.test(((b.cert.subject.getField('CN') || {}).value) || '')) || certs[0];
+    if (!titular) return { erro: 'Nenhum certificado encontrado no arquivo .pfx' };
+    const cn = (titular.cert.subject.getField('CN') || {}).value || '';
+    const m = cn.match(/^(.*):(\d{14})$/);
+    return { nome: m ? m[1] : cn, cnpj: m ? m[2] : '', validoAte: titular.cert.validity.notAfter.toISOString(), temChave: keyBags.length > 0 };
+  } catch (e) {
+    return { erro: /mac|password|invalid/i.test(e.message) ? 'Senha do certificado não confere' : 'Arquivo de certificado inválido: ' + e.message };
+  }
+}
+
+function certInfo(slug) {
+  try { return lerCertificado(fs.readFileSync(certPath(slug)), db.getConfig(slug).nfe_senha || ''); }
+  catch (e) { return {}; }
+}
+
+const fmtData = iso => iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+
+// Traduz respostas cruas da SEFAZ (ex.: página HTML de 403) em mensagem legível
+function traduzirErro(msg) {
+  msg = String(msg || '');
+  if (/403|Forbidden/i.test(msg)) return 'SEFAZ recusou o certificado (403 - acesso negado). Verifique se o certificado digital está dentro da validade e se é do mesmo CNPJ configurado.';
+  if (/<html/i.test(msg)) return 'SEFAZ devolveu uma página de erro: ' + msg.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  return msg;
+}
+
 function getNfeConfig(slug) {
   const cfg = db.getConfig(slug);
   return {
@@ -138,6 +176,19 @@ async function consultarNotas(slug, forcar = false) {
   let pfx;
   try { pfx = fs.readFileSync(certPath(slug)); } catch (e) { return { error: 'Erro ao ler certificado: ' + e.message }; }
 
+  // Valida o certificado antes de ir à SEFAZ: mensagens claras em vez de 403/215 crus
+  const info = lerCertificado(pfx, cfg.senha);
+  const falhaCert = msg => { db.updateConfig(slug, 'nfe_ultimo_erro', msg); db.updateConfig(slug, 'nfe_ultima_consulta', new Date().toISOString()); return { error: msg }; };
+  if (info.erro) return falhaCert(info.erro);
+  if (info.validoAte && new Date(info.validoAte).getTime() < Date.now()) return falhaCert('Certificado digital vencido em ' + fmtData(info.validoAte) + '. Envie o certificado renovado em Configurar Certificado.');
+  if (cfg.cnpj.length !== 14 && info.cnpj) {
+    // CNPJ digitado errado (ex.: dígito a mais): usa o do próprio certificado
+    cfg.cnpj = info.cnpj;
+    db.updateConfig(slug, 'nfe_cnpj', info.cnpj);
+  }
+  if (cfg.cnpj.length !== 14) return falhaCert('CNPJ configurado inválido (' + cfg.cnpj.length + ' dígitos). Corrija em Configurar Certificado.');
+  if (info.cnpj && info.cnpj.slice(0, 8) !== cfg.cnpj.slice(0, 8)) return falhaCert('O certificado é do CNPJ ' + info.cnpj + ' mas o CNPJ configurado é ' + cfg.cnpj + '. Corrija em Configurar Certificado.');
+
   const dist = new DistribuicaoDFe({ pfx, passphrase: cfg.senha, cnpj: cfg.cnpj, cUFAutor: cfg.uf, tpAmb: '1' });
   let ultNSU = cfg.ultNSU;
   let novas = 0, atualizadas = 0;
@@ -177,7 +228,7 @@ async function consultarNotas(slug, forcar = false) {
 
   db.updateConfig(slug, 'nfe_ult_nsu', ultNSU);
   db.updateConfig(slug, 'nfe_ultima_consulta', new Date().toISOString());
-  db.updateConfig(slug, 'nfe_ultimo_erro', erro || '');
+  db.updateConfig(slug, 'nfe_ultimo_erro', erro ? traduzirErro(erro) : '');
   // Se já está em dia ou tomou limite, agenda a próxima consulta para daqui 1h (regra SEFAZ).
   // Se ainda há backlog (parou pelo teto de iterações), pode consultar de novo em breve.
   if (emDia || limitado) {
@@ -208,7 +259,7 @@ async function consultarNotas(slug, forcar = false) {
 
   console.log(`NFe [${slug}]: ${novas} nova(s), ${atualizadas} completada(s)${erro ? ' | ERRO: ' + erro : ''}`);
   if (novas > 0) telegram.notificarNotasNovas(slug, novas).catch(() => {});
-  return { ok: !erro, novas, atualizadas, error: erro };
+  return { ok: !erro, novas, atualizadas, error: erro ? traduzirErro(erro) : erro };
 }
 
 // Consulta automática (cron) para todas as empresas com nfe_auto=1
@@ -224,4 +275,4 @@ async function consultarTodasEmpresas() {
   }
 }
 
-module.exports = { getNfeConfig, certPath, consultarNotas, consultarTodasEmpresas };
+module.exports = { getNfeConfig, certPath, consultarNotas, consultarTodasEmpresas, lerCertificado, certInfo };
