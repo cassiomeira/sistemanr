@@ -100,7 +100,9 @@ async function conectar() {
         } else if (lerConfig().ativo) {
           tentativas++;
           const espera = Math.min(60000, 3000 * tentativas);
-          estado.erro = 'Conexão caiu (código ' + code + '). Reconectando em ' + Math.round(espera / 1000) + 's...';
+          const motivo = code === 440 ? 'sessão aberta em outro lugar (normal por alguns segundos durante um deploy)' : code === 408 ? 'tempo esgotado' : code === 428 ? 'conexão perdida' : code === 515 ? 'reinício pedido pelo WhatsApp' : 'código ' + code;
+          estado.erro = 'Conexão caiu (' + motivo + '). Reconectando em ' + Math.round(espera / 1000) + 's...';
+          registrar('conexao', 'Conexão caiu: ' + motivo);
           reconectarTimer = setTimeout(() => conectar().catch(e => registrar('erro', e.message)), espera);
         }
       }
