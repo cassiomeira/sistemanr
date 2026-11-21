@@ -800,7 +800,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
       guardarHash(media, slug, conta.id);
       lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
       registrar('boleto', nomeEmp + ': boleto anexado em ' + conta.descricao + (mudou.length ? ' (' + mudou.join('; ').replace(/\*/g, '') + ')' : ''), { quem, empresa: slug });
-      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia' + (antes[conta.id].linha_digitavel || antes[conta.id].boleto_arquivo ? ' (substituiu o boleto anterior)' : '') + ':\n'
+      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia' + (analise.porValorData ? ' (mesmo valor e vencimento)' : '') + (antes[conta.id].linha_digitavel || antes[conta.id].boleto_arquivo ? ' (substituiu o boleto anterior)' : '') + ':\n'
         + (mudou.length ? '🔁 Atualizei: ' + mudou.join('; ') + '\n' : '') + resumoConta(db.getContaPagarById(slug, conta.id)) + DICA, m);
       if (dados.linha) await enviarLinha(jid, dados.linha);
       return;
@@ -813,7 +813,10 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
       const mesmoNome = c => { const n = norm(c.fornecedor || c.descricao); return nomeB.length >= 3 && n && (n === nomeB || (Math.min(n.length, nomeB.length) >= 4 && (n.includes(nomeB) || nomeB.includes(n)))); };
       // conta lançada à mão com outro nome: mesmo valor (±1%) e vencimento até 15 dias de diferença
       const mesmoValor = c => Math.abs((c.valor || 0) - dados.valor) <= Math.max(0.05, dados.valor * 0.01) && diasEntre(c.vencimento, dados.vencimento || hoje) <= 15;
-      const mesmas = db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180)).filter(c => mesmoNome(c) || mesmoValor(c))
+      const pend = db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180));
+      const exatas = dados.vencimento ? pend.filter(c => Math.abs((c.valor || 0) - dados.valor) < 0.01 && c.vencimento === dados.vencimento) : [];
+      if (exatas.length === 1) return executar({ jid, m, quem, slug, media, padraoGrupo, analise: Object.assign({}, analise, { conta_id: exatas[0].id, porValorData: true }) });
+      const mesmas = pend.filter(c => mesmoNome(c) || mesmoValor(c))
         .sort((x, y) => (mesmoNome(y) && mesmoValor(y)) - (mesmoNome(x) && mesmoValor(x)) || diasEntre(x.vencimento, dados.vencimento) - diasEntre(y.vencimento, dados.vencimento)).slice(0, 4);
       if (mesmas.length) {
         const opcoes = mesmas.map(c => ({ id: c.id })).concat([{ novo: true }]);
