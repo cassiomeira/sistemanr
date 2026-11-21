@@ -318,6 +318,35 @@ function identificarEmpresa(texto, cfg) {
   return k.length ? { varias: k } : null;
 }
 
+// ---------- casar comprovante com boleto pela linha digitável / código de barras ----------
+function paraCodigoBarras(d) {
+  d = soDigitos(d);
+  if (d.length === 44) return d;
+  if (d.length === 47) return d.slice(0, 4) + d.slice(32, 33) + d.slice(33, 47) + d.slice(4, 9) + d.slice(10, 20) + d.slice(21, 31);
+  if (d.length === 48) return d.slice(0, 11) + d.slice(12, 23) + d.slice(24, 35) + d.slice(36, 47);
+  return '';
+}
+function codigosNoTexto(textos) {
+  const out = new Set();
+  for (const t of textos) {
+    if (!t) continue;
+    for (const m of String(t).match(/\d[\d\s.\-]{42,70}\d/g) || []) { const b = paraCodigoBarras(m); if (b) out.add(b); }
+    const b = paraCodigoBarras(t); if (b) out.add(b);
+  }
+  return out;
+}
+function contaPelaLinha(textos, slugs) {
+  const cods = codigosNoTexto(textos);
+  if (!cods.size) return null;
+  for (const slug of slugs) {
+    let lista = [];
+    try { lista = db.getContasComLinha(slug); } catch (e) {}
+    const c = lista.find(x => cods.has(paraCodigoBarras(x.linha_digitavel)));
+    if (c) return { slug, conta: c };
+  }
+  return null;
+}
+
 // ---------- números autorizados (com ou sem o 9 depois do DDD) ----------
 function variantesNumero(n) {
   let d = soDigitos(n);
@@ -384,8 +413,8 @@ async function aplicarComando({ jid, m, quem, cmd }) {
         const a = u.antes[c.id] || {};
         if (!estaPaga(a) && estaPaga(c)) db.delAcertoPorConta(slug, c.id);
         if (c.comprovante && c.comprovante !== a.comprovante) { const abs = comprovantePath(c.comprovante); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
-        if (c.boleto_arquivo && c.boleto_arquivo !== a.boleto_arquivo) { const abs = comprovantePath(c.boleto_arquivo); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
-        db.updateContaPagar(slug, c.id, { pago_por: a.pago_por || '', comprovante: a.comprovante || '', valor: a.valor, boleto_chegou: a.boleto_chegou, linha_digitavel: a.linha_digitavel || '', boleto_arquivo: a.boleto_arquivo || '' });
+        if (c.boleto_arquivo && c.boleto_arquivo !== a.boleto_arquivo) { const abs = comprovantePath(c.boleto_arquivo); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } } // apaga só o boleto novo; o anterior volta
+        db.updateContaPagar(slug, c.id, { pago_por: a.pago_por || '', comprovante: a.comprovante || '', valor: a.valor, vencimento: a.vencimento, descricao: a.descricao, categoria: a.categoria, fornecedor: a.fornecedor || '', recorrente: a.recorrente ? 1 : 0, tipo_nota: a.tipo_nota || '', boleto_chegou: a.boleto_chegou, linha_digitavel: a.linha_digitavel || '', boleto_arquivo: a.boleto_arquivo || '' });
         db.addAuditLog(slug, autor, 'alterou', 'Contas a Pagar', 'ID: ' + c.id + ' - desfeito pelo WhatsApp');
       }
       nomes.push(c.descricao + ' (' + fmtV(c.valor) + ')');
@@ -486,6 +515,9 @@ async function tratarMensagem(m) {
         if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, cancelado. Nada foi alterado.', m); return; }
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { forcar: escolha.modo }) });
       }
+      if (pend.tipo === 'boleto_troca') {
+        return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, escolha.novo ? { conta_id: null, forcarNovo: true } : { conta_id: escolha.id }) });
+      }
       if (pend.tipo === 'duplicado') {
         if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, não lancei de novo.', m); return; }
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { ignorarDup: true }) });
@@ -538,13 +570,15 @@ function montarContexto(slugs, cfg) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"alterar"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
+- Em comprovante de pagamento de boleto, se aparecer o código de barras ou a linha digitável, copie os dígitos em linha_digitavel (o sistema usa para achar a conta exata).
 - "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje).
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
-- "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar".
+- "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar". Boleto REEMITIDO/ALTERADO (mesmo fornecedor de uma conta pendente, com outro vencimento ou outro valor, ou o texto diz "novo boleto", "mudou", "prorrogou") também é "boleto" com conta_id da conta pendente — o sistema troca valor e vencimento.
+- "alterar": o TEXTO pede para mudar uma conta pendente que NÃO é o último lançamento (ex.: "o boleto da ISPS mudou pra dia 30", "a conta da Cemig agora é 480"). Preencha conta_id (das contas_pendentes) e correcao só com os campos citados.
 - "criar": despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
 - fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
 - tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
@@ -609,6 +643,22 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     if (c.descricao) itens.push({ campo: 'descricao', valor: c.descricao });
     return aplicarComando({ jid, m, quem, cmd: c.desfazer ? { desfazer: true } : { itens } });
   }
+  if (analise.acao === 'alterar' && analise.conta_id) {
+    const slugA = !multi ? empresaFixa : ((analise.empresa && empresas.some(e => e.slug === analise.empresa)) ? analise.empresa : (empresas.find(e => db.getContaPagarById(e.slug, analise.conta_id)) || {}).slug);
+    const contaA = slugA && db.getContaPagarById(slugA, analise.conta_id);
+    if (contaA) {
+      lembrarUltimo(jid, slugA, [contaA.id], 'alterar', { [contaA.id]: Object.assign({}, contaA) });
+      const c = analise.correcao || {}, itens = [];
+      if (c.tipo_nota === 'D' || c.tipo_nota === 'F') itens.push({ campo: 'tipo_nota', valor: c.tipo_nota });
+      if (c.recorrente === true || c.recorrente === false) itens.push({ campo: 'recorrente', valor: c.recorrente ? 1 : 0 });
+      if (c.categoria) itens.push({ campo: 'categoria', valor: c.categoria });
+      if (c.vencimento && /^\d{4}-\d{2}-\d{2}$/.test(c.vencimento)) itens.push({ campo: 'vencimento', iso: c.vencimento });
+      if (c.valor) itens.push({ campo: 'valor', valor: parseFloat(c.valor) });
+      if (c.fornecedor) itens.push({ campo: 'fornecedor', valor: c.fornecedor });
+      if (c.descricao) itens.push({ campo: 'descricao', valor: c.descricao });
+      return aplicarComando({ jid, m, quem, cmd: { itens } });
+    }
+  }
   if (analise.acao === 'consultar') {
     const alvo = !multi ? [empresaFixa] : (peloTexto && peloTexto.slug ? [peloTexto.slug] : (analise.empresa && empresas.some(e => e.slug === analise.empresa) ? [analise.empresa] : empresas.map(e => e.slug)));
     return executarConsulta({ jid, m, slugs: alvo, c: analise.consulta || {} });
@@ -620,6 +670,15 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     const noPdf = boletoPdf || anexoTexto ? identificarEmpresa(anexoTexto, cfg) : null;
     slug = (peloTexto && peloTexto.slug) || (pagador && pagador.slug) || (empresas.some(e => e.slug === analise.empresa) ? analise.empresa : '') || (noPdf && noPdf.slug) || '';
     if (slug) registrar('empresa', 'Empresa ' + slug + (peloTexto && peloTexto.slug === slug ? ' pelo texto (' + peloTexto.motivo + ')' : pagador && pagador.slug === slug ? ' pelo pagador (' + pagador.motivo + ')' : ' pela IA'), { quem });
+  }
+  // Comprovante que traz a linha digitável / código de barras de um boleto já lançado: quita essa conta direto
+  if (media && analise.acao !== 'boleto') {
+    const achada = contaPelaLinha([analise.linha_digitavel, boletoPdf && boletoPdf.linha, anexoTexto], slug ? [slug] : empresas.map(e => e.slug));
+    if (achada) {
+      slug = achada.slug;
+      analise = Object.assign({}, analise, { acao: 'quitar', conta_id: achada.conta.id, confianca: 1, pelaLinha: true });
+      registrar('empresa', 'Comprovante casado pela linha digitável com "' + achada.conta.descricao + '" (' + slug + ')', { quem });
+    }
   }
   if (!slug || !empresas.some(e => e.slug === slug)) {
     const opcoes = empresas.map(e => ({ slug: e.slug, nome: e.nome }));
@@ -710,7 +769,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
     registrar('quitar', nomeEmp + ': ' + conta.descricao + ' ' + fmtV(conta.valor), { quem, empresa: slug });
     const atual = db.getContaPagarById(slug, conta.id);
-    await responder(jid, '✅ *' + nomeEmp + '* — ' + (jaPaga ? 'a conta já estava paga' + (comprovante ? '; anexei o comprovante.' : '.') : 'marquei como paga' + (comprovante ? ' e anexei o comprovante.' : '.')) + '\n' + resumoConta(atual)
+    await responder(jid, '✅ *' + nomeEmp + '* — ' + (analise.pelaLinha ? '(comprovante reconhecido pela linha digitável do boleto) ' : '') + (jaPaga ? 'a conta já estava paga' + (comprovante ? '; anexei o comprovante.' : '.') : 'marquei como paga' + (comprovante ? ' e anexei o comprovante.' : '.')) + '\n' + resumoConta(atual)
       + (analise.valor && Math.abs(analise.valor - atual.valor) > 0.01 ? '\n⚠️ Valor do comprovante (' + fmtV(analise.valor) + ') difere do lançado (' + fmtV(atual.valor) + ').' : '') + DICA, m);
     return;
   }
@@ -723,22 +782,41 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     try { const e = boletoLib.enriquecer(slug, dados); if (e.fornecedor) dados.fornecedor = e.fornecedor; if (e.nota_numero) dados.nota = e.nota_numero; } catch (e) {}
     // a data calculada da linha pode errar (ciclo do fator de vencimento): se ficar longe da data lida no boleto, vale a lida
     if (analise.vencimento && dados.vencimento && Math.abs(new Date(dados.vencimento) - new Date(analise.vencimento)) > 60 * 86400000) dados.vencimento = analise.vencimento;
+    // data fora do razoável (fator de vencimento mal lido): não usa
+    if (dados.vencimento && (dados.vencimento < somaDias(hojeISO(), -120) || dados.vencimento > somaDias(hojeISO(), 400))) dados.vencimento = analise.vencimento || '';
     if (!dados.valor) { await responder(jid, 'Não consegui ler o valor do boleto. Manda o PDF ou uma foto mais nítida (ou escreva o valor).', m); return; }
     const conta = analise.conta_id ? db.getContaPagarById(slug, analise.conta_id) : null;
     if (conta && !estaPaga(conta)) {
+      // boleto novo/reemitido de uma conta que já existe: anexa e atualiza vencimento e valor
       const antes = { [conta.id]: Object.assign({}, conta) };
       const arq = salvarComprovante(slug, conta.id, media, 'boleto_');
       const f = { boleto_chegou: 1 };
       if (dados.linha) f.linha_digitavel = dados.linha;
       if (arq) f.boleto_arquivo = arq;
+      const mudou = [];
+      if (dados.vencimento && dados.vencimento !== conta.vencimento) { f.vencimento = dados.vencimento; mudou.push('vencimento ' + fmtD(conta.vencimento) + ' → *' + fmtD(dados.vencimento) + '*'); }
+      if (dados.valor && Math.abs(dados.valor - conta.valor) > 0.009) { f.valor = dados.valor; mudou.push('valor ' + fmtV(conta.valor) + ' → *' + fmtV(dados.valor) + '*'); }
       deps.atualizarConta(slug, conta.id, f, autor);
       guardarHash(media, slug, conta.id);
       lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
-      registrar('boleto', nomeEmp + ': boleto anexado em ' + conta.descricao + ' ' + fmtV(conta.valor), { quem, empresa: slug });
-      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia (marcado "boleto chegou"):\n' + resumoConta(db.getContaPagarById(slug, conta.id))
-        + (Math.abs(dados.valor - conta.valor) > 0.01 ? '\n⚠️ O boleto é de ' + fmtV(dados.valor) + ' e a conta está com ' + fmtV(conta.valor) + ' — responda "valor ' + String(dados.valor).replace('.', ',') + '" para corrigir.' : '') + DICA, m);
+      registrar('boleto', nomeEmp + ': boleto anexado em ' + conta.descricao + (mudou.length ? ' (' + mudou.join('; ').replace(/\*/g, '') + ')' : ''), { quem, empresa: slug });
+      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia' + (antes[conta.id].linha_digitavel || antes[conta.id].boleto_arquivo ? ' (substituiu o boleto anterior)' : '') + ':\n'
+        + (mudou.length ? '🔁 Atualizei: ' + mudou.join('; ') + '\n' : '') + resumoConta(db.getContaPagarById(slug, conta.id)) + DICA, m);
       if (dados.linha) await enviarLinha(jid, dados.linha);
       return;
+    }
+    // IA não achou a conta: se há conta pendente do mesmo fornecedor, pergunta se é troca de boleto
+    if (!analise.forcarNovo) {
+      const nomeB = norm(dados.fornecedor || dados.beneficiario || analise.fornecedor || '');
+      const hoje = hojeISO();
+      const mesmas = nomeB.length >= 3 ? db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180)).filter(c => { const n = norm(c.fornecedor || c.descricao); return n && (n === nomeB || (Math.min(n.length, nomeB.length) >= 4 && (n.includes(nomeB) || nomeB.includes(n)))); }).slice(0, 4) : [];
+      if (mesmas.length) {
+        const opcoes = mesmas.map(c => ({ id: c.id })).concat([{ novo: true }]);
+        pendentes[jid] = { tipo: 'boleto_troca', opcoes, slug, media, analise, quando: Date.now() };
+        await responder(jid, '📄 Boleto de ' + (dados.fornecedor || dados.beneficiario || analise.fornecedor) + ': ' + fmtV(dados.valor) + ', venc. ' + fmtD(dados.vencimento) + '.\nJá existe conta pendente desse fornecedor. É troca de boleto (atualizo valor e vencimento)?\n'
+          + mesmas.map((c, i) => (i + 1) + '. Trocar: ' + c.descricao + ' — ' + fmtV(c.valor) + ' — venc. ' + fmtD(c.vencimento)).join('\n') + '\n' + (mesmas.length + 1) + '. Não, é uma conta nova', m);
+        return;
+      }
     }
     const fornBol = dados.fornecedor || dados.beneficiario || analise.fornecedor || '';
     analise = Object.assign({}, analise, { acao: 'criar', pago: false, valor: dados.valor, vencimento: dados.vencimento || analise.vencimento, fornecedor: fornBol, descricao: analise.descricao || ('Boleto ' + fornBol).trim(), ehBoleto: dados });

@@ -638,8 +638,10 @@ module.exports = {
 
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
-    if (mes) return query(slug, 'SELECT * FROM acerto WHERE data LIKE ? ORDER BY data DESC', [mes + '%']);
-    return query(slug, 'SELECT * FROM acerto ORDER BY data DESC');
+    // comprovante_conta: comprovante anexado na conta a pagar que gerou esta saída (para abrir pelo Acerto)
+    const sel = "SELECT a.*, COALESCE(cp.comprovante, '') AS comprovante_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
+    if (mes) return query(slug, sel + ' WHERE a.data LIKE ? ORDER BY a.data DESC', [mes + '%']);
+    return query(slug, sel + ' ORDER BY a.data DESC');
   },
   addAcerto(slug, item) {
     run(slug, 'INSERT INTO acerto (id,data,descricao,entrada,saida,categoria,recorrente,tipo_nota,origem_conta_pagar,fornecedor,veiculo,placa,km,localidade,condutor,a_chegar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -738,6 +740,10 @@ module.exports = {
     if (fields.linha_digitavel !== undefined) { sets.push('linha_digitavel=?'); vals.push(fields.linha_digitavel || ''); }
     if (fields.boleto_arquivo !== undefined) { sets.push('boleto_arquivo=?'); vals.push(fields.boleto_arquivo || ''); }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE contas_pagar SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  // Contas pendentes com linha digitável (casar comprovante de pagamento com o boleto)
+  getContasComLinha(slug) {
+    return query(slug, "SELECT id, descricao, valor, vencimento, fornecedor, linha_digitavel FROM contas_pagar WHERE linha_digitavel IS NOT NULL AND linha_digitavel <> '' AND (pago_por IS NULL OR pago_por='' OR pago_por='A Pagar')");
   },
   // Últimas contas por fornecedor/descrição (WhatsApp copia categoria, D/F e recorrente do histórico)
   historicoContas(slug, limite = 600) {
