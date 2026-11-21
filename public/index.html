@@ -1128,8 +1128,9 @@
                         </div>
                         <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
                             <button class="btn btn-primary btn-sm" onclick="NR.waSalvarConfig()"><i class="fas fa-check"></i> Salvar</button>
-                            <button class="btn btn-outline btn-sm" onclick="NR.waTestarGrok()"><i class="fas fa-robot"></i> Testar Grok</button>
+                            <button class="btn btn-outline btn-sm" id="wa-btn-testar" onclick="NR.waTestarGrok()"><i class="fas fa-robot"></i> Testar Grok</button>
                             <button class="btn btn-outline btn-sm" onclick="NR.waAtualizarGrupos()"><i class="fas fa-sync-alt"></i> Atualizar grupos</button>
+                            <span id="wa-teste-res" style="font-size:12px;align-self:center"></span>
                         </div>
                     </div>
                 </div>
@@ -1659,6 +1660,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=124"></script>
+    <script src="app.js?v=125"></script>
 </body>
 </html>

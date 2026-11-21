@@ -4162,9 +4162,14 @@ async function waSalvarConfig(){
 }
 async function waTestarGrok(){
   let body={grok_api_key:document.getElementById('wa-grok-key').value.trim(),grok_model:document.getElementById('wa-grok-model').value.trim()};
-  toast('Testando Grok...');
-  let r=await api('POST','/api/whatsapp/testar-grok',body);
-  if(r&&r.error)toast('Grok falhou: '+r.error,'error');else toast('Grok respondeu OK'+(r.resposta&&r.resposta.modelo?' ('+r.resposta.modelo+')':''));
+  let btn=document.getElementById('wa-btn-testar'),res=document.getElementById('wa-teste-res');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Testando... (pode levar ~10 s)';res.textContent='';
+  let t0=Date.now(),r;
+  try{r=await api('POST','/api/whatsapp/testar-grok',body);}catch(e){r={error:'falha de conexão com o servidor'};}
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-robot"></i> Testar Grok';
+  let seg=((Date.now()-t0)/1000).toFixed(1);
+  if(r&&r.error){res.innerHTML='<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Grok falhou: '+r.error+'</span>';toast('Grok falhou: '+r.error,'error');}
+  else{res.innerHTML='<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Grok respondeu OK em '+seg+' s'+(body.grok_model?' ('+body.grok_model+')':'')+'</span>';toast('Grok respondeu OK em '+seg+' s');}
 }
 async function waAtualizarGrupos(){await api('POST','/api/whatsapp/grupos',{});carregarWhatsapp();toast('Lista de grupos atualizada');}
 // === TELEGRAM ===
