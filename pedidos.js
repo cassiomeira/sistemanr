@@ -153,4 +153,4 @@ async function lerBoletos(buffer, mimeType, slug) {
   return { boletos };
 }
 
-module.exports = { lerPedido, lerBoletos, getGeminiConfig };
+module.exports = { lerPedido, lerBoletos, getGeminiConfig, chamarGemini, parseJsonResposta };

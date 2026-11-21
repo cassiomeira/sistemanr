@@ -183,6 +183,16 @@ async function extrairPdfTexto(buffer) {
   } catch (e) { return ''; }
 }
 
+async function transcreverComGemini(slug, buffer, mimeType) {
+  try {
+    const pedidos = require('./pedidos');
+    const r = await pedidos.chamarGemini(slug, buffer, mimeType, 'Este arquivo é um comprovante de pagamento/transferência brasileiro. Transcreva TODOS os textos legíveis e devolva SOMENTE JSON: {"texto":"transcrição completa, linha por linha","valor":0.00,"data":"YYYY-MM-DD","favorecido":"quem recebeu","pagador":"quem pagou","descricao":"tipo (PIX, boleto, TED...) e finalidade se houver"}. Valores com ponto decimal. Se algo não estiver legível, deixe vazio — nunca invente.');
+    if (r.error) return { error: r.error };
+    let j = {}; try { j = pedidos.parseJsonResposta(r.text); } catch (e) { return { texto: r.text }; }
+    return { texto: (j.texto || '') + '\nVALOR: ' + (j.valor || '') + '\nDATA: ' + (j.data || '') + '\nFAVORECIDO: ' + (j.favorecido || '') + '\nPAGADOR: ' + (j.pagador || '') + '\nDESCRICAO: ' + (j.descricao || '') };
+  } catch (e) { return { error: e.message }; }
+}
+
 // ---------- fluxo principal ----------
 async function tratarMensagem(m) {
   if (!m || !m.message || !m.key) return;
@@ -221,6 +231,10 @@ async function tratarMensagem(m) {
       const escolha = pend.opcoes[n - 1];
       if (pend.tipo === 'empresa') return analisarEExecutar({ jid, m, texto: pend.texto, media: pend.media, quem, empresaFixa: escolha.slug, cfg });
       if (pend.tipo === 'conta') return executar({ jid, m, quem, slug: pend.slug, media: pend.media, analise: Object.assign({}, pend.analise, { acao: 'quitar', conta_id: escolha.id, confianca: 1 }) });
+      if (pend.tipo === 'confirmar') {
+        if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, cancelado. Nada foi alterado.', m); return; }
+        return executar({ jid, m, quem, slug: pend.slug, media: pend.media, analise: Object.assign({}, pend.analise, { forcar: escolha.modo }) });
+      }
     }
     if (Date.now() - pend.quando > 15 * 60000) delete pendentes[jid]; // expirou: segue como mensagem nova
     else { await responder(jid, 'Responda com o número de uma das opções (1 a ' + pend.opcoes.length + ') ou "cancelar".', m); return; }
@@ -274,7 +288,12 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg 
     if (/^image\/(jpe?g|png)$/.test(media.mimeType)) imagens.push({ buffer: media.buffer, mimeType: media.mimeType });
     else if (media.mimeType === 'application/pdf') {
       anexoTexto = await extrairPdfTexto(media.buffer);
-      if (!anexoTexto) { await responder(jid, 'O PDF veio sem texto (parece escaneado). Manda uma foto/print do comprovante que eu leio.', m); return; }
+      if (!anexoTexto || anexoTexto.length < 25) {
+        // PDF escaneado (só imagem): o Gemini lê PDF nativamente — usa ele para transcrever
+        const t = await transcreverComGemini(slugs[0], media.buffer, 'application/pdf');
+        if (t.error) { await responder(jid, 'O PDF veio sem texto (escaneado) e não consegui ler com a IA: ' + t.error + '\nManda uma foto/print do comprovante.', m); return; }
+        anexoTexto = '(transcrito por OCR da IA — confira o valor)\n' + t.texto;
+      }
     } else { await responder(jid, 'Formato ' + (media.mimeType || 'desconhecido') + ' não suportado. Envie foto (JPG/PNG) ou PDF.', m); return; }
   }
   const prompt = 'Mensagem do usuário: ' + (texto ? JSON.stringify(texto) : '(sem texto, só o comprovante)') + '\n'
@@ -327,6 +346,13 @@ async function executar({ jid, m, quem, slug, media, analise }) {
     const conta = db.getContaPagarById(slug, analise.conta_id);
     if (!conta) { await responder(jid, 'Não achei essa conta no sistema. Pode detalhar?', m); return; }
     const jaPaga = conta.pago_por && conta.pago_por !== 'A Pagar';
+    const diverge = analise.valor && Math.abs(analise.valor - conta.valor) > Math.max(0.05, conta.valor * 0.03);
+    if (diverge && !analise.forcar) {
+      pendentes[jid] = { tipo: 'confirmar', opcoes: [{ modo: 'manter' }, { modo: 'corrigir' }, { modo: 'cancelar' }], slug, media, analise, quando: Date.now() };
+      await responder(jid, '⚠️ O comprovante é de ' + fmtV(analise.valor) + ', mas a conta "' + conta.descricao + '" está lançada com ' + fmtV(conta.valor) + ' (venc. ' + fmtD(conta.vencimento) + ').\n1. Quitar mesmo assim (mantém ' + fmtV(conta.valor) + ')\n2. Quitar e corrigir o valor para ' + fmtV(analise.valor) + '\n3. Cancelar', m);
+      return;
+    }
+    if (analise.forcar === 'corrigir' && analise.valor) { deps.atualizarConta(slug, conta.id, { valor: analise.valor }, 'WhatsApp (' + quem + ')'); conta.valor = analise.valor; }
     const comprovante = salvarComprovante(slug, conta.id, media);
     const fields = {};
     if (!jaPaga) fields.pago_por = pagoPor;
