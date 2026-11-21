@@ -268,7 +268,7 @@ function resumoConta(c) {
     + '\n   ' + (c.categoria || 'Outros') + ' · ' + txtDF(c.tipo_nota) + ' · ' + (c.recorrente ? 'recorrente' : 'não recorrente')
     + ' · ' + (estaPaga(c) ? 'paga (' + c.pago_por + ')' : 'pendente');
 }
-const DICA = '\n\n_Para corrigir, responda: D, F, rec, não rec, cat <categoria>, venc 10/12, valor 450, forn <nome>, desc <texto> ou desfazer._';
+const DICA = '\n\n_Para corrigir, responda (pode juntar na mesma mensagem, ex.: "rec d" ou "valor 350 f"): D, F, rec, não rec, cat <categoria>, venc 10/12, valor 450, forn <nome>, desc <texto> ou desfazer._';
 
 // ---------- comprovantes repetidos (hash do arquivo) ----------
 const hashesPath = path.join(dataDir, 'whatsapp', 'hashes.json');
@@ -297,20 +297,37 @@ function variantesNumero(n) {
 const ultimos = {}; // jid -> { slug, ids, tipo: 'criar'|'alterar', antes: {id: snapshot}, quando }
 function lembrarUltimo(jid, slug, ids, tipo, antes) { ultimos[jid] = { slug, ids, tipo, antes: antes || {}, quando: Date.now() }; }
 
+// Lê uma ou mais correções na mesma mensagem: "rec d", "350 forn CEMIG rec sim", "ven 10", "D/F: D".
+// Devolve null se sobrar texto que não é comando (aí a mensagem segue para a IA).
+const FIM_CMD = String.raw`(?=\s+(?:d|f|dentro|fora|rec|recorrente|mensal|fixa|n[aã]o\s+rec\w*|ven\w*|valor|forn\w*|desc\w*|cat\w*)(?:[\s,;]|$)|\s*[,;]|$)`;
+const REGRAS_CMD = [
+  [/^(?:d\s*\/\s*f|d-f|df)\s*:?\s*/i, () => null],
+  [/^(?:n[aã]o\s+rec(?:orrente)?|rec(?:orrente)?\s+n[aã]o|nrec|avulsa?)(?=[\s,;]|$)/i, () => ({ campo: 'recorrente', valor: 0 })],
+  [/^(?:rec(?:orrente)?|mensal|fixa)(?:\s+sim)?(?=[\s,;]|$)/i, () => ({ campo: 'recorrente', valor: 1 })],
+  [/^(?:dentro|d)(?=[\s,;]|$)/i, () => ({ campo: 'tipo_nota', valor: 'D' })],
+  [/^(?:fora|f)(?=[\s,;]|$)/i, () => ({ campo: 'tipo_nota', valor: 'F' })],
+  [/^ven(?:c|ce|cimento)?\s*(?:dia\s+)?(\d{1,2})(?:[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?)?(?=[\s,;]|$)/i, m => ({ campo: 'vencimento', dia: m[1], mes: m[2], ano: m[3] })],
+  [/^valor\s*(?:r\$\s*)?([\d.,]+)(?=[\s,;]|$)/i, m => ({ campo: 'valor', valor: parseValorBR(m[1]) })],
+  [/^(?:r\$\s*)?(\d[\d.,]*)(?=[\s,;]|$)/i, m => ({ campo: 'valor', valor: parseValorBR(m[1]) })],
+  [new RegExp(String.raw`^cat(?:egoria)?\s+(.+?)` + FIM_CMD, 'i'), m => ({ campo: 'categoria', valor: m[1].trim() })],
+  [new RegExp(String.raw`^forn(?:ecedor)?\s+(.+?)` + FIM_CMD, 'i'), m => ({ campo: 'fornecedor', valor: m[1].trim() })],
+  [new RegExp(String.raw`^desc(?:ri[cç][aã]o)?\s+(.+?)` + FIM_CMD, 'i'), m => ({ campo: 'descricao', valor: m[1].trim() })],
+];
 function comandoRapido(texto) {
-  const t = String(texto || '').trim().replace(/[.!]+$/, '');
-  let m;
+  let t = String(texto || '').trim().replace(/[.!]+$/, '');
   if (/^(desfazer|desfaz|desfaça|desfaca|apagar? (isso|o ultimo|o último|ultimo|último))$/i.test(t)) return { desfazer: true };
-  if (/^(d|dentro)$/i.test(t)) return { campo: 'tipo_nota', valor: 'D' };
-  if (/^(f|fora)$/i.test(t)) return { campo: 'tipo_nota', valor: 'F' };
-  if (/^(rec|recorrente|mensal|fixa)$/i.test(t)) return { campo: 'recorrente', valor: 1 };
-  if (/^(n[aã]o rec(orrente)?|nrec|avulsa?)$/i.test(t)) return { campo: 'recorrente', valor: 0 };
-  if ((m = t.match(/^cat(?:egoria)?\s+(.+)$/i))) return { campo: 'categoria', valor: m[1].trim() };
-  if ((m = t.match(/^venc(?:imento|e)?\s+(?:dia\s+)?(\d{1,2})(?:[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?)?$/i))) return { campo: 'vencimento', dia: m[1], mes: m[2], ano: m[3] };
-  if ((m = t.match(/^valor\s+(?:r\$\s*)?([\d.,]+)$/i))) return { campo: 'valor', valor: parseValorBR(m[1]) };
-  if ((m = t.match(/^forn(?:ecedor)?\s+(.+)$/i))) return { campo: 'fornecedor', valor: m[1].trim() };
-  if ((m = t.match(/^desc(?:ri[cç][aã]o)?\s+(.+)$/i))) return { campo: 'descricao', valor: m[1].trim() };
-  return null;
+  const itens = [];
+  for (let guarda = 0; t && guarda < 20; guarda++) {
+    t = t.replace(/^[\s,;]+/, '');
+    if (!t) break;
+    let achou = false;
+    for (const [re, fn] of REGRAS_CMD) {
+      const m = t.match(re);
+      if (m && m[0].length) { const it = fn(m); if (it) itens.push(it); t = t.slice(m[0].length); achou = true; break; }
+    }
+    if (!achou) return null;
+  }
+  return itens.length ? { itens } : null;
 }
 
 async function aplicarComando({ jid, m, quem, cmd }) {
@@ -344,22 +361,25 @@ async function aplicarComando({ jid, m, quem, cmd }) {
   }
 
   const campos = {};
-  if (cmd.campo === 'categoria') {
-    const cats = db.getConfig(slug).categoriasLoja || [];
-    const alvo = norm(cmd.valor);
-    const cat = cats.find(c => norm(c) === alvo) || cats.find(c => norm(c).startsWith(alvo)) || cats.find(c => norm(c).includes(alvo));
-    if (!cat) { await responder(jid, 'Não achei a categoria "' + cmd.valor + '". Categorias desta empresa: ' + cats.join(', '), m); return; }
-    campos.categoria = cat;
-  } else if (cmd.campo === 'vencimento') {
-    if (contas.length > 1) { await responder(jid, 'O último lançamento tem ' + contas.length + ' parcelas; ajuste os vencimentos pelo sistema.', m); return; }
-    const mesAtual = contas[0].vencimento ? contas[0].vencimento.substring(5, 7) : hojeISO().substring(5, 7);
-    const iso = dataDoTexto(cmd.dia, cmd.mes || mesAtual, cmd.ano);
-    if (!iso) { await responder(jid, 'Data inválida. Ex.: venc 10/12', m); return; }
-    campos.vencimento = iso;
-  } else if (cmd.campo === 'valor') {
-    if (!cmd.valor) { await responder(jid, 'Valor inválido. Ex.: valor 450,00', m); return; }
-    campos.valor = cmd.valor;
-  } else campos[cmd.campo] = cmd.valor;
+  for (const it of (cmd.itens || [])) {
+    if (it.campo === 'categoria') {
+      const cats = db.getConfig(slug).categoriasLoja || [];
+      const alvo = norm(it.valor);
+      const cat = cats.find(c => norm(c) === alvo) || cats.find(c => norm(c).startsWith(alvo)) || cats.find(c => norm(c).includes(alvo));
+      if (!cat) { await responder(jid, 'Não achei a categoria "' + it.valor + '". Categorias desta empresa: ' + cats.join(', ') + '\nNada foi alterado.', m); return; }
+      campos.categoria = cat;
+    } else if (it.campo === 'vencimento') {
+      if (contas.length > 1) { await responder(jid, 'O último lançamento tem ' + contas.length + ' parcelas; ajuste os vencimentos pelo sistema. Nada foi alterado.', m); return; }
+      const mesAtual = contas[0].vencimento ? contas[0].vencimento.substring(5, 7) : hojeISO().substring(5, 7);
+      const iso = it.iso || dataDoTexto(it.dia, it.mes || mesAtual, it.ano);
+      if (!iso) { await responder(jid, 'Data inválida. Ex.: venc 10/12. Nada foi alterado.', m); return; }
+      campos.vencimento = iso;
+    } else if (it.campo === 'valor') {
+      if (!it.valor) { await responder(jid, 'Valor inválido. Ex.: valor 450,00. Nada foi alterado.', m); return; }
+      campos.valor = it.valor;
+    } else campos[it.campo] = it.valor;
+  }
+  if (!Object.keys(campos).length) { await responder(jid, 'Não entendi o que corrigir. Ex.: D, F, rec, cat energia, venc 10/12, valor 450.', m); return; }
 
   for (const c of contas) {
     deps.atualizarConta(slug, c.id, campos, autor);
@@ -482,8 +502,10 @@ function montarContexto(slugs) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"consultar"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
+- "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
+- NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
 - "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje).
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
 - "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar".
@@ -520,10 +542,13 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
       }
     } else { await responder(jid, 'Formato ' + (media.mimeType || 'desconhecido') + ' não suportado. Envie foto (JPG/PNG) ou PDF.', m); return; }
   }
+  const ult = !media && ultimos[jid] && Date.now() - ultimos[jid].quando < 3 * 3600000 ? ultimos[jid] : null;
+  const ultimoCtx = ult ? ult.ids.slice(0, 3).map(id => db.getContaPagarById(ult.slug, id)).filter(Boolean).map(c => ({ descricao: c.descricao, valor: c.valor, vencimento: c.vencimento, fornecedor: c.fornecedor, categoria: c.categoria, tipo_nota: c.tipo_nota, recorrente: !!c.recorrente })) : null;
   const prompt = 'Mensagem do usuário: ' + (texto ? JSON.stringify(texto) : '(sem texto, só o anexo)') + '\n'
     + (empresaFixa ? 'Empresa desta conversa (fixa): ' + empresaFixa + '\n' : 'Empresa não definida — descubra pelo texto (nomes/slugs abaixo).\n')
     + (imagens.length ? 'Há uma imagem anexa (comprovante ou boleto): leia valor, data/vencimento, quem recebeu, descrição e a linha digitável se houver.\n' : '')
     + (anexoTexto ? 'Texto extraído do PDF anexo:\n"""' + anexoTexto.slice(0, 6000) + '"""\n' : '')
+    + (ultimoCtx ? 'Último lançamento desta conversa (se a mensagem for uma correção dele, use acao "corrigir"): ' + JSON.stringify(ultimoCtx) + '\n' : '')
     + (boletoPdf ? 'O PDF tem uma linha digitável de boleto: ' + JSON.stringify(boletoPdf) + ' (decida se é um boleto a pagar ou o comprovante de pagamento dele).\n' : '')
     + 'Contexto (JSON): ' + JSON.stringify(ctx);
   let analise;
@@ -533,6 +558,17 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
   if (boletoPdf) analise.boletoPdf = boletoPdf;
 
   if (analise.acao === 'ignorar') return;
+  if (analise.acao === 'corrigir' && ult) {
+    const c = analise.correcao || {}, itens = [];
+    if (c.tipo_nota === 'D' || c.tipo_nota === 'F') itens.push({ campo: 'tipo_nota', valor: c.tipo_nota });
+    if (c.recorrente === true || c.recorrente === false) itens.push({ campo: 'recorrente', valor: c.recorrente ? 1 : 0 });
+    if (c.categoria) itens.push({ campo: 'categoria', valor: c.categoria });
+    if (c.vencimento && /^\d{4}-\d{2}-\d{2}$/.test(c.vencimento)) itens.push({ campo: 'vencimento', iso: c.vencimento });
+    if (c.valor) itens.push({ campo: 'valor', valor: parseFloat(c.valor) });
+    if (c.fornecedor) itens.push({ campo: 'fornecedor', valor: c.fornecedor });
+    if (c.descricao) itens.push({ campo: 'descricao', valor: c.descricao });
+    return aplicarComando({ jid, m, quem, cmd: c.desfazer ? { desfazer: true } : { itens } });
+  }
   if (analise.acao === 'consultar') {
     const alvo = empresaFixa ? [empresaFixa] : (analise.empresa && empresas.some(e => e.slug === analise.empresa) ? [analise.empresa] : empresas.map(e => e.slug));
     return executarConsulta({ jid, m, slugs: alvo, c: analise.consulta || {} });
@@ -578,6 +614,10 @@ function completarCampos(slug, analise, padraoGrupo) {
     recorrente: analise.recorrente === true ? 1 : (analise.recorrente === false ? 0 : (h ? h.recorrente : 0)),
     doHistorico: !!h,
   };
+  out.copiados = [];
+  if (h && h.categoria && out.categoria === h.categoria && !(cats.includes(analise.categoria) && analise.categoria === h.categoria)) out.copiados.push('categoria');
+  if (h && h.tipo_nota && out.tipo_nota === h.tipo_nota && analise.tipo_nota !== h.tipo_nota && !(padraoGrupo && padraoGrupo.tipo_nota)) out.copiados.push('D/F');
+  if (h && (analise.recorrente === null || analise.recorrente === undefined)) out.copiados.push('recorrente');
   return out;
 }
 
@@ -700,9 +740,10 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     lembrarUltimo(jid, slug, ids, 'criar');
     const contas = ids.map(id => db.getContaPagarById(slug, id));
     registrar('criar', nomeEmp + ': ' + descBase + ' ' + fmtV(valorParc) + (qtd > 1 ? ' em ' + qtd + 'x' : '') + (pago ? ' (paga)' : ' (pendente)'), { quem, empresa: slug });
-    let txt = (analise.ehBoleto ? '📄' : '🆕') + ' *' + nomeEmp + '* — ' + (analise.ehBoleto ? 'boleto lançado como conta a pagar' : (qtd > 1 ? 'criei ' + qtd + ' parcelas' : 'criei a conta')) + (comp.doHistorico ? ' (categoria/D-F/recorrente copiados do histórico do fornecedor)' : '') + ':\n';
+    let txt = (analise.ehBoleto ? '📄' : '🆕') + ' *' + nomeEmp + '* — ' + (analise.ehBoleto ? 'boleto lançado como conta a pagar' : (qtd > 1 ? 'criei ' + qtd + ' parcelas' : 'criei a conta')) + (comp.copiados.length ? ' (' + comp.copiados.join(', ') + ' copiado(s) do último lançamento deste fornecedor)' : '') + ':\n';
     if (qtd > 1) txt += resumoConta(contas[0]) + '\n   Parcelas: ' + contas.map(c => fmtD(c.vencimento)).join(', ') + ' — ' + fmtV(valorParc) + ' cada (total ' + fmtV(valorParc * qtd) + ')';
     else txt += resumoConta(contas[0]);
+    if (!comp.tipo_nota) txt += '\n⚠️ Dentro/Fora não definido — responda D ou F.';
     await responder(jid, txt + DICA, m);
     if (analise.ehBoleto && analise.ehBoleto.linha) await enviarLinha(jid, analise.ehBoleto.linha);
     return;
