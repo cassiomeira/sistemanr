@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const db = require('./database');
 const grok = require('./grok');
+const boletoLib = require('./boleto');
 
 const dataDir = path.join(__dirname, 'data');
 const authDir = path.join(dataDir, 'whatsapp', 'auth');
@@ -25,8 +26,8 @@ const idsEnviados = new Set();
 
 // ---------- configuração ----------
 function lerConfig() {
-  try { return Object.assign({ ativo: false, grok_api_key: '', grok_model: '', grupos: {}, autorizados: [], empresa_padrao: '' }, JSON.parse(fs.readFileSync(cfgPath, 'utf8'))); }
-  catch (e) { return { ativo: false, grok_api_key: '', grok_model: '', grupos: {}, autorizados: [], empresa_padrao: '' }; }
+  try { return Object.assign({ ativo: false, grok_api_key: '', grok_model: '', grupos: {}, autorizados: [], empresa_padrao: '', grupos_padrao: {}, resumo_diario: true }, JSON.parse(fs.readFileSync(cfgPath, 'utf8'))); }
+  catch (e) { return { ativo: false, grok_api_key: '', grok_model: '', grupos: {}, autorizados: [], empresa_padrao: '', grupos_padrao: {}, resumo_diario: true }; }
 }
 function salvarConfig(novo) {
   const atual = lerConfig();
@@ -157,8 +158,11 @@ function remetentePn(m) {
 }
 function nomeAutorizado(numero, fromMe) {
   const cfg = lerConfig();
-  const a = (cfg.autorizados || []).find(x => soDigitos(x.numero) && (numero.endsWith(soDigitos(x.numero)) || soDigitos(x.numero).endsWith(numero)));
-  if (a) return a.nome || numero;
+  const vs = variantesNumero(numero); // aceita o número com ou sem o 9 depois do DDD; número vazio nunca é autorizado
+  if (vs.length) {
+    const a = (cfg.autorizados || []).find(x => variantesNumero(x.numero).some(n => vs.includes(n)));
+    if (a) return a.nome || numero;
+  }
   if (fromMe) return (cfg.autorizados || [])[0] && (cfg.autorizados || [])[0].nome || 'WhatsApp';
   return null;
 }
@@ -193,6 +197,178 @@ async function transcreverComGemini(slug, buffer, mimeType) {
   } catch (e) { return { error: e.message }; }
 }
 
+// ---------- histórico do fornecedor / normalização ----------
+const PALAVRAS_VAZIAS = new Set(['ltda', 'me', 'epp', 'eireli', 'sa', 's', 'a', 'cia', 'de', 'da', 'do', 'das', 'dos', 'e', 'com', 'comercio']);
+function norm(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').split(' ').filter(w => w && !PALAVRAS_VAZIAS.has(w)).join(' ');
+}
+const chaveDesc = d => norm(d).split(' ').slice(0, 3).join(' ');
+
+// Um registro por fornecedor (o lançamento mais recente) e, sem fornecedor, por início da descrição
+function historico(slug) {
+  const vistos = new Map();
+  let lista = [];
+  try { lista = db.historicoContas(slug); } catch (e) {}
+  for (const c of lista) {
+    const k = norm(c.fornecedor) ? 'f:' + norm(c.fornecedor) : (chaveDesc(c.descricao) ? 'd:' + chaveDesc(c.descricao) : '');
+    if (!k || vistos.has(k)) continue;
+    vistos.set(k, { fornecedor: c.fornecedor || '', descricao: c.descricao || '', categoria: c.categoria || '', tipo_nota: c.tipo_nota || '', recorrente: c.recorrente ? 1 : 0, valor: c.valor });
+  }
+  return [...vistos.values()];
+}
+function acharNoHistorico(hist, fornecedor, descricao) {
+  const nf = norm(fornecedor);
+  if (nf) {
+    const exato = hist.find(x => x.fornecedor && norm(x.fornecedor) === nf);
+    if (exato) return exato;
+    const parecido = hist.find(x => { const n = norm(x.fornecedor); return n && Math.min(n.length, nf.length) >= 4 && (n.includes(nf) || nf.includes(n)); });
+    if (parecido) return parecido;
+  }
+  const nd = chaveDesc(descricao);
+  if (nd.length >= 4) return hist.find(x => chaveDesc(x.descricao) === nd) || null;
+  return null;
+}
+
+// ---------- utilidades ----------
+function parseValorBR(s) {
+  let t = String(s || '').replace(/[^\d.,]/g, '');
+  if (!t) return null;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  const v = parseFloat(t);
+  return isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null;
+}
+function dataDoTexto(dia, mes, ano) {
+  const hoje = hojeISO();
+  let a = ano ? parseInt(ano, 10) : parseInt(hoje.substring(0, 4), 10);
+  if (a < 100) a += 2000;
+  const d = String(parseInt(dia, 10)).padStart(2, '0'), m = String(parseInt(mes, 10)).padStart(2, '0');
+  if (+d < 1 || +d > 31 || +m < 1 || +m > 12) return null;
+  let iso = a + '-' + m + '-' + d;
+  if (!ano && iso < somaDias(hoje, -180)) iso = (a + 1) + '-' + m + '-' + d;
+  return iso;
+}
+function somaMeses(iso, n) {
+  const [a, m, d] = iso.split('-').map(Number);
+  const alvo = new Date(Date.UTC(a, m - 1 + n, 1));
+  const ultimo = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();
+  return alvo.getUTCFullYear() + '-' + String(alvo.getUTCMonth() + 1).padStart(2, '0') + '-' + String(Math.min(d, ultimo)).padStart(2, '0');
+}
+const novoId = () => crypto.randomBytes(5).toString('hex');
+const estaPaga = c => !!(c && c.pago_por && c.pago_por !== 'A Pagar');
+const txtDF = t => t === 'D' ? 'Dentro' : (t === 'F' ? 'Fora' : 'D/F não definido');
+
+function resumoConta(c) {
+  if (!c) return '';
+  return '• ' + c.descricao + ' — *' + fmtV(c.valor) + '* — venc. ' + fmtD(c.vencimento)
+    + (c.fornecedor ? '\n   Fornecedor: ' + c.fornecedor : '')
+    + '\n   ' + (c.categoria || 'Outros') + ' · ' + txtDF(c.tipo_nota) + ' · ' + (c.recorrente ? 'recorrente' : 'não recorrente')
+    + ' · ' + (estaPaga(c) ? 'paga (' + c.pago_por + ')' : 'pendente');
+}
+const DICA = '\n\n_Para corrigir, responda: D, F, rec, não rec, cat <categoria>, venc 10/12, valor 450, forn <nome>, desc <texto> ou desfazer._';
+
+// ---------- comprovantes repetidos (hash do arquivo) ----------
+const hashesPath = path.join(dataDir, 'whatsapp', 'hashes.json');
+function lerHashes() { try { return JSON.parse(fs.readFileSync(hashesPath, 'utf8')); } catch (e) { return {}; } }
+function hashArquivo(media) { return media && media.buffer ? crypto.createHash('sha1').update(media.buffer).digest('hex') : ''; }
+function arquivoJaVisto(media) { const h = hashArquivo(media); return h ? lerHashes()[h] || null : null; }
+function guardarHash(media, slug, contaId) {
+  const h = hashArquivo(media); if (!h) return;
+  const todos = lerHashes(); todos[h] = { slug, conta: contaId, quando: new Date().toISOString() };
+  const chaves = Object.keys(todos); if (chaves.length > 3000) for (const k of chaves.slice(0, chaves.length - 3000)) delete todos[k];
+  try { fs.writeFileSync(hashesPath, JSON.stringify(todos)); } catch (e) {}
+}
+
+// ---------- números autorizados (com ou sem o 9 depois do DDD) ----------
+function variantesNumero(n) {
+  let d = soDigitos(n);
+  if (!d) return [];
+  if (d.length === 10 || d.length === 11) d = '55' + d;
+  const v = new Set([d]);
+  if (d.startsWith('55') && d.length === 13 && d[4] === '9') v.add(d.slice(0, 4) + d.slice(5));
+  if (d.startsWith('55') && d.length === 12) v.add(d.slice(0, 4) + '9' + d.slice(4));
+  return [...v];
+}
+
+// ---------- última ação por conversa (correção rápida / desfazer) ----------
+const ultimos = {}; // jid -> { slug, ids, tipo: 'criar'|'alterar', antes: {id: snapshot}, quando }
+function lembrarUltimo(jid, slug, ids, tipo, antes) { ultimos[jid] = { slug, ids, tipo, antes: antes || {}, quando: Date.now() }; }
+
+function comandoRapido(texto) {
+  const t = String(texto || '').trim().replace(/[.!]+$/, '');
+  let m;
+  if (/^(desfazer|desfaz|desfaça|desfaca|apagar? (isso|o ultimo|o último|ultimo|último))$/i.test(t)) return { desfazer: true };
+  if (/^(d|dentro)$/i.test(t)) return { campo: 'tipo_nota', valor: 'D' };
+  if (/^(f|fora)$/i.test(t)) return { campo: 'tipo_nota', valor: 'F' };
+  if (/^(rec|recorrente|mensal|fixa)$/i.test(t)) return { campo: 'recorrente', valor: 1 };
+  if (/^(n[aã]o rec(orrente)?|nrec|avulsa?)$/i.test(t)) return { campo: 'recorrente', valor: 0 };
+  if ((m = t.match(/^cat(?:egoria)?\s+(.+)$/i))) return { campo: 'categoria', valor: m[1].trim() };
+  if ((m = t.match(/^venc(?:imento|e)?\s+(?:dia\s+)?(\d{1,2})(?:[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?)?$/i))) return { campo: 'vencimento', dia: m[1], mes: m[2], ano: m[3] };
+  if ((m = t.match(/^valor\s+(?:r\$\s*)?([\d.,]+)$/i))) return { campo: 'valor', valor: parseValorBR(m[1]) };
+  if ((m = t.match(/^forn(?:ecedor)?\s+(.+)$/i))) return { campo: 'fornecedor', valor: m[1].trim() };
+  if ((m = t.match(/^desc(?:ri[cç][aã]o)?\s+(.+)$/i))) return { campo: 'descricao', valor: m[1].trim() };
+  return null;
+}
+
+async function aplicarComando({ jid, m, quem, cmd }) {
+  const u = ultimos[jid];
+  const { slug, ids } = u;
+  const contas = ids.map(id => db.getContaPagarById(slug, id)).filter(Boolean);
+  if (!contas.length) { delete ultimos[jid]; await responder(jid, 'Não achei mais o último lançamento (pode ter sido apagado no sistema).', m); return; }
+  const autor = 'WhatsApp (' + quem + ')';
+
+  if (cmd.desfazer) {
+    const nomes = [];
+    for (const c of contas) {
+      if (u.tipo === 'criar') {
+        db.delAcertoPorConta(slug, c.id);
+        for (const rel of [c.comprovante, c.boleto_arquivo]) { const abs = comprovantePath(rel); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
+        deps.excluirConta(slug, c.id, autor);
+      } else {
+        const a = u.antes[c.id] || {};
+        if (!estaPaga(a) && estaPaga(c)) db.delAcertoPorConta(slug, c.id);
+        if (c.comprovante && c.comprovante !== a.comprovante) { const abs = comprovantePath(c.comprovante); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
+        if (c.boleto_arquivo && c.boleto_arquivo !== a.boleto_arquivo) { const abs = comprovantePath(c.boleto_arquivo); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
+        db.updateContaPagar(slug, c.id, { pago_por: a.pago_por || '', comprovante: a.comprovante || '', valor: a.valor, boleto_chegou: a.boleto_chegou, linha_digitavel: a.linha_digitavel || '', boleto_arquivo: a.boleto_arquivo || '' });
+        db.addAuditLog(slug, autor, 'alterou', 'Contas a Pagar', 'ID: ' + c.id + ' - desfeito pelo WhatsApp');
+      }
+      nomes.push(c.descricao + ' (' + fmtV(c.valor) + ')');
+    }
+    delete ultimos[jid];
+    registrar('desfazer', nomes.join('; '), { quem, empresa: slug });
+    await responder(jid, '↩️ Desfeito: ' + (u.tipo === 'criar' ? 'apaguei ' : 'voltei como estava ') + nomes.join('; ') + '.', m);
+    return;
+  }
+
+  const campos = {};
+  if (cmd.campo === 'categoria') {
+    const cats = db.getConfig(slug).categoriasLoja || [];
+    const alvo = norm(cmd.valor);
+    const cat = cats.find(c => norm(c) === alvo) || cats.find(c => norm(c).startsWith(alvo)) || cats.find(c => norm(c).includes(alvo));
+    if (!cat) { await responder(jid, 'Não achei a categoria "' + cmd.valor + '". Categorias desta empresa: ' + cats.join(', '), m); return; }
+    campos.categoria = cat;
+  } else if (cmd.campo === 'vencimento') {
+    if (contas.length > 1) { await responder(jid, 'O último lançamento tem ' + contas.length + ' parcelas; ajuste os vencimentos pelo sistema.', m); return; }
+    const mesAtual = contas[0].vencimento ? contas[0].vencimento.substring(5, 7) : hojeISO().substring(5, 7);
+    const iso = dataDoTexto(cmd.dia, cmd.mes || mesAtual, cmd.ano);
+    if (!iso) { await responder(jid, 'Data inválida. Ex.: venc 10/12', m); return; }
+    campos.vencimento = iso;
+  } else if (cmd.campo === 'valor') {
+    if (!cmd.valor) { await responder(jid, 'Valor inválido. Ex.: valor 450,00', m); return; }
+    campos.valor = cmd.valor;
+  } else campos[cmd.campo] = cmd.valor;
+
+  for (const c of contas) {
+    deps.atualizarConta(slug, c.id, campos, autor);
+    db.updateAcertoPorConta(slug, c.id, campos);
+  }
+  u.quando = Date.now();
+  const atual = ids.map(id => db.getContaPagarById(slug, id)).filter(Boolean);
+  registrar('corrigir', Object.keys(campos).map(k => k + '=' + campos[k]).join(', ') + ' em ' + atual.length + ' conta(s)', { quem, empresa: slug });
+  await responder(jid, '✏️ Corrigido:\n' + (atual.length > 3 ? resumoConta(atual[0]) + '\n(e mais ' + (atual.length - 1) + ' parcela(s) com a mesma alteração)' : atual.map(resumoConta).join('\n')), m);
+}
+
 // ---------- fluxo principal ----------
 async function tratarMensagem(m) {
   if (!m || !m.message || !m.key) return;
@@ -202,8 +378,9 @@ async function tratarMensagem(m) {
   const msg = desembrulhar(m.message);
   if (msg.protocolMessage || msg.reactionMessage || msg.senderKeyDistributionMessage && Object.keys(msg).length === 1) return;
 
-  const texto = (msg.conversation || (msg.extendedTextMessage && msg.extendedTextMessage.text) || (msg.imageMessage && msg.imageMessage.caption) || (msg.documentMessage && msg.documentMessage.caption) || '').trim();
+  let texto = (msg.conversation || (msg.extendedTextMessage && msg.extendedTextMessage.text) || (msg.imageMessage && msg.imageMessage.caption) || (msg.documentMessage && msg.documentMessage.caption) || '').trim();
   if (texto.startsWith(MARCA)) return;
+  if (m.key.fromMe && /^\d{44,48}$/.test(texto)) return; // linha digitável enviada pelo próprio sistema
   const ehGrupo = /@g\.us$/.test(jid);
   const cfg = lerConfig();
 
@@ -211,33 +388,59 @@ async function tratarMensagem(m) {
     gruposCache[jid] = Object.assign(gruposCache[jid] || { nome: jid }, { ultima: new Date().toISOString() });
     if (!gruposCache[jid].nome || gruposCache[jid].nome === jid) { try { gruposCache[jid].nome = (await sock.groupMetadata(jid)).subject || jid; } catch (e) {} }
   }
-  const numero = remetentePn(m);
-  const quem = nomeAutorizado(numero, !!m.key.fromMe);
-  if (!quem) return; // só números autorizados (ou o próprio dono do WhatsApp)
-
   const empresaFixa = ehGrupo ? (cfg.grupos || {})[jid] || '' : (cfg.empresa_padrao || '');
   if (ehGrupo && !empresaFixa) return; // grupo não vinculado a empresa: ignora
 
+  const numero = remetentePn(m);
+  const quem = nomeAutorizado(numero, !!m.key.fromMe);
+  if (!quem) {
+    if (ehGrupo) registrar('ignorado', 'Mensagem no grupo "' + (gruposCache[jid].nome || jid) + '" de número não autorizado: ' + (numero || 'não identificado') + ' (inclua em Números autorizados)');
+    return;
+  }
+  const padraoGrupo = ehGrupo ? ((cfg.grupos_padrao || {})[jid] || {}) : {};
+
+  const audio = msg.audioMessage || null;
   const media = msg.imageMessage || msg.documentMessage || null;
-  if (!media && !texto) return;
+  if (!media && !texto && !audio) return;
+
+  // Áudio: transcreve com o Gemini e segue como se fosse texto
+  if (audio) {
+    let buffer;
+    try { buffer = await baileys.downloadMediaMessage({ key: m.key, message: msg }, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }); }
+    catch (e) { await responder(jid, 'Não consegui baixar o áudio: ' + e.message, m); return; }
+    const t = await transcreverAudio(empresaFixa || 'nunesrocha', buffer, (audio.mimetype || 'audio/ogg').split(';')[0].toLowerCase());
+    if (t.error || !t.texto) { await responder(jid, 'Não consegui entender o áudio' + (t.error ? ': ' + t.error : '') + '. Pode mandar por escrito?', m); return; }
+    texto = t.texto;
+    await responder(jid, '🎤 Entendi: "' + texto + '"', m);
+  }
 
   // Resposta a uma pergunta pendente ("1", "2", "cancelar")
   const pend = pendentes[jid];
   if (pend && !media) {
     if (/^(cancela|cancelar|não|nao|esquece)/i.test(texto)) { delete pendentes[jid]; await responder(jid, 'Ok, cancelado.', m); return; }
     const n = parseInt(texto, 10);
-    if (n >= 1 && n <= pend.opcoes.length) {
+    if (n >= 1 && n <= pend.opcoes.length && /^\d+$/.test(texto.trim())) {
       delete pendentes[jid];
       const escolha = pend.opcoes[n - 1];
-      if (pend.tipo === 'empresa') return analisarEExecutar({ jid, m, texto: pend.texto, media: pend.media, quem, empresaFixa: escolha.slug, cfg });
-      if (pend.tipo === 'conta') return executar({ jid, m, quem, slug: pend.slug, media: pend.media, analise: Object.assign({}, pend.analise, { acao: 'quitar', conta_id: escolha.id, confianca: 1 }) });
+      if (pend.tipo === 'empresa') return analisarEExecutar({ jid, m, texto: pend.texto, media: pend.media, quem, empresaFixa: escolha.slug, cfg, padraoGrupo });
+      if (pend.tipo === 'conta') return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { acao: pend.analise.acao === 'boleto' ? 'boleto' : 'quitar', conta_id: escolha.id, confianca: 1 }) });
       if (pend.tipo === 'confirmar') {
         if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, cancelado. Nada foi alterado.', m); return; }
-        return executar({ jid, m, quem, slug: pend.slug, media: pend.media, analise: Object.assign({}, pend.analise, { forcar: escolha.modo }) });
+        return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { forcar: escolha.modo }) });
+      }
+      if (pend.tipo === 'duplicado') {
+        if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, não lancei de novo.', m); return; }
+        return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { ignorarDup: true }) });
       }
     }
     if (Date.now() - pend.quando > 15 * 60000) delete pendentes[jid]; // expirou: segue como mensagem nova
     else { await responder(jid, 'Responda com o número de uma das opções (1 a ' + pend.opcoes.length + ') ou "cancelar".', m); return; }
+  }
+
+  // Correção rápida do último lançamento (D, F, rec, cat ..., venc ..., valor ..., desfazer)
+  if (!media && ultimos[jid] && Date.now() - ultimos[jid].quando < 3 * 3600000) {
+    const cmd = comandoRapido(texto);
+    if (cmd) return aplicarComando({ jid, m, quem, cmd });
   }
 
   let arquivo = null;
@@ -247,43 +450,60 @@ async function tratarMensagem(m) {
       arquivo = { buffer, mimeType: (media.mimetype || '').split(';')[0].toLowerCase(), nome: media.fileName || '' };
     } catch (e) { await responder(jid, 'Não consegui baixar o arquivo: ' + e.message, m); return; }
   }
-  await analisarEExecutar({ jid, m, texto, media: arquivo, quem, empresaFixa, cfg });
+  await analisarEExecutar({ jid, m, texto, media: arquivo, quem, empresaFixa, cfg, padraoGrupo });
 }
 
-function montarContexto(slugs, texto) {
+async function transcreverAudio(slug, buffer, mimeType) {
+  try {
+    const pedidos = require('./pedidos');
+    const r = await pedidos.chamarGemini(slug, buffer, mimeType || 'audio/ogg', 'Transcreva este áudio em português do Brasil, exatamente como foi falado (é um comando financeiro curto, ex.: "paguei 120 de lavagem do caminhão, fora"). Escreva valores em números (ex.: 120,50). Devolva SOMENTE JSON: {"texto":"transcrição"}');
+    if (r.error) return { error: r.error };
+    try { const j = pedidos.parseJsonResposta(r.text); return { texto: String(j.texto || '').trim() }; } catch (e) { return { texto: String(r.text || '').trim() }; }
+  } catch (e) { return { error: e.message }; }
+}
+
+function montarContexto(slugs) {
   const hoje = hojeISO();
+  const dias = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
   const empresas = db.getEmpresas();
-  const ctx = { hoje, empresas: empresas.filter(e => slugs.includes(e.slug)).map(e => ({ slug: e.slug, nome: e.nome })), contas_pendentes: [], colaboradores: {}, categorias: {} };
+  const ctx = { hoje, dia_semana: dias[new Date(hoje + 'T12:00:00Z').getUTCDay()], empresas: empresas.filter(e => slugs.includes(e.slug)).map(e => ({ slug: e.slug, nome: e.nome })), contas_pendentes: [], colaboradores: {}, categorias: {}, fornecedores_conhecidos: {} };
   for (const slug of slugs) {
     try {
       ctx.contas_pendentes.push(...db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 90)).map(c => ({ id: c.id, empresa: slug, vencimento: c.vencimento, descricao: c.descricao, valor: c.valor, fornecedor: c.fornecedor || '' })));
       ctx.colaboradores[slug] = db.getColaboradores(slug).map(c => c.nome);
       ctx.categorias[slug] = db.getConfig(slug).categoriasLoja || [];
+      if (slugs.length <= 2) ctx.fornecedores_conhecidos[slug] = [...new Set(historico(slug).map(h => h.fornecedor).filter(Boolean))].slice(0, 150);
     } catch (e) {}
   }
   return ctx;
 }
 
-const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF) e textos curtos como "lavagem caminhão branco pago da clc" ou "criar conta energia 450 vence dia 10".
-Sua tarefa é decidir UMA ação e devolver SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
+Decida UMA ação e devolva SOMENTE um JSON com este formato:
+{"acao":"quitar"|"criar"|"boleto"|"consultar"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
-- "quitar": existe uma conta pendente que corresponde à mensagem/comprovante (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje).
+- "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje).
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
-- "criar": a mensagem descreve uma despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", marque pago=true, vencimento=data do pagamento; se o texto fala em vencimento/boleto/a pagar, pago=false e vencimento=data informada (ano atual, ou próximo se já passou). Preencha descricao curta e clara, valor (do comprovante se houver), fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
-- Se a empresa não estiver definida e a mensagem não deixar claro qual é, use "perguntar" com empresa=null (o sistema lista as empresas).
+- "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar".
+- "criar": despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
+- fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
+- tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
+- recorrente: true se disser mensal / todo mês / fixa / recorrente; false se disser avulsa / única; senão null.
+- parcelas: só quando falar em parcelas ("3x", "em 4 parcelas", "10 vezes"). valor_parcela = valor de CADA parcela (se informou o total, divida pela quantidade, 2 casas). primeiro_vencimento = data da 1ª parcela (se não disser, hoje + 30 dias). Nesse caso preencha também valor = valor_parcela.
+- "consultar": perguntas sobre as contas ("o que vence hoje", "quanto falta pagar essa semana", "quais estão atrasadas", "quanto paguei de combustível em novembro"). Preencha consulta: status ("pendentes" para a vencer/atrasadas, "pagas" para o que já foi pago, "todas"), de/ate (período pelo vencimento; atrasadas = de hoje-365 até ontem; "essa semana" = hoje até domingo), categoria (se citar uma categoria da empresa) e texto (palavra para filtrar descrição/fornecedor, ex.: "combustível", "cemig"). empresa = slug se a pergunta citar uma empresa, senão null (todas).
+- Se a empresa não estiver definida e a mensagem não deixar claro qual é (exceto "consultar"), use "perguntar" com empresa=null (o sistema lista as empresas).
 - pago_por: só preencha se a mensagem citar quem pagou e o nome existir em colaboradores da empresa; senão null.
-- "ignorar": conversa sem relação com finanças (cumprimentos, etc.). Nunca invente valores: se não houver valor legível, deixe null.
+- "ignorar": conversa sem relação com finanças (cumprimentos etc.). Nunca invente valores: se não houver valor legível, deixe null.
 - Datas no formato YYYY-MM-DD. "mensagem" deve resumir o que você entendeu (1 ou 2 frases).`;
 
-async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg }) {
+async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg, padraoGrupo }) {
   const g = grokCfg();
   if (!g.apiKey) { await responder(jid, 'A chave da API do Grok não está configurada no sistema (Configurações → WhatsApp).', m); return; }
   const empresas = db.getEmpresas();
   const slugs = empresaFixa ? [empresaFixa] : empresas.map(e => e.slug);
-  const ctx = montarContexto(slugs, texto);
+  const ctx = montarContexto(slugs);
   const imagens = [];
-  let anexoTexto = '';
+  let anexoTexto = '', boletoPdf = null;
   if (media) {
     if (/^image\/(jpe?g|png)$/.test(media.mimeType)) imagens.push({ buffer: media.buffer, mimeType: media.mimeType });
     else if (media.mimeType === 'application/pdf') {
@@ -293,21 +513,29 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg 
         const t = await transcreverComGemini(slugs[0], media.buffer, 'application/pdf');
         if (t.error) { await responder(jid, 'O PDF veio sem texto (escaneado) e não consegui ler com a IA: ' + t.error + '\nManda uma foto/print do comprovante.', m); return; }
         anexoTexto = '(transcrito por OCR da IA — confira o valor)\n' + t.texto;
+      } else {
+        try { const b = boletoLib.parseBoletoPdf(anexoTexto); if (b.linha) boletoPdf = b; } catch (e) {}
       }
     } else { await responder(jid, 'Formato ' + (media.mimeType || 'desconhecido') + ' não suportado. Envie foto (JPG/PNG) ou PDF.', m); return; }
   }
-  const prompt = 'Mensagem do usuário: ' + (texto ? JSON.stringify(texto) : '(sem texto, só o comprovante)') + '\n'
+  const prompt = 'Mensagem do usuário: ' + (texto ? JSON.stringify(texto) : '(sem texto, só o anexo)') + '\n'
     + (empresaFixa ? 'Empresa desta conversa (fixa): ' + empresaFixa + '\n' : 'Empresa não definida — descubra pelo texto (nomes/slugs abaixo).\n')
-    + (imagens.length ? 'Há uma imagem de comprovante anexa: leia valor, data, quem recebeu e descrição.\n' : '')
-    + (anexoTexto ? 'Texto extraído do PDF do comprovante:\n"""' + anexoTexto.slice(0, 6000) + '"""\n' : '')
+    + (imagens.length ? 'Há uma imagem anexa (comprovante ou boleto): leia valor, data/vencimento, quem recebeu, descrição e a linha digitável se houver.\n' : '')
+    + (anexoTexto ? 'Texto extraído do PDF anexo:\n"""' + anexoTexto.slice(0, 6000) + '"""\n' : '')
+    + (boletoPdf ? 'O PDF tem uma linha digitável de boleto: ' + JSON.stringify(boletoPdf) + ' (decida se é um boleto a pagar ou o comprovante de pagamento dele).\n' : '')
     + 'Contexto (JSON): ' + JSON.stringify(ctx);
   let analise;
   try { analise = await grok.perguntarJson(g, { system: SYSTEM, texto: prompt, imagens }); }
   catch (e) { registrar('erro', 'Grok: ' + e.message, { quem }); await responder(jid, 'Não consegui consultar a IA agora: ' + e.message, m); return; }
   registrar('analise', (analise.acao || '?') + ' — ' + (analise.mensagem || ''), { quem, texto, empresa: analise.empresa || empresaFixa });
+  if (boletoPdf) analise.boletoPdf = boletoPdf;
 
-  const slug = empresaFixa || analise.empresa || '';
   if (analise.acao === 'ignorar') return;
+  if (analise.acao === 'consultar') {
+    const alvo = empresaFixa ? [empresaFixa] : (analise.empresa && empresas.some(e => e.slug === analise.empresa) ? [analise.empresa] : empresas.map(e => e.slug));
+    return executarConsulta({ jid, m, slugs: alvo, c: analise.consulta || {} });
+  }
+  const slug = empresaFixa || analise.empresa || '';
   if (!slug || !empresas.some(e => e.slug === slug)) {
     const opcoes = empresas.map(e => ({ slug: e.slug, nome: e.nome }));
     pendentes[jid] = { tipo: 'empresa', opcoes, texto, media, quando: Date.now() };
@@ -324,69 +552,232 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg 
     }
     if (analise.acao === 'perguntar') { await responder(jid, analise.mensagem || 'Não entendi. Pode detalhar (empresa, descrição e valor)?', m); return; }
   }
-  await executar({ jid, m, quem, slug, media, analise });
+  await executar({ jid, m, quem, slug, media, analise, padraoGrupo });
 }
 
-function salvarComprovante(slug, contaId, media) {
+function salvarComprovante(slug, contaId, media, prefixo) {
   if (!media || !media.buffer) return '';
   const ext = media.mimeType === 'application/pdf' ? 'pdf' : (media.mimeType === 'image/png' ? 'png' : 'jpg');
   const dir = path.join(comprovantesDir, slug);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const nome = contaId + '_' + Date.now() + '.' + ext;
+  const nome = (prefixo || '') + contaId + '_' + Date.now() + '.' + ext;
   fs.writeFileSync(path.join(dir, nome), media.buffer);
   return slug + '/' + nome;
 }
 
-async function executar({ jid, m, quem, slug, media, analise }) {
+// Completa categoria / D-F / recorrente / fornecedor: texto da mensagem > padrão do grupo > histórico do fornecedor
+function completarCampos(slug, analise, padraoGrupo) {
+  const cats = db.getConfig(slug).categoriasLoja || [];
+  const h = acharNoHistorico(historico(slug), analise.fornecedor, analise.descricao);
+  const out = {
+    fornecedor: (h && h.fornecedor && analise.fornecedor && norm(h.fornecedor) !== norm(analise.fornecedor) && (norm(h.fornecedor).includes(norm(analise.fornecedor)) || norm(analise.fornecedor).includes(norm(h.fornecedor)))) ? h.fornecedor : (analise.fornecedor || (h && h.fornecedor) || ''),
+    categoria: (h && h.categoria && cats.includes(h.categoria) ? h.categoria : '') || (cats.includes(analise.categoria) ? analise.categoria : 'Outros'),
+    tipo_nota: analise.tipo_nota === 'D' || analise.tipo_nota === 'F' ? analise.tipo_nota : (padraoGrupo && (padraoGrupo.tipo_nota === 'D' || padraoGrupo.tipo_nota === 'F') ? padraoGrupo.tipo_nota : (h && h.tipo_nota) || ''),
+    recorrente: analise.recorrente === true ? 1 : (analise.recorrente === false ? 0 : (h ? h.recorrente : 0)),
+    doHistorico: !!h,
+  };
+  return out;
+}
+
+async function avisarDuplicado({ jid, m, slug, media, analise, texto }) {
+  pendentes[jid] = { tipo: 'duplicado', opcoes: [{ modo: 'seguir' }, { modo: 'cancelar' }], slug, media, analise, quando: Date.now() };
+  await responder(jid, '⚠️ ' + texto + '\n1. Lançar mesmo assim\n2. Cancelar', m);
+}
+
+async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
   const nomeEmp = (db.getEmpresas().find(e => e.slug === slug) || {}).nome || slug;
   const colabs = db.getColaboradores(slug).map(c => c.nome);
-  const pagoPor = (analise.pago_por && colabs.find(c => c.toLowerCase() === String(analise.pago_por).toLowerCase())) || colabs.find(c => c.toLowerCase() === String(quem).toLowerCase()) || quem;
+  const achaColab = n => n && colabs.find(c => c.toLowerCase() === String(n).toLowerCase());
+  const pagoPor = achaColab(analise.pago_por) || achaColab(padraoGrupo && padraoGrupo.pago_por) || (padraoGrupo && padraoGrupo.pago_por) || achaColab(quem) || quem;
+  const autor = 'WhatsApp (' + quem + ')';
+
+  // Mesmo arquivo já lançado antes?
+  if (media && !analise.ignorarDup) {
+    const visto = arquivoJaVisto(media);
+    if (visto) {
+      const c = db.getContaPagarById(visto.slug, visto.conta);
+      if (c) return avisarDuplicado({ jid, m, slug, media, analise, texto: 'Esse mesmo arquivo já foi enviado em ' + fmtD(visto.quando.substring(0, 10)) + ' (conta "' + c.descricao + '", ' + fmtV(c.valor) + ').' });
+    }
+  }
 
   if (analise.acao === 'quitar') {
     const conta = db.getContaPagarById(slug, analise.conta_id);
     if (!conta) { await responder(jid, 'Não achei essa conta no sistema. Pode detalhar?', m); return; }
-    const jaPaga = conta.pago_por && conta.pago_por !== 'A Pagar';
+    const jaPaga = estaPaga(conta);
     const diverge = analise.valor && Math.abs(analise.valor - conta.valor) > Math.max(0.05, conta.valor * 0.03);
     if (diverge && !analise.forcar) {
       pendentes[jid] = { tipo: 'confirmar', opcoes: [{ modo: 'manter' }, { modo: 'corrigir' }, { modo: 'cancelar' }], slug, media, analise, quando: Date.now() };
       await responder(jid, '⚠️ O comprovante é de ' + fmtV(analise.valor) + ', mas a conta "' + conta.descricao + '" está lançada com ' + fmtV(conta.valor) + ' (venc. ' + fmtD(conta.vencimento) + ').\n1. Quitar mesmo assim (mantém ' + fmtV(conta.valor) + ')\n2. Quitar e corrigir o valor para ' + fmtV(analise.valor) + '\n3. Cancelar', m);
       return;
     }
-    if (analise.forcar === 'corrigir' && analise.valor) { deps.atualizarConta(slug, conta.id, { valor: analise.valor }, 'WhatsApp (' + quem + ')'); conta.valor = analise.valor; }
+    const antes = { [conta.id]: Object.assign({}, conta) };
+    if (analise.forcar === 'corrigir' && analise.valor) { deps.atualizarConta(slug, conta.id, { valor: analise.valor }, autor); conta.valor = analise.valor; }
     const comprovante = salvarComprovante(slug, conta.id, media);
     const fields = {};
     if (!jaPaga) fields.pago_por = pagoPor;
     if (comprovante) fields.comprovante = comprovante;
-    if (Object.keys(fields).length) deps.atualizarConta(slug, conta.id, fields, 'WhatsApp (' + quem + ')');
+    if (Object.keys(fields).length) deps.atualizarConta(slug, conta.id, fields, autor);
+    guardarHash(media, slug, conta.id);
+    lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
     registrar('quitar', nomeEmp + ': ' + conta.descricao + ' ' + fmtV(conta.valor), { quem, empresa: slug });
-    await responder(jid, '✅ *' + nomeEmp + '* — ' + conta.descricao + ' (' + fmtV(conta.valor) + ', venc. ' + fmtD(conta.vencimento) + ')'
-      + (jaPaga ? ' já estava paga' + (comprovante ? '; anexei o comprovante.' : '.') : ' marcada como paga por ' + pagoPor + (comprovante ? ', comprovante anexado.' : '.'))
-      + (analise.valor && Math.abs(analise.valor - conta.valor) > 0.01 ? '\n⚠️ Valor do comprovante (' + fmtV(analise.valor) + ') difere do lançado (' + fmtV(conta.valor) + ').' : ''), m);
+    const atual = db.getContaPagarById(slug, conta.id);
+    await responder(jid, '✅ *' + nomeEmp + '* — ' + (jaPaga ? 'a conta já estava paga' + (comprovante ? '; anexei o comprovante.' : '.') : 'marquei como paga' + (comprovante ? ' e anexei o comprovante.' : '.')) + '\n' + resumoConta(atual)
+      + (analise.valor && Math.abs(analise.valor - atual.valor) > 0.01 ? '\n⚠️ Valor do comprovante (' + fmtV(analise.valor) + ') difere do lançado (' + fmtV(atual.valor) + ').' : '') + DICA, m);
     return;
   }
+
+  if (analise.acao === 'boleto') {
+    // valores da linha digitável têm prioridade (são exatos)
+    const linha = soDigitos((analise.boletoPdf && analise.boletoPdf.linha) || analise.linha_digitavel || '');
+    const dec = linha.length >= 44 ? boletoLib.decodeLinhaDigitavel(linha) : { valido: false };
+    let dados = { linha: dec.valido ? linha : '', valor: (dec.valido && dec.valor) || analise.valor || (analise.boletoPdf && analise.boletoPdf.valor) || null, vencimento: (dec.valido && dec.vencimento) || (analise.boletoPdf && analise.boletoPdf.vencimento) || analise.vencimento || '', cnpj: (analise.boletoPdf && analise.boletoPdf.cnpj) || '', beneficiario: analise.fornecedor || (analise.boletoPdf && analise.boletoPdf.beneficiario) || '' };
+    try { const e = boletoLib.enriquecer(slug, dados); if (e.fornecedor) dados.fornecedor = e.fornecedor; if (e.nota_numero) dados.nota = e.nota_numero; } catch (e) {}
+    // a data calculada da linha pode errar (ciclo do fator de vencimento): se ficar longe da data lida no boleto, vale a lida
+    if (analise.vencimento && dados.vencimento && Math.abs(new Date(dados.vencimento) - new Date(analise.vencimento)) > 60 * 86400000) dados.vencimento = analise.vencimento;
+    if (!dados.valor) { await responder(jid, 'Não consegui ler o valor do boleto. Manda o PDF ou uma foto mais nítida (ou escreva o valor).', m); return; }
+    const conta = analise.conta_id ? db.getContaPagarById(slug, analise.conta_id) : null;
+    if (conta && !estaPaga(conta)) {
+      const antes = { [conta.id]: Object.assign({}, conta) };
+      const arq = salvarComprovante(slug, conta.id, media, 'boleto_');
+      const f = { boleto_chegou: 1 };
+      if (dados.linha) f.linha_digitavel = dados.linha;
+      if (arq) f.boleto_arquivo = arq;
+      deps.atualizarConta(slug, conta.id, f, autor);
+      guardarHash(media, slug, conta.id);
+      lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
+      registrar('boleto', nomeEmp + ': boleto anexado em ' + conta.descricao + ' ' + fmtV(conta.valor), { quem, empresa: slug });
+      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia (marcado "boleto chegou"):\n' + resumoConta(db.getContaPagarById(slug, conta.id))
+        + (Math.abs(dados.valor - conta.valor) > 0.01 ? '\n⚠️ O boleto é de ' + fmtV(dados.valor) + ' e a conta está com ' + fmtV(conta.valor) + ' — responda "valor ' + String(dados.valor).replace('.', ',') + '" para corrigir.' : '') + DICA, m);
+      if (dados.linha) await enviarLinha(jid, dados.linha);
+      return;
+    }
+    const fornBol = dados.fornecedor || dados.beneficiario || analise.fornecedor || '';
+    analise = Object.assign({}, analise, { acao: 'criar', pago: false, valor: dados.valor, vencimento: dados.vencimento || analise.vencimento, fornecedor: fornBol, descricao: analise.descricao || ('Boleto ' + fornBol).trim(), ehBoleto: dados });
+  }
+
   if (analise.acao === 'criar') {
     if (!analise.valor) { await responder(jid, 'Não consegui ler o valor. Me diz o valor (ex.: "350,00") junto com a descrição.', m); return; }
-    const cats = db.getConfig(slug).categoriasLoja || [];
-    const item = {
-      id: crypto.randomBytes(5).toString('hex'),
-      vencimento: analise.vencimento || analise.data_pagamento || hojeISO(),
-      descricao: analise.descricao || 'Lançamento via WhatsApp',
-      valor: parseFloat(analise.valor), recorrente: 0, boleto_chegou: 1,
-      pago_por: '', categoria: cats.includes(analise.categoria) ? analise.categoria : 'Outros',
-      fornecedor: analise.fornecedor || '', a_chegar: 0,
-    };
-    deps.criarConta(slug, item, 'WhatsApp (' + quem + ')');
-    const comprovante = salvarComprovante(slug, item.id, media);
-    const fields = {};
-    if (analise.pago || media) fields.pago_por = pagoPor;
-    if (comprovante) fields.comprovante = comprovante;
-    if (Object.keys(fields).length) deps.atualizarConta(slug, item.id, fields, 'WhatsApp (' + quem + ')');
-    registrar('criar', nomeEmp + ': ' + item.descricao + ' ' + fmtV(item.valor) + (fields.pago_por ? ' (paga)' : ' (pendente)'), { quem, empresa: slug });
-    await responder(jid, '🆕 *' + nomeEmp + '* — criei "' + item.descricao + '" de ' + fmtV(item.valor) + (item.fornecedor ? ' (' + item.fornecedor + ')' : '')
-      + (fields.pago_por ? ', já paga por ' + pagoPor + (comprovante ? ' com comprovante anexado.' : '.') : ', vencendo em ' + fmtD(item.vencimento) + ' (pendente).'), m);
+    const comp = completarCampos(slug, analise, padraoGrupo);
+    const qtd = analise.parcelas && parseInt(analise.parcelas.qtd, 10) > 1 ? Math.min(parseInt(analise.parcelas.qtd, 10), 60) : 1;
+    const valorParc = qtd > 1 ? (parseFloat(analise.parcelas.valor_parcela) || Math.round(parseFloat(analise.valor) / qtd * 100) / 100) : parseFloat(analise.valor);
+    const primeiro = (qtd > 1 && analise.parcelas.primeiro_vencimento) || analise.vencimento || analise.data_pagamento || hojeISO();
+    const pago = !!(analise.pago || (media && !analise.ehBoleto));
+
+    if (!analise.ignorarDup) {
+      const parecidas = db.contasParecidas(slug, valorParc, primeiro, 3);
+      if (parecidas.length) return avisarDuplicado({ jid, m, slug, media, analise, texto: 'Já existe conta de ' + fmtV(valorParc) + ' perto dessa data: "' + parecidas[0].descricao + '" (venc. ' + fmtD(parecidas[0].vencimento) + ', ' + (estaPaga(parecidas[0]) ? 'paga' : 'pendente') + '). Pode ser repetido.' });
+    }
+
+    const grupo = qtd > 1 ? 'grp_' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex') : '';
+    const descBase = analise.descricao || 'Lançamento via WhatsApp';
+    const ids = [];
+    for (let i = 0; i < qtd; i++) {
+      const item = {
+        id: novoId(),
+        vencimento: qtd > 1 ? somaMeses(primeiro, i) : primeiro,
+        descricao: qtd > 1 ? descBase + ' (' + (i + 1) + '/' + qtd + ')' : descBase,
+        valor: valorParc, recorrente: comp.recorrente, boleto_chegou: (media || pago) ? 1 : 0,
+        pago_por: '', categoria: comp.categoria, tipo_nota: comp.tipo_nota,
+        fornecedor: comp.fornecedor, a_chegar: 0, grupo_parcela: grupo,
+        linha_digitavel: i === 0 && analise.ehBoleto ? analise.ehBoleto.linha || '' : '',
+      };
+      deps.criarConta(slug, item, autor);
+      ids.push(item.id);
+      if (i === 0) {
+        const fields = {};
+        if (analise.ehBoleto) { const arq = salvarComprovante(slug, item.id, media, 'boleto_'); if (arq) fields.boleto_arquivo = arq; }
+        else {
+          if (pago) fields.pago_por = pagoPor;
+          const comprovante = salvarComprovante(slug, item.id, media);
+          if (comprovante) fields.comprovante = comprovante;
+        }
+        if (Object.keys(fields).length) deps.atualizarConta(slug, item.id, fields, autor);
+      }
+    }
+    guardarHash(media, slug, ids[0]);
+    lembrarUltimo(jid, slug, ids, 'criar');
+    const contas = ids.map(id => db.getContaPagarById(slug, id));
+    registrar('criar', nomeEmp + ': ' + descBase + ' ' + fmtV(valorParc) + (qtd > 1 ? ' em ' + qtd + 'x' : '') + (pago ? ' (paga)' : ' (pendente)'), { quem, empresa: slug });
+    let txt = (analise.ehBoleto ? '📄' : '🆕') + ' *' + nomeEmp + '* — ' + (analise.ehBoleto ? 'boleto lançado como conta a pagar' : (qtd > 1 ? 'criei ' + qtd + ' parcelas' : 'criei a conta')) + (comp.doHistorico ? ' (categoria/D-F/recorrente copiados do histórico do fornecedor)' : '') + ':\n';
+    if (qtd > 1) txt += resumoConta(contas[0]) + '\n   Parcelas: ' + contas.map(c => fmtD(c.vencimento)).join(', ') + ' — ' + fmtV(valorParc) + ' cada (total ' + fmtV(valorParc * qtd) + ')';
+    else txt += resumoConta(contas[0]);
+    await responder(jid, txt + DICA, m);
+    if (analise.ehBoleto && analise.ehBoleto.linha) await enviarLinha(jid, analise.ehBoleto.linha);
     return;
   }
   await responder(jid, analise.mensagem || 'Não entendi o que fazer com essa mensagem.', m);
+}
+
+// Linha digitável numa mensagem separada, só com os números (fácil de copiar para pagar)
+async function enviarLinha(jid, linha) {
+  if (!sock || !linha) return;
+  try { const r = await sock.sendMessage(jid, { text: linha }); if (r && r.key && r.key.id) idsEnviados.add(r.key.id); } catch (e) {}
+}
+
+// ---------- perguntas ----------
+async function executarConsulta({ jid, m, slugs, c }) {
+  const hoje = hojeISO();
+  const f = { status: c.status === 'pagas' ? 'pagas' : (c.status === 'todas' ? '' : 'pendentes'), de: c.de || null, ate: c.ate || null, categoria: c.categoria || null, texto: c.texto || null };
+  if (!f.de && !f.ate) { if (f.status === 'pendentes') { f.de = somaDias(hoje, -365); f.ate = somaDias(hoje, 7); } else { f.de = hoje.substring(0, 8) + '01'; f.ate = hoje; } }
+  const empresas = db.getEmpresas();
+  const blocos = []; let total = 0, qtd = 0;
+  for (const slug of slugs) {
+    let rows = [];
+    try { rows = db.consultarContas(slug, f); } catch (e) { continue; }
+    if (!rows.length) continue;
+    const soma = rows.reduce((s, r) => s + (r.valor || 0), 0);
+    total += soma; qtd += rows.length;
+    const nome = (empresas.find(e => e.slug === slug) || {}).nome || slug;
+    blocos.push('*' + nome + '* — ' + rows.length + ' conta(s), ' + fmtV(soma) + '\n' + rows.slice(0, 12).map(r => '• ' + fmtD(r.vencimento) + ' ' + r.descricao + ' — ' + fmtV(r.valor) + (f.status === 'pendentes' && r.vencimento < hoje ? ' ⚠️ atrasada' : '') + (f.status !== 'pagas' && estaPaga(r) ? ' (paga)' : '')).join('\n') + (rows.length > 12 ? '\n… e mais ' + (rows.length - 12) : ''));
+  }
+  const titulo = (f.status === 'pagas' ? 'Pagas' : f.status === 'pendentes' ? 'A pagar' : 'Contas') + ' de ' + fmtD(f.de) + ' a ' + fmtD(f.ate) + (f.categoria ? ' · categoria ' + f.categoria : '') + (f.texto ? ' · "' + f.texto + '"' : '');
+  registrar('consulta', titulo + ': ' + qtd + ' conta(s) ' + fmtV(total));
+  if (!qtd) { await responder(jid, '🔎 ' + titulo + ': nenhuma conta encontrada.', m); return; }
+  let txt = '🔎 ' + titulo + '\n\n' + blocos.join('\n\n');
+  if (blocos.length > 1) txt += '\n\n💰 Total geral: *' + fmtV(total) + '* (' + qtd + ' contas)';
+  if (txt.length > 3800) txt = txt.slice(0, 3800) + '\n… (lista cortada — refine a pergunta)';
+  await responder(jid, txt, m);
+}
+
+// ---------- resumo diário ----------
+async function jidDoNumero(numero) {
+  for (const v of variantesNumero(numero)) {
+    try { const r = await sock.onWhatsApp(v + '@s.whatsapp.net'); const ok = (r || []).find(x => x.exists); if (ok) return ok.jid; } catch (e) {}
+  }
+  const vs = variantesNumero(numero);
+  return vs.length ? vs[vs.length - 1] + '@s.whatsapp.net' : '';
+}
+function montarResumoDiario() {
+  const hoje = hojeISO(), amanha = somaDias(hoje, 1);
+  const blocos = []; let totalHoje = 0, totalAtras = 0;
+  for (const e of db.getEmpresas()) {
+    let pend = [];
+    try { pend = db.consultarContas(e.slug, { status: 'pendentes', de: somaDias(hoje, -90), ate: amanha }); } catch (err) { continue; }
+    const atras = pend.filter(c => c.vencimento < hoje), deHoje = pend.filter(c => c.vencimento === hoje), deAmanha = pend.filter(c => c.vencimento === amanha);
+    if (!atras.length && !deHoje.length && !deAmanha.length) continue;
+    const soma = l => l.reduce((s, c) => s + (c.valor || 0), 0);
+    totalHoje += soma(deHoje); totalAtras += soma(atras);
+    let b = '*' + e.nome + '*';
+    if (deHoje.length) b += '\nHoje (' + fmtV(soma(deHoje)) + '):\n' + deHoje.slice(0, 10).map(c => '• ' + c.descricao + ' — ' + fmtV(c.valor)).join('\n');
+    if (atras.length) b += '\n⚠️ Atrasadas: ' + atras.length + ' (' + fmtV(soma(atras)) + ')' + (atras.length <= 5 ? '\n' + atras.map(c => '• ' + fmtD(c.vencimento) + ' ' + c.descricao + ' — ' + fmtV(c.valor)).join('\n') : '');
+    if (deAmanha.length) b += '\nAmanhã: ' + deAmanha.length + ' (' + fmtV(soma(deAmanha)) + ')';
+    blocos.push(b);
+  }
+  if (!blocos.length) return '☀️ Bom dia! Contas a pagar de ' + fmtD(hoje) + ': nada vencendo hoje nem atrasado. ✅';
+  return '☀️ Bom dia! Contas a pagar — ' + fmtD(hoje) + '\n💰 Vence hoje: *' + fmtV(totalHoje) + '*' + (totalAtras ? ' · atrasadas: *' + fmtV(totalAtras) + '*' : '') + '\n\n' + blocos.join('\n\n');
+}
+async function enviarResumoDiario(forcar) {
+  const cfg = lerConfig();
+  if (!forcar && cfg.resumo_diario === false) return { ok: false, motivo: 'resumo desligado' };
+  if (!sock || estado.status !== 'conectado') return { ok: false, motivo: 'WhatsApp desconectado' };
+  const dono = (cfg.autorizados || [])[0];
+  if (!dono) return { ok: false, motivo: 'nenhum número autorizado cadastrado' };
+  const jid = await jidDoNumero(dono.numero);
+  if (!jid) return { ok: false, motivo: 'número inválido' };
+  const txt = montarResumoDiario();
+  await responder(jid, txt);
+  registrar('resumo', 'Resumo diário enviado para ' + (dono.nome || dono.numero));
+  return { ok: true };
 }
 
 // ---------- API para o server ----------
@@ -401,8 +792,9 @@ function status() {
     status: estado.status, qr: estado.qr, numero: estado.numero, erro: estado.erro, desde: estado.desde,
     ativo: cfg.ativo, temSessao: fs.existsSync(path.join(authDir, 'creds.json')),
     grok_model: cfg.grok_model || grok.MODELO_PADRAO, temGrokKey: !!cfg.grok_api_key,
-    grupos: Object.keys(gruposCache).map(jid => ({ jid, nome: gruposCache[jid].nome || jid, empresa: (cfg.grupos || {})[jid] || '' })).sort((a, b) => a.nome.localeCompare(b.nome)),
+    grupos: Object.keys(gruposCache).map(jid => ({ jid, nome: gruposCache[jid].nome || jid, empresa: (cfg.grupos || {})[jid] || '', padrao: (cfg.grupos_padrao || {})[jid] || {} })).sort((a, b) => a.nome.localeCompare(b.nome)),
     gruposConfig: cfg.grupos || {}, autorizados: cfg.autorizados || [], empresa_padrao: cfg.empresa_padrao || '',
+    grupos_padrao: cfg.grupos_padrao || {}, resumo_diario: cfg.resumo_diario !== false,
     log: logEventos,
   };
 }
@@ -412,5 +804,5 @@ function comprovantePath(rel) {
   return abs;
 }
 
-module.exports = { init, conectar, desconectar, status, atualizarGrupos, lerConfig, salvarConfig, grokCfg, salvarComprovante, comprovantePath, comprovantesDir,
-  _interno: { tratarMensagem, setSock(s) { sock = s; }, setEstado(e) { Object.assign(estado, e); }, setBaileys(b) { baileys = b; } } };
+module.exports = { init, conectar, desconectar, status, atualizarGrupos, lerConfig, salvarConfig, grokCfg, salvarComprovante, comprovantePath, comprovantesDir, enviarResumoDiario,
+  _interno: { tratarMensagem, comandoRapido, variantesNumero, parseValorBR, somaMeses, dataDoTexto, norm, acharNoHistorico, montarResumoDiario, setSock(s) { sock = s; }, setEstado(e) { Object.assign(estado, e); }, setBaileys(b) { baileys = b; } } };

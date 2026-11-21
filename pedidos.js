@@ -2,7 +2,7 @@
 const db = require('./database');
 const boleto = require('./boleto');
 
-const MIMES_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const MIMES_ACEITOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/wav', 'audio/webm', 'audio/flac'];
 
 function getGeminiConfig(slug) {
   const cfg = db.getConfig(slug);

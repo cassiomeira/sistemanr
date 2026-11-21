@@ -1130,13 +1130,15 @@
                             <button class="btn btn-primary btn-sm" onclick="NR.waSalvarConfig()"><i class="fas fa-check"></i> Salvar</button>
                             <button class="btn btn-outline btn-sm" id="wa-btn-testar" onclick="NR.waTestarGrok()"><i class="fas fa-robot"></i> Testar Grok</button>
                             <button class="btn btn-outline btn-sm" onclick="NR.waAtualizarGrupos()"><i class="fas fa-sync-alt"></i> Atualizar grupos</button>
+                            <button class="btn btn-outline btn-sm" onclick="NR.waResumoAgora()" title="Manda agora o resumo de contas para o 1º número autorizado"><i class="fas fa-sun"></i> Enviar resumo agora</button>
+                            <label style="font-size:12px;align-self:center;display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="wa-resumo-diario" checked> Resumo diário às 7h (1º número autorizado)</label>
                             <span id="wa-teste-res" style="font-size:12px;align-self:center"></span>
                         </div>
                     </div>
                 </div>
                 <div style="margin-top:16px">
                     <div style="font-weight:600;margin-bottom:6px"><i class="fas fa-users"></i> Grupos do WhatsApp → empresa</div>
-                    <div class="table-wrap"><table class="data-table" id="wa-grupos"><thead><tr><th>Grupo</th><th style="width:260px">Empresa</th></tr></thead><tbody><tr><td colspan="2" style="color:var(--text3)">Conecte o WhatsApp para listar os grupos.</td></tr></tbody></table></div>
+                    <div class="table-wrap"><table class="data-table" id="wa-grupos"><thead><tr><th>Grupo</th><th style="width:220px">Empresa</th><th style="width:150px" title="Dentro/Fora usado quando a mensagem não disser">D/F padrão</th><th style="width:170px" title="Quem pagou, quando a mensagem não disser">Pago por padrão</th></tr></thead><tbody><tr><td colspan="4" style="color:var(--text3)">Conecte o WhatsApp para listar os grupos.</td></tr></tbody></table></div>
                 </div>
                 <div style="margin-top:16px">
                     <div style="font-weight:600;margin-bottom:6px"><i class="fas fa-history"></i> Últimas mensagens processadas</div>

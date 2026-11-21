@@ -142,6 +142,7 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN grupo_parcela TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN linha_digitavel TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN comprovante TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN boleto_arquivo TEXT DEFAULT ""'); } catch(e) {}
   // Controle Fiscal
   dbInstance.run(`CREATE TABLE IF NOT EXISTS controle_fiscal (
     id TEXT PRIMARY KEY, data TEXT NOT NULL,
@@ -734,7 +735,36 @@ module.exports = {
     if (fields.recorrente !== undefined) { sets.push('recorrente=?'); vals.push(parseInt(fields.recorrente) ? 1 : 0); }
     if (fields.tipo_nota !== undefined) { sets.push('tipo_nota=?'); vals.push(fields.tipo_nota); }
     if (fields.comprovante !== undefined) { sets.push('comprovante=?'); vals.push(fields.comprovante || ''); }
+    if (fields.linha_digitavel !== undefined) { sets.push('linha_digitavel=?'); vals.push(fields.linha_digitavel || ''); }
+    if (fields.boleto_arquivo !== undefined) { sets.push('boleto_arquivo=?'); vals.push(fields.boleto_arquivo || ''); }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE contas_pagar SET ' + sets.join(',') + ' WHERE id=?', vals); }
+  },
+  // Últimas contas por fornecedor/descrição (WhatsApp copia categoria, D/F e recorrente do histórico)
+  historicoContas(slug, limite = 600) {
+    return query(slug, "SELECT fornecedor, descricao, categoria, tipo_nota, recorrente, valor, vencimento FROM contas_pagar ORDER BY vencimento DESC LIMIT ?", [limite]);
+  },
+  // Contas com mesmo valor perto da mesma data (aviso de lançamento repetido)
+  contasParecidas(slug, valor, data, dias = 3) {
+    return query(slug, "SELECT * FROM contas_pagar WHERE ABS(valor - ?) < 0.01 AND vencimento BETWEEN date(?, ?) AND date(?, ?) ORDER BY vencimento", [valor, data, '-' + dias + ' days', data, '+' + dias + ' days']);
+  },
+  // Consulta livre das contas a pagar (perguntas pelo WhatsApp)
+  consultarContas(slug, f) {
+    const w = [], v = [];
+    if (f.status === 'pendentes') w.push("(pago_por IS NULL OR pago_por='' OR pago_por='A Pagar')");
+    if (f.status === 'pagas') w.push("(pago_por IS NOT NULL AND pago_por<>'' AND pago_por<>'A Pagar')");
+    if (f.de) { w.push('vencimento >= ?'); v.push(f.de); }
+    if (f.ate) { w.push('vencimento <= ?'); v.push(f.ate); }
+    if (f.categoria) { w.push('LOWER(categoria) = LOWER(?)'); v.push(f.categoria); }
+    if (f.texto) { w.push('(LOWER(descricao) LIKE ? OR LOWER(fornecedor) LIKE ?)'); v.push('%' + String(f.texto).toLowerCase() + '%', '%' + String(f.texto).toLowerCase() + '%'); }
+    return query(slug, 'SELECT id, vencimento, descricao, valor, fornecedor, categoria, pago_por, tipo_nota FROM contas_pagar' + (w.length ? ' WHERE ' + w.join(' AND ') : '') + ' ORDER BY vencimento LIMIT 500', v);
+  },
+  // Saída do acerto gerada ao quitar uma conta (desfazer / correção pelo WhatsApp)
+  delAcertoPorConta(slug, contaId) { run(slug, 'DELETE FROM acerto WHERE origem_conta_pagar=?', [contaId]); },
+  updateAcertoPorConta(slug, contaId, fields) {
+    const map = { categoria: 'categoria', tipo_nota: 'tipo_nota', fornecedor: 'fornecedor', recorrente: 'recorrente', valor: 'saida' };
+    const sets = [], vals = [];
+    for (const k of Object.keys(map)) if (fields[k] !== undefined) { sets.push(map[k] + '=?'); vals.push(k === 'recorrente' ? (parseInt(fields[k]) ? 1 : 0) : (k === 'valor' ? parseFloat(fields[k]) : fields[k])); }
+    if (sets.length) { vals.push(contaId); run(slug, 'UPDATE acerto SET ' + sets.join(',') + ' WHERE origem_conta_pagar=?', vals); }
   },
   // Contas ainda não pagas numa janela de datas (usado pelo WhatsApp para casar comprovantes)
   getContasPagarPendentes(slug, de, ate, limite = 80) {

@@ -302,6 +302,16 @@ app.get('/api/contas-pagar/:id/comprovante', (req, res) => {
   res.setHeader('Content-Disposition', 'inline; filename="comprovante_' + conta.id + ext + '"');
   res.send(fs.readFileSync(abs));
 });
+// Boleto recebido pelo WhatsApp (arquivo guardado junto dos comprovantes)
+app.get('/api/contas-pagar/:id/boleto', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  const abs = conta && whatsapp.comprovantePath(conta.boleto_arquivo);
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ error: 'Boleto não encontrado' });
+  const ext = path.extname(abs).toLowerCase();
+  res.setHeader('Content-Type', ext === '.pdf' ? 'application/pdf' : (ext === '.png' ? 'image/png' : 'image/jpeg'));
+  res.setHeader('Content-Disposition', 'inline; filename="boleto_' + conta.id + ext + '"');
+  res.send(fs.readFileSync(abs));
+});
 app.delete('/api/contas-pagar/:id/comprovante', (req, res) => {
   const conta = db.getContaPagarById(req.emp, req.params.id);
   if (!conta) return res.status(404).json({ error: 'Conta não encontrada' });
@@ -1366,11 +1376,23 @@ app.post('/api/whatsapp/config', adminOnly, (req, res) => {
   if (b.grupos && typeof b.grupos === 'object') novo.grupos = b.grupos;
   if (Array.isArray(b.autorizados)) novo.autorizados = b.autorizados.map(a => ({ numero: String(a.numero || '').replace(/\D/g, ''), nome: String(a.nome || '').trim() })).filter(a => a.numero);
   if (b.empresa_padrao !== undefined) novo.empresa_padrao = String(b.empresa_padrao || '');
+  if (b.grupos_padrao && typeof b.grupos_padrao === 'object') {
+    novo.grupos_padrao = {};
+    for (const [jid, p] of Object.entries(b.grupos_padrao)) {
+      const tn = p && (p.tipo_nota === 'D' || p.tipo_nota === 'F') ? p.tipo_nota : '';
+      const pp = p && p.pago_por ? String(p.pago_por).trim() : '';
+      if (tn || pp) novo.grupos_padrao[jid] = { tipo_nota: tn, pago_por: pp };
+    }
+  }
+  if (b.resumo_diario !== undefined) novo.resumo_diario = !!b.resumo_diario;
   if (b.grok_model !== undefined) novo.grok_model = String(b.grok_model || '').trim();
   if (b.grok_api_key) novo.grok_api_key = String(b.grok_api_key).trim();
   whatsapp.salvarConfig(novo);
   db.addAuditLog(req.emp, req.user.nome, 'alterou', 'WhatsApp', 'Atualizou configuração do WhatsApp/Grok');
   res.json({ ok: true });
+});
+app.post('/api/whatsapp/resumo-agora', adminOnly, async (req, res) => {
+  try { res.json(await whatsapp.enviarResumoDiario(true)); } catch (e) { res.json({ error: e.message }); }
 });
 app.post('/api/whatsapp/testar-grok', adminOnly, async (req, res) => {
   try {
@@ -1656,7 +1678,13 @@ db.init().then(() => {
   whatsapp.init({
     atualizarConta: (slug, id, fields, quem) => aplicarAlteracaoConta(slug, id, fields, quem),
     criarConta: (slug, item, quem) => { db.addContaPagar(slug, item); db.addAuditLog(slug, quem, 'criou', 'Contas a Pagar', 'ID: ' + item.id + ' - ' + item.descricao + ' - R$ ' + item.valor); },
+    excluirConta: (slug, id, quem) => { db.delContaPagar(slug, id); db.addAuditLog(slug, quem, 'excluiu', 'Contas a Pagar', 'ID: ' + id + ' (desfeito pelo WhatsApp)'); },
   });
+  // Resumo diário das contas a pagar no WhatsApp do dono (1º número autorizado)
+  cron.schedule('0 7 * * *', () => {
+    whatsapp.enviarResumoDiario().then(r => console.log('⏰ Resumo WhatsApp:', JSON.stringify(r))).catch(e => console.error('Erro resumo WhatsApp:', e.message));
+  }, { timezone: 'America/Sao_Paulo' });
+  console.log('⏰ Resumo diário WhatsApp: 07:00 (Brasília)');
   // Backup automático: 7h, 12h, 16h e 20h (horário do servidor)
   cron.schedule('0 7,12,16,20 * * *', () => {
     console.log('⏰ Backup agendado iniciando...');
