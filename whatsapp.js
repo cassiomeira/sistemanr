@@ -577,7 +577,7 @@ Regras:
 - Em comprovante de pagamento de boleto, se aparecer o código de barras ou a linha digitável, copie os dígitos em linha_digitavel (o sistema usa para achar a conta exata).
 - "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje).
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
-- "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar". Boleto REEMITIDO/ALTERADO (mesmo fornecedor de uma conta pendente, com outro vencimento ou outro valor, ou o texto diz "novo boleto", "mudou", "prorrogou") também é "boleto" com conta_id da conta pendente — o sistema troca valor e vencimento.
+- "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar". Se a conta pendente foi lançada à mão com outro nome/sem fornecedor mas tem o mesmo valor (±3%) e vencimento próximo, é a mesma conta: use conta_id dela. Boleto REEMITIDO/ALTERADO (mesmo fornecedor de uma conta pendente, com outro vencimento ou outro valor, ou o texto diz "novo boleto", "mudou", "prorrogou") também é "boleto" com conta_id da conta pendente — o sistema troca valor e vencimento.
 - "alterar": o TEXTO pede para mudar uma conta pendente que NÃO é o último lançamento (ex.: "o boleto da ISPS mudou pra dia 30", "a conta da Cemig agora é 480"). Preencha conta_id (das contas_pendentes) e correcao só com os campos citados.
 - "criar": despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
 - fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
@@ -809,12 +809,17 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     if (!analise.forcarNovo) {
       const nomeB = norm(dados.fornecedor || dados.beneficiario || analise.fornecedor || '');
       const hoje = hojeISO();
-      const mesmas = nomeB.length >= 3 ? db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180)).filter(c => { const n = norm(c.fornecedor || c.descricao); return n && (n === nomeB || (Math.min(n.length, nomeB.length) >= 4 && (n.includes(nomeB) || nomeB.includes(n)))); }).slice(0, 4) : [];
+      const diasEntre = (x, y) => (x && y) ? Math.abs(new Date(x) - new Date(y)) / 86400000 : 999;
+      const mesmoNome = c => { const n = norm(c.fornecedor || c.descricao); return nomeB.length >= 3 && n && (n === nomeB || (Math.min(n.length, nomeB.length) >= 4 && (n.includes(nomeB) || nomeB.includes(n)))); };
+      // conta lançada à mão com outro nome: mesmo valor (±1%) e vencimento até 15 dias de diferença
+      const mesmoValor = c => Math.abs((c.valor || 0) - dados.valor) <= Math.max(0.05, dados.valor * 0.01) && diasEntre(c.vencimento, dados.vencimento || hoje) <= 15;
+      const mesmas = db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180)).filter(c => mesmoNome(c) || mesmoValor(c))
+        .sort((x, y) => (mesmoNome(y) && mesmoValor(y)) - (mesmoNome(x) && mesmoValor(x)) || diasEntre(x.vencimento, dados.vencimento) - diasEntre(y.vencimento, dados.vencimento)).slice(0, 4);
       if (mesmas.length) {
         const opcoes = mesmas.map(c => ({ id: c.id })).concat([{ novo: true }]);
         pendentes[jid] = { tipo: 'boleto_troca', opcoes, slug, media, analise, quando: Date.now() };
-        await responder(jid, '📄 Boleto de ' + (dados.fornecedor || dados.beneficiario || analise.fornecedor) + ': ' + fmtV(dados.valor) + ', venc. ' + fmtD(dados.vencimento) + '.\nJá existe conta pendente desse fornecedor. É troca de boleto (atualizo valor e vencimento)?\n'
-          + mesmas.map((c, i) => (i + 1) + '. Trocar: ' + c.descricao + ' — ' + fmtV(c.valor) + ' — venc. ' + fmtD(c.vencimento)).join('\n') + '\n' + (mesmas.length + 1) + '. Não, é uma conta nova', m);
+        await responder(jid, '📄 Boleto de ' + (dados.fornecedor || dados.beneficiario || analise.fornecedor) + ': ' + fmtV(dados.valor) + ', venc. ' + fmtD(dados.vencimento) + '.\nJá existe conta pendente que pode ser deste boleto (mesmo fornecedor, ou mesmo valor e vencimento próximo). Anexo o boleto nela (atualizo valor e vencimento)?\n'
+          + mesmas.map((c, i) => (i + 1) + '. Anexar em: ' + c.descricao + ' — ' + fmtV(c.valor) + ' — venc. ' + fmtD(c.vencimento)).join('\n') + '\n' + (mesmas.length + 1) + '. Não, é uma conta nova', m);
         return;
       }
     }
