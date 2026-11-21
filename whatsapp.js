@@ -282,6 +282,42 @@ function guardarHash(media, slug, contaId) {
   try { fs.writeFileSync(hashesPath, JSON.stringify(todos)); } catch (e) {}
 }
 
+// ---------- apelidos das empresas (grupo com várias empresas / conversa privada) ----------
+// Nomes e CNPJs que aparecem no texto, no boleto (pagador/sacado) ou no comprovante (pagador) → slug da empresa.
+const APELIDOS_PADRAO = {
+  nunesrocha: ['nunes rocha', 'nr casa', 'casa nunes rocha', 'geraldo celso', 'geraldo celso rocha', 'llc.com', 'llc com', '20606315000194', '68378016000176'],
+  spntelecom: ['spn', 'spn servicos', 'spn servicos net', 'spn telecom', 'suprinet', '20753858000134', '55010237000145'],
+  tmtnetc: ['tmt', 'tmt servicos', 'tmt telecom', 'tmt net', 'tmtnet'],
+  clc: ['clc', 'clc transportadora', '64139263000169'],
+  drogaria: ['drogaria', 'drugstore', 'drugstore rocha', '05916046000179'],
+};
+function apelidosCfg(cfg) { return (cfg && cfg.apelidos && typeof cfg.apelidos === 'object') ? cfg.apelidos : APELIDOS_PADRAO; }
+const ehCnpj = a => /^\d{14}$/.test(soDigitos(a)) && soDigitos(a).length === String(a).replace(/[\s.\/-]/g, '').length;
+// Devolve { slug, motivo } quando só uma empresa bate; { varias: [slugs] } quando bate mais de uma; null quando nenhuma
+function identificarEmpresa(texto, cfg) {
+  if (!texto) return null;
+  const empresas = db.getEmpresas();
+  const valida = sl => empresas.some(e => e.slug === sl);
+  const t = ' ' + norm(texto) + ' ';
+  const cnpjs = new Set((String(texto).match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g) || []).map(soDigitos));
+  const procura = mapa => {
+    const achadas = {};
+    for (const [slug, lista] of Object.entries(mapa)) {
+      if (!valida(slug)) continue;
+      for (const a of lista || []) {
+        if (ehCnpj(a)) { if (cnpjs.has(soDigitos(a))) achadas[slug] = 'CNPJ ' + soDigitos(a); }
+        else { const n = norm(a); if (n && t.includes(' ' + n + ' ') && !achadas[slug]) achadas[slug] = '"' + a + '"'; }
+      }
+    }
+    return achadas;
+  };
+  let achadas = procura(apelidosCfg(cfg)); // apelidos têm prioridade sobre o nome cadastrado da empresa
+  if (!Object.keys(achadas).length) achadas = procura(Object.fromEntries(empresas.map(e => [e.slug, [e.nome, e.slug]])));
+  const k = Object.keys(achadas);
+  if (k.length === 1) return { slug: k[0], motivo: achadas[k[0]] };
+  return k.length ? { varias: k } : null;
+}
+
 // ---------- números autorizados (com ou sem o 9 depois do DDD) ----------
 function variantesNumero(n) {
   let d = soDigitos(n);
@@ -430,7 +466,7 @@ async function tratarMensagem(m) {
     let buffer;
     try { buffer = await baileys.downloadMediaMessage({ key: m.key, message: msg }, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }); }
     catch (e) { await responder(jid, 'Não consegui baixar o áudio: ' + e.message, m); return; }
-    const t = await transcreverAudio(empresaFixa || 'nunesrocha', buffer, (audio.mimetype || 'audio/ogg').split(';')[0].toLowerCase());
+    const t = await transcreverAudio(empresaFixa && empresaFixa !== '*' ? empresaFixa : 'nunesrocha', buffer, (audio.mimetype || 'audio/ogg').split(';')[0].toLowerCase());
     if (t.error || !t.texto) { await responder(jid, 'Não consegui entender o áudio' + (t.error ? ': ' + t.error : '') + '. Pode mandar por escrito?', m); return; }
     texto = t.texto;
     await responder(jid, '🎤 Entendi: "' + texto + '"', m);
@@ -484,11 +520,11 @@ async function transcreverAudio(slug, buffer, mimeType) {
   } catch (e) { return { error: e.message }; }
 }
 
-function montarContexto(slugs) {
+function montarContexto(slugs, cfg) {
   const hoje = hojeISO();
   const dias = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
   const empresas = db.getEmpresas();
-  const ctx = { hoje, dia_semana: dias[new Date(hoje + 'T12:00:00Z').getUTCDay()], empresas: empresas.filter(e => slugs.includes(e.slug)).map(e => ({ slug: e.slug, nome: e.nome })), contas_pendentes: [], colaboradores: {}, categorias: {}, fornecedores_conhecidos: {} };
+  const ctx = { hoje, dia_semana: dias[new Date(hoje + 'T12:00:00Z').getUTCDay()], empresas: empresas.filter(e => slugs.includes(e.slug)).map(e => slugs.length > 1 ? { slug: e.slug, nome: e.nome, tambem_aparece_como: (apelidosCfg(cfg)[e.slug] || []) } : { slug: e.slug, nome: e.nome }), contas_pendentes: [], colaboradores: {}, categorias: {}, fornecedores_conhecidos: {} };
   for (const slug of slugs) {
     try {
       ctx.contas_pendentes.push(...db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 90)).map(c => ({ id: c.id, empresa: slug, vencimento: c.vencimento, descricao: c.descricao, valor: c.valor, fornecedor: c.fornecedor || '' })));
@@ -502,7 +538,7 @@ function montarContexto(slugs) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
@@ -524,8 +560,10 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
   const g = grokCfg();
   if (!g.apiKey) { await responder(jid, 'A chave da API do Grok não está configurada no sistema (Configurações → WhatsApp).', m); return; }
   const empresas = db.getEmpresas();
-  const slugs = empresaFixa ? [empresaFixa] : empresas.map(e => e.slug);
-  const ctx = montarContexto(slugs);
+  const multi = !empresaFixa || empresaFixa === '*';
+  const slugs = multi ? empresas.map(e => e.slug) : [empresaFixa];
+  const ctx = montarContexto(slugs, cfg);
+  const peloTexto = multi ? identificarEmpresa(texto, cfg) : null;
   const imagens = [];
   let anexoTexto = '', boletoPdf = null;
   if (media) {
@@ -545,7 +583,9 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
   const ult = !media && ultimos[jid] && Date.now() - ultimos[jid].quando < 3 * 3600000 ? ultimos[jid] : null;
   const ultimoCtx = ult ? ult.ids.slice(0, 3).map(id => db.getContaPagarById(ult.slug, id)).filter(Boolean).map(c => ({ descricao: c.descricao, valor: c.valor, vencimento: c.vencimento, fornecedor: c.fornecedor, categoria: c.categoria, tipo_nota: c.tipo_nota, recorrente: !!c.recorrente })) : null;
   const prompt = 'Mensagem do usuário: ' + (texto ? JSON.stringify(texto) : '(sem texto, só o anexo)') + '\n'
-    + (empresaFixa ? 'Empresa desta conversa (fixa): ' + empresaFixa + '\n' : 'Empresa não definida — descubra pelo texto (nomes/slugs abaixo).\n')
+    + (!multi ? 'Empresa desta conversa (fixa): ' + empresaFixa + '\n'
+      : 'Esta conversa tem VÁRIAS empresas. Descubra a empresa nesta ordem: 1) nome citado no texto da mensagem; 2) se for BOLETO, o pagador/sacado (devedor); 3) se for COMPROVANTE, o pagador (quem pagou). Compare com "nome" e "tambem_aparece_como" (inclui CNPJs) das empresas; um apelido vale mais que o nome — use o slug da empresa a que o apelido pertence. Preencha "pagador" com o nome/CNPJ do pagador que você leu.\n'
+        + (peloTexto && peloTexto.slug ? 'O sistema identificou pelo texto a empresa ' + peloTexto.slug + ' (' + peloTexto.motivo + ').\n' : ''))
     + (imagens.length ? 'Há uma imagem anexa (comprovante ou boleto): leia valor, data/vencimento, quem recebeu, descrição e a linha digitável se houver.\n' : '')
     + (anexoTexto ? 'Texto extraído do PDF anexo:\n"""' + anexoTexto.slice(0, 6000) + '"""\n' : '')
     + (ultimoCtx ? 'Último lançamento desta conversa (se a mensagem for uma correção dele, use acao "corrigir"): ' + JSON.stringify(ultimoCtx) + '\n' : '')
@@ -570,10 +610,17 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     return aplicarComando({ jid, m, quem, cmd: c.desfazer ? { desfazer: true } : { itens } });
   }
   if (analise.acao === 'consultar') {
-    const alvo = empresaFixa ? [empresaFixa] : (analise.empresa && empresas.some(e => e.slug === analise.empresa) ? [analise.empresa] : empresas.map(e => e.slug));
+    const alvo = !multi ? [empresaFixa] : (peloTexto && peloTexto.slug ? [peloTexto.slug] : (analise.empresa && empresas.some(e => e.slug === analise.empresa) ? [analise.empresa] : empresas.map(e => e.slug)));
     return executarConsulta({ jid, m, slugs: alvo, c: analise.consulta || {} });
   }
-  const slug = empresaFixa || analise.empresa || '';
+  let slug = multi ? '' : empresaFixa;
+  if (multi) {
+    // texto do usuário > pagador lido no documento (apelidos/CNPJ) > escolha da IA > nomes no PDF
+    const pagador = identificarEmpresa(analise.pagador, cfg);
+    const noPdf = boletoPdf || anexoTexto ? identificarEmpresa(anexoTexto, cfg) : null;
+    slug = (peloTexto && peloTexto.slug) || (pagador && pagador.slug) || (empresas.some(e => e.slug === analise.empresa) ? analise.empresa : '') || (noPdf && noPdf.slug) || '';
+    if (slug) registrar('empresa', 'Empresa ' + slug + (peloTexto && peloTexto.slug === slug ? ' pelo texto (' + peloTexto.motivo + ')' : pagador && pagador.slug === slug ? ' pelo pagador (' + pagador.motivo + ')' : ' pela IA'), { quem });
+  }
   if (!slug || !empresas.some(e => e.slug === slug)) {
     const opcoes = empresas.map(e => ({ slug: e.slug, nome: e.nome }));
     pendentes[jid] = { tipo: 'empresa', opcoes, texto, media, quando: Date.now() };
@@ -837,7 +884,7 @@ function status() {
     grok_model: cfg.grok_model || grok.MODELO_PADRAO, temGrokKey: !!cfg.grok_api_key,
     grupos: Object.keys(gruposCache).map(jid => ({ jid, nome: gruposCache[jid].nome || jid, empresa: (cfg.grupos || {})[jid] || '', padrao: (cfg.grupos_padrao || {})[jid] || {} })).sort((a, b) => a.nome.localeCompare(b.nome)),
     gruposConfig: cfg.grupos || {}, autorizados: cfg.autorizados || [], empresa_padrao: cfg.empresa_padrao || '',
-    grupos_padrao: cfg.grupos_padrao || {}, resumo_diario: cfg.resumo_diario !== false,
+    grupos_padrao: cfg.grupos_padrao || {}, resumo_diario: cfg.resumo_diario !== false, apelidos: apelidosCfg(cfg),
     log: logEventos,
   };
 }
@@ -848,4 +895,4 @@ function comprovantePath(rel) {
 }
 
 module.exports = { init, conectar, desconectar, status, atualizarGrupos, lerConfig, salvarConfig, grokCfg, salvarComprovante, comprovantePath, comprovantesDir, enviarResumoDiario,
-  _interno: { tratarMensagem, comandoRapido, variantesNumero, parseValorBR, somaMeses, dataDoTexto, norm, acharNoHistorico, montarResumoDiario, setSock(s) { sock = s; }, setEstado(e) { Object.assign(estado, e); }, setBaileys(b) { baileys = b; } } };
+  _interno: { tratarMensagem, identificarEmpresa, comandoRapido, variantesNumero, parseValorBR, somaMeses, dataDoTexto, norm, acharNoHistorico, montarResumoDiario, setSock(s) { sock = s; }, setEstado(e) { Object.assign(estado, e); }, setBaileys(b) { baileys = b; } } };

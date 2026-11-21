@@ -1385,6 +1385,10 @@ app.post('/api/whatsapp/config', adminOnly, (req, res) => {
     }
   }
   if (b.resumo_diario !== undefined) novo.resumo_diario = !!b.resumo_diario;
+  if (b.apelidos && typeof b.apelidos === 'object') {
+    novo.apelidos = {};
+    for (const [slug, lista] of Object.entries(b.apelidos)) if (Array.isArray(lista)) novo.apelidos[String(slug)] = lista.map(x => String(x).trim()).filter(Boolean).slice(0, 50);
+  }
   if (b.grok_model !== undefined) novo.grok_model = String(b.grok_model || '').trim();
   if (b.grok_api_key) novo.grok_api_key = String(b.grok_api_key).trim();
   whatsapp.salvarConfig(novo);
