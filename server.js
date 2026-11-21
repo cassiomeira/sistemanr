@@ -218,33 +218,34 @@ app.post('/api/contas-pagar', (req, res) => {
   db.addAuditLog(req.emp, req.user.nome, 'criou', 'Contas a Pagar', 'ID: ' + item.id + ' - ' + b.descricao + ' - R$ ' + b.valor);
   res.json({ ok: true, id: item.id });
 });
-app.put('/api/contas-pagar/:id', (req, res) => {
-  const b = req.body;
-  console.log(`PUT /contas-pagar/${req.params.id}`, b);
+// Atualiza uma conta a pagar aplicando as regras de negócio (acerto ao marcar pago, débito/crédito de caixa).
+// Usada pela rota PUT e pelo módulo WhatsApp.
+function aplicarAlteracaoConta(slug, id, b, quem) {
+  console.log(`PUT /contas-pagar/${id}`, b);
   // Ler estado ANTERIOR antes de atualizar (importante para lógica de caixa)
   let contaAnterior = null;
   if (b.caixa_id !== undefined || b.pago_por !== undefined) {
-    contaAnterior = db.getContaPagarById(req.emp, req.params.id);
+    contaAnterior = db.getContaPagarById(slug, id);
   }
   // Atualizar o registro
-  db.updateContaPagar(req.emp, req.params.id, b);
+  db.updateContaPagar(slug, id, b);
   // Se marcou boleto_chegou e pertence a um grupo, propagar para todas do grupo
   if (b.boleto_chegou !== undefined) {
-    const conta = db.getContaPagarById(req.emp, req.params.id);
+    const conta = db.getContaPagarById(slug, id);
     if (conta && conta.grupo_parcela) {
-      db.run_raw(req.emp, 'UPDATE contas_pagar SET boleto_chegou=? WHERE grupo_parcela=?', [b.boleto_chegou ? 1 : 0, conta.grupo_parcela]);
+      db.run_raw(slug, 'UPDATE contas_pagar SET boleto_chegou=? WHERE grupo_parcela=?', [b.boleto_chegou ? 1 : 0, conta.grupo_parcela]);
     }
   }
   // Se marcou "pago_por" com um colaborador → gera saída no acerto (se ainda não existe)
   if (b.pago_por && b.pago_por !== '' && b.pago_por !== 'A Pagar') {
     try {
-      const conta = contaAnterior || db.getContaPagarById(req.emp, req.params.id);
+      const conta = contaAnterior || db.getContaPagarById(slug, id);
       console.log('Conta para acerto:', conta ? conta.id : 'NÃO ENCONTRADA');
       if (conta) {
-        const jaExiste = db.acertoJaExiste(req.emp, conta.id);
+        const jaExiste = db.acertoJaExiste(slug, conta.id);
         console.log('Acerto já existe?', jaExiste);
         if (!jaExiste) {
-          db.addAcerto(req.emp, {
+          db.addAcerto(slug, {
             id: uid(), data: new Date().toISOString().split('T')[0],
             descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + b.pago_por + ')',
             entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
@@ -265,16 +266,48 @@ app.put('/api/contas-pagar/:id', (req, res) => {
     console.log(`Caixa: antigo=${antigoCaixa}, novo=${novoCaixa}, valor=${contaAnterior.valor}`);
     // Se tinha um caixa anterior diferente do novo, creditar de volta
     if (antigoCaixa > 0 && antigoCaixa !== novoCaixa) {
-      db.run_raw(req.emp, 'UPDATE caixas SET saldo=saldo+? WHERE id=?', [contaAnterior.valor, antigoCaixa]);
+      db.run_raw(slug, 'UPDATE caixas SET saldo=saldo+? WHERE id=?', [contaAnterior.valor, antigoCaixa]);
       console.log(`✅ Creditado ${contaAnterior.valor} de volta ao caixa antigo ${antigoCaixa}`);
     }
     // Se o novo caixa é válido e diferente do antigo, debitar
     if (novoCaixa > 0 && novoCaixa !== antigoCaixa) {
-      db.debitCaixa(req.emp, novoCaixa, contaAnterior.valor);
+      db.debitCaixa(slug, novoCaixa, contaAnterior.valor);
       console.log(`✅ Debitado ${contaAnterior.valor} do caixa ${novoCaixa}`);
     }
   }
-  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Contas a Pagar', 'ID: ' + req.params.id + ' - ' + JSON.stringify(req.body));
+  db.addAuditLog(slug, quem, 'alterou', 'Contas a Pagar', 'ID: ' + id + ' - ' + JSON.stringify(b));
+}
+app.put('/api/contas-pagar/:id', (req, res) => {
+  aplicarAlteracaoConta(req.emp, req.params.id, req.body, req.user.nome);
+  res.json({ ok: true });
+});
+// Comprovante de pagamento anexado à conta (arquivo em data/comprovantes/<empresa>/)
+app.post('/api/contas-pagar/:id/comprovante', upload.single('arquivo'), (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  if (!conta) return res.status(404).json({ error: 'Conta não encontrada' });
+  if (!req.file) return res.status(400).json({ error: 'Envie o arquivo' });
+  const mime = (req.file.mimetype || '').toLowerCase();
+  if (!/^(image\/(jpe?g|png)|application\/pdf)$/.test(mime)) return res.status(400).json({ error: 'Envie JPG, PNG ou PDF' });
+  const rel = whatsapp.salvarComprovante(req.emp, conta.id, { buffer: req.file.buffer, mimeType: mime });
+  db.updateContaPagar(req.emp, conta.id, { comprovante: rel });
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Contas a Pagar', 'ID: ' + conta.id + ' - anexou comprovante');
+  res.json({ ok: true, comprovante: rel });
+});
+app.get('/api/contas-pagar/:id/comprovante', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  const abs = conta && whatsapp.comprovantePath(conta.comprovante);
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ error: 'Comprovante não encontrado' });
+  const ext = path.extname(abs).toLowerCase();
+  res.setHeader('Content-Type', ext === '.pdf' ? 'application/pdf' : (ext === '.png' ? 'image/png' : 'image/jpeg'));
+  res.setHeader('Content-Disposition', 'inline; filename="comprovante_' + conta.id + ext + '"');
+  res.send(fs.readFileSync(abs));
+});
+app.delete('/api/contas-pagar/:id/comprovante', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  if (!conta) return res.status(404).json({ error: 'Conta não encontrada' });
+  const abs = whatsapp.comprovantePath(conta.comprovante);
+  if (abs && fs.existsSync(abs)) { try { fs.unlinkSync(abs); } catch (e) {} }
+  db.updateContaPagar(req.emp, conta.id, { comprovante: '' });
   res.json({ ok: true });
 });
 app.delete('/api/contas-pagar/:id', (req, res) => {
@@ -770,6 +803,8 @@ function parseHolerite(text) {
 
 // === NF-e (NOTAS EMITIDAS CONTRA O CNPJ) ===
 const nfe = require('./nfe');
+const whatsapp = require('./whatsapp');
+const grok = require('./grok');
 app.get('/api/nfe/config', adminOnly, (req, res) => {
   const cfg = nfe.getNfeConfig(req.emp);
   const cert = cfg.temCert ? nfe.certInfo(req.emp) : {};
@@ -1313,6 +1348,39 @@ app.get('/api/alertas', (req, res) => {
 
 // === TELEGRAM ===
 const telegram = require('./telegram');
+// === WHATSAPP (global, só admin) ===
+app.get('/api/whatsapp/status', adminOnly, (req, res) => res.json(Object.assign(whatsapp.status(), { empresas: db.getEmpresas() })));
+app.post('/api/whatsapp/conectar', adminOnly, async (req, res) => {
+  whatsapp.salvarConfig({ ativo: true });
+  whatsapp.conectar().catch(() => {});
+  setTimeout(() => res.json(whatsapp.status()), 1500);
+});
+app.post('/api/whatsapp/desconectar', adminOnly, async (req, res) => {
+  await whatsapp.desconectar(!!req.body.apagarSessao);
+  res.json(whatsapp.status());
+});
+app.post('/api/whatsapp/grupos', adminOnly, async (req, res) => { await whatsapp.atualizarGrupos(); res.json(whatsapp.status()); });
+app.post('/api/whatsapp/config', adminOnly, (req, res) => {
+  const b = req.body || {};
+  const novo = {};
+  if (b.grupos && typeof b.grupos === 'object') novo.grupos = b.grupos;
+  if (Array.isArray(b.autorizados)) novo.autorizados = b.autorizados.map(a => ({ numero: String(a.numero || '').replace(/\D/g, ''), nome: String(a.nome || '').trim() })).filter(a => a.numero);
+  if (b.empresa_padrao !== undefined) novo.empresa_padrao = String(b.empresa_padrao || '');
+  if (b.grok_model !== undefined) novo.grok_model = String(b.grok_model || '').trim();
+  if (b.grok_api_key) novo.grok_api_key = String(b.grok_api_key).trim();
+  whatsapp.salvarConfig(novo);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'WhatsApp', 'Atualizou configuração do WhatsApp/Grok');
+  res.json({ ok: true });
+});
+app.post('/api/whatsapp/testar-grok', adminOnly, async (req, res) => {
+  try {
+    const cfg = whatsapp.grokCfg();
+    if (req.body && req.body.grok_api_key) cfg.apiKey = String(req.body.grok_api_key).trim();
+    if (req.body && req.body.grok_model) cfg.modelo = String(req.body.grok_model).trim();
+    res.json(await grok.testar(cfg));
+  } catch (e) { res.json({ error: e.message }); }
+});
+
 app.post('/api/telegram/testar', adminOnly, async (req, res) => {
   const r = await telegram.sendTelegram(req.emp, '✅ Teste de notificação do Sistema Nunes Rocha funcionando!');
   res.json(r);
@@ -1585,6 +1653,10 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 db.init().then(() => {
   app.listen(PORT, '0.0.0.0', () => console.log(`✅ Sistema rodando em http://0.0.0.0:${PORT}`));
+  whatsapp.init({
+    atualizarConta: (slug, id, fields, quem) => aplicarAlteracaoConta(slug, id, fields, quem),
+    criarConta: (slug, item, quem) => { db.addContaPagar(slug, item); db.addAuditLog(slug, quem, 'criou', 'Contas a Pagar', 'ID: ' + item.id + ' - ' + item.descricao + ' - R$ ' + item.valor); },
+  });
   // Backup automático: 7h, 12h, 16h e 20h (horário do servidor)
   cron.schedule('0 7,12,16,20 * * *', () => {
     console.log('⏰ Backup agendado iniciando...');

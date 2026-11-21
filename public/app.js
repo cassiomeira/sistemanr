@@ -303,7 +303,7 @@ async function renderContasPagar(){
     let achegar=i.a_chegar?'<span style="background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;margin-left:4px"><i class="fas fa-truck-loading"></i> A CHEGAR</span>':'';
     let chegarBtn=i.a_chegar?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px" onclick="NR.marcarChegou(\''+i.id+'\')" title="Marcar como chegou"><i class="fas fa-check"></i> Chegou</button> ':'<button class="btn btn-sm" style="background:var(--bg3);color:var(--amber);font-size:10px;border:1px solid var(--amber)" onclick="NR.toggleAChegar(\''+i.id+'\')" title="Marcar como produto a chegar"><i class="fas fa-truck-loading"></i></button> ';
     let cb=pago?'<td></td>':'<td><input type="checkbox" class="cp-sel-cb" data-id="'+i.id+'" data-valor="'+i.valor+'" onchange="NR.updateCpBatch()"></td>';
-    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'" class="'+cls+'">'+cb+'<td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(! i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+chegarBtn+'<button class="btn-edit" onclick="NR.editRow(\'contas-pagar\',\''+i.id+'\')"><i class="fas fa-edit"></i></button> '+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'" class="'+cls+'">'+cb+'<td>'+fD(i.vencimento)+'</td><td>'+i.descricao+achegar+'</td><td>'+fmt(i.valor)+'</td><td>'+i.categoria+'</td><td>'+(i.fornecedor||'—')+'</td><td>'+(i.recorrente?'Sim':'Não')+'</td><td>'+(i.tipo_nota||'—')+'</td><td><button class="inline-toggle '+(i.boleto_chegou?'is-yes':'is-no')+'" onclick="NR.toggleBoleto(\''+i.id+'\','+(! i.boleto_chegou?1:0)+')">'+(i.boleto_chegou?'Sim':'Não')+'</button></td><td><select class="inline-select" onchange="NR.setPago(\''+i.id+'\',this.value)">'+colabOpts.replace('value="'+(i.pago_por||'')+'"','value="'+(i.pago_por||'')+'" selected')+'</select></td><td>'+cxSel+'</td><td>'+(i.comprovante?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px" onclick="NR.verComprovante(\''+i.id+'\')" title="Ver comprovante"><i class="fas fa-paperclip"></i></button> ':'<button class="btn btn-sm" style="background:var(--bg3);color:var(--text3);font-size:10px;border:1px solid var(--border)" onclick="NR.anexarComprovante(\''+i.id+'\')" title="Anexar comprovante"><i class="fas fa-paperclip"></i></button> ')+chegarBtn+'<button class="btn-edit" onclick="NR.editRow(\'contas-pagar\',\''+i.id+'\')"><i class="fas fa-edit"></i></button> '+chqBtn+'<button class="btn btn-sm btn-danger" onclick="NR.delCP(\''+i.id+'\')"><i class="fas fa-trash"></i></button></td></tr>';
   }).join('');
   document.getElementById('cp-total-pend').textContent=fmt(tp);
   document.getElementById('cp-total-pago').textContent=fmt(tpg);
@@ -4092,8 +4092,84 @@ async function renderAlertas(){
   }catch(e){boxes.forEach(box=>box.style.display='none');}
 }
 
+// === COMPROVANTES (Contas a Pagar) ===
+let cpComprovanteId=null;
+function anexarComprovante(id){cpComprovanteId=id;let f=document.getElementById('cp-comprovante-file');f.value='';f.click();}
+async function enviarComprovante(input){
+  let file=input.files[0];if(!file||!cpComprovanteId)return;
+  let fd=new FormData();fd.append('arquivo',file);
+  try{
+    let r=await fetch('/api/contas-pagar/'+cpComprovanteId+'/comprovante',{method:'POST',headers:{'Authorization':'Bearer '+authToken,'X-Empresa':currentEmpresa},body:fd});
+    let d=await r.json();if(d.error){toast('Erro: '+d.error,'error');return;}
+    toast('Comprovante anexado!');renderContasPagar();
+  }catch(e){toast('Erro ao enviar comprovante','error');}
+}
+async function verComprovante(id){
+  try{
+    const resp=await fetch('/api/contas-pagar/'+id+'/comprovante',{headers:{'Authorization':'Bearer '+authToken,'X-Empresa':currentEmpresa}});
+    if(!resp.ok){toast('Comprovante não disponível','error');return;}
+    const blob=await resp.blob();const url=URL.createObjectURL(blob);
+    let w=window.open(url,'_blank');
+    if(!w){const a=document.createElement('a');a.href=url;a.download='comprovante_'+id;document.body.appendChild(a);a.click();a.remove();}
+    if(confirm('Comprovante aberto em nova aba.\n\nDeseja REMOVER este comprovante da conta?')){await api('DELETE','/api/contas-pagar/'+id+'/comprovante');toast('Comprovante removido');renderContasPagar();}
+  }catch(e){toast('Erro ao abrir comprovante','error');}
+}
+// === WHATSAPP + GROK ===
+let waTimer=null,waUltimo=null;
+function waVisivel(){let p=document.getElementById('painelWhatsapp');return p&&p.offsetParent!==null;}
+async function carregarWhatsapp(){
+  if(!currentUser||currentUser.role!=='admin')return;
+  let p=document.getElementById('painelWhatsapp');if(!p)return;
+  try{
+    let st=await api('GET','/api/whatsapp/status');waUltimo=st;
+    let lbl={desligado:'<span style="color:var(--text3)"><i class="fas fa-circle"></i> Desligado</span>',conectando:'<span style="color:var(--amber)"><i class="fas fa-spinner fa-spin"></i> Conectando...</span>',qr:'<span style="color:var(--amber)"><i class="fas fa-qrcode"></i> Aguardando leitura do QR Code</span>',conectado:'<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Conectado'+(st.numero?' — +'+st.numero:'')+'</span>'};
+    document.getElementById('wa-status').innerHTML=(lbl[st.status]||st.status)+(st.temGrokKey?'':' <span style="color:var(--red);font-size:12px;margin-left:8px"><i class="fas fa-exclamation-triangle"></i> chave do Grok não configurada</span>');
+    document.getElementById('wa-erro').textContent=st.erro||'';
+    let qb=document.getElementById('wa-qr-box');if(st.status==='qr'&&st.qr){qb.style.display='';document.getElementById('wa-qr').src=st.qr;}else qb.style.display='none';
+    document.getElementById('wa-btn-conectar').style.display=st.status==='conectado'?'none':'';
+    let km=document.getElementById('wa-grok-model');if(document.activeElement!==km&&!km.value)km.value=st.grok_model||'';
+    let kk=document.getElementById('wa-grok-key');if(document.activeElement!==kk)kk.placeholder=st.temGrokKey?'•••••• (chave salva — cole outra para trocar)':'xai-...';
+    let ep=document.getElementById('wa-empresa-padrao');
+    if(document.activeElement!==ep){ep.innerHTML='<option value="">— perguntar qual empresa —</option>'+(st.empresas||[]).map(e=>'<option value="'+e.slug+'"'+(e.slug===st.empresa_padrao?' selected':'')+'>'+e.nome+'</option>').join('');}
+    let ta=document.getElementById('wa-autorizados');if(document.activeElement!==ta)ta.value=(st.autorizados||[]).map(a=>a.numero+' '+(a.nome||'')).join('\n');
+    let tb=document.querySelector('#wa-grupos tbody');
+    if(!document.activeElement||!tb.contains(document.activeElement)){
+      tb.innerHTML=(st.grupos||[]).length?st.grupos.map(g=>'<tr data-jid="'+g.jid+'"><td>'+g.nome+'</td><td><select class="inline-select wa-grupo-emp" style="width:100%"><option value="">— ignorar —</option>'+(st.empresas||[]).map(e=>'<option value="'+e.slug+'"'+(e.slug===g.empresa?' selected':'')+'>'+e.nome+'</option>').join('')+'</select></td></tr>').join(''):'<tr><td colspan="2" style="color:var(--text3)">'+(st.status==='conectado'?'Nenhum grupo encontrado. Clique em "Atualizar grupos".':'Conecte o WhatsApp para listar os grupos.')+'</td></tr>';
+    }
+    let ic={conexao:'fa-plug',analise:'fa-robot',quitar:'fa-check-circle',criar:'fa-plus-circle',erro:'fa-exclamation-triangle'};
+    document.getElementById('wa-log').innerHTML=(st.log||[]).length?st.log.map(l=>'<div style="padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text3)">'+new Date(l.quando).toLocaleString('pt-BR')+'</span> <i class="fas '+(ic[l.tipo]||'fa-circle')+'" style="color:'+(l.tipo==='erro'?'var(--red)':(l.tipo==='quitar'||l.tipo==='criar')?'var(--green)':'var(--text3)')+'"></i> '+(l.quem?'<b>'+l.quem+'</b>: ':'')+l.texto+'</div>').join(''):'—';
+    clearTimeout(waTimer);
+    if(waVisivel())waTimer=setTimeout(carregarWhatsapp,st.status==='conectado'?15000:3000);
+  }catch(e){}
+}
+async function waConectar(){
+  if(!waUltimo||!waUltimo.temGrokKey){let k=document.getElementById('wa-grok-key').value.trim();if(!k){toast('Cole a chave da API do Grok e salve antes de conectar','error');return;}await waSalvarConfig();}
+  toast('Iniciando conexão... o QR Code aparece em alguns segundos');
+  await api('POST','/api/whatsapp/conectar',{});carregarWhatsapp();
+}
+async function waDesconectar(apagar){
+  if(apagar&&!confirm('Sair do WhatsApp? Será preciso ler o QR Code novamente para reconectar.'))return;
+  await api('POST','/api/whatsapp/desconectar',{apagarSessao:!!apagar});toast(apagar?'Sessão removida':'WhatsApp desligado');carregarWhatsapp();
+}
+async function waSalvarConfig(){
+  let grupos={};document.querySelectorAll('#wa-grupos tbody tr[data-jid]').forEach(tr=>{let v=tr.querySelector('select').value;if(v)grupos[tr.dataset.jid]=v;});
+  let autorizados=document.getElementById('wa-autorizados').value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{let m=l.match(/^\+?([\d\s().-]{8,})\s*(.*)$/);return m?{numero:m[1].replace(/\D/g,''),nome:m[2].trim()}:null;}).filter(Boolean);
+  let body={grupos,autorizados,empresa_padrao:document.getElementById('wa-empresa-padrao').value,grok_model:document.getElementById('wa-grok-model').value.trim()};
+  let k=document.getElementById('wa-grok-key').value.trim();if(k)body.grok_api_key=k;
+  let r=await api('POST','/api/whatsapp/config',body);
+  if(r&&r.error){toast('Erro: '+r.error,'error');return;}
+  document.getElementById('wa-grok-key').value='';toast('Configuração do WhatsApp salva!');carregarWhatsapp();
+}
+async function waTestarGrok(){
+  let body={grok_api_key:document.getElementById('wa-grok-key').value.trim(),grok_model:document.getElementById('wa-grok-model').value.trim()};
+  toast('Testando Grok...');
+  let r=await api('POST','/api/whatsapp/testar-grok',body);
+  if(r&&r.error)toast('Grok falhou: '+r.error,'error');else toast('Grok respondeu OK'+(r.resposta&&r.resposta.modelo?' ('+r.resposta.modelo+')':''));
+}
+async function waAtualizarGrupos(){await api('POST','/api/whatsapp/grupos',{});carregarWhatsapp();toast('Lista de grupos atualizada');}
 // === TELEGRAM ===
 function fillTelegramCfg(){
+  carregarWhatsapp();
   let el=document.getElementById('tg-token');
   if(!el||document.activeElement===el)return;
   el.value=CFG.tg_token||'';
@@ -4483,6 +4559,6 @@ document.getElementById('boleto-linha').addEventListener('input',function(){clea
 document.getElementById('boleto-linha').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();clearTimeout(boletoTimer);analisarBipe();}});
 document.getElementById('boleto-pdf-file').addEventListener('change',function(){if(this.files[0]){document.getElementById('boleto-pdf-nome').textContent=this.files[0].name;importarBoletoPdf(this.files[0]);}});
 
-window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal,calcSimNota,delFatDir,toggleMovDono};
+window.NR={del,delAc,delC,delCP,comp,toggleBoleto,setPago,delCL,delCD,delForn,addCatInline,addFornInline,setAcField,chqBusca,setDest,novaEmpresa,delEmpresa,openChequePag,calcChequePag,closeChequePag,logout,togglePerm,delUser,openSenha,closeSenha,printRecibo,confirmClear,closeConfirmDel,openEditPerms,closeEditPerms,toggleEditPerm,saveEditPerms,updateCxSaldo,delCaixa,setCaixaPago,toggleAllChq,updateChqSelCount,printSelecionados,saveMovConfig,updateMovDif,delMov,exportarPlanilhaGeral,backupDB,restoreDB,baixarModelo,importarPlanilha,openParcelas,closeParcelas,gerarParcelas,addFreteParcela,removeParcela,setParcField,salvarParcelas,marcarChegou,toggleAChegar,renderDashGeral,setCor,setFundo,delFisc,editRow,saveRow,cancelEdit,toggleLembretes,toggleStatusLembrete,delLembrete,backupManual,loadBackupStatus,updateCpBatch,toggleAllCp,limparSelecaoCp,pagarSelecionadas,buscarAuditoria,editVeiculo,delVeiculo,toggleOcultarPagas,closeAuditItem,closeDelParcelas,confirmarDelParcelas,salvarEditParcelas,novaSoma,delSoma,updateSomaTitulo,addSomaItem,addSomaItemAndFocus,updateSomaItem,updateSomaItemQuiet,delSomaItem,switchFolhaTab,setFolhaVal,limparFolhaColab,copiarFolhaMesAnterior,addVerbaCfg,delVerbaCfg,setFolhaAuxVal,addAuxColuna,delAuxColuna,aplicarLiqHolerite,gerarRelatorioAux,openCadEmp,closeCadEmp,salvarCadEmp,editEmp,quitarEmp,delEmp,openCadColab,closeCadColab,salvarCadColab,editColab,openImportHolerite,closeImportHolerite,uploadHolerites,delHolerite,toggleNaFolha,tirarDaFolha,renderNotasNfe,nfeConsultar,openNfeConfig,closeNfeConfig,salvarNfeConfig,openLancarNota,closeLancarNota,confirmarLancarNota,setParcelaNota,addParcelaNota,removeParcelaNota,ignorarNota,toggleAllNotas,updateNotasSel,aprovarNotasSel,ignorarNotasSel,baixarXmlNota,filtrarNotas,renderFornecedoresCad,openCadForn,closeCadForn,editFornCad,salvarCadForn,delFornCad,consultarCnpj,closeCnpj,switchTranspTab,openTranspCfg,closeTranspCfg,salvarTranspCfg,carregarTransparencia,renderTranspContratos,renderTranspFornecedores,carregarServidores,renderTranspServidores,verFichaServidor,closeFichaServidor,carregarCargos,carregarSemContrato,renderSemContrato,verPagamentos,closePagamentos,carregarDispensas,renderDispensas,verPagamentosDisp,verItensFornecedor,closeItens,compararPrecos,verResumoForn,closeResumoForn,salvarTelegram,testarTelegram,detectarChatId,openBoleto,closeBoleto,setBoletoDest,salvarBoleto,preencherBoletoMulti,lancarTodosBoletos,baixarBackupCompleto,abrirRestauraCompleto,closeRestauraCompleto,confirmarRestauraCompleto,renderLicitacoes,licitConsultar,addLicitCidade,delLicitCidade,marcarLicit,carregarCidadesUF,toggleAllLicit,updateLicitSel,marcarLicitSel,filtrarPorCidade,analisarLicit,closeAnalise,reanalisarLicit,toggleDocPronto,addDocAnalise,delDocAnalise,printReciboFolha,printRecibosMes,salvarReciboCfg,closeRecibo,addLinhaRecibo,delLinhaRecibo,setLinhaRecibo,imprimirReciboModal,openReciboColab,closeReciboColab,printReciboColab,delContaAlerta,verFechamento,receberFechamento,fecharReceberFech,confirmarReceberFech,delFechamento,fecharPreviewFech,salvarFechamento,baixarDocumento,editarDocumento,delDocumento,verPedido,fecharVerPed,faturarPed,fecharFaturarPed,confirmarFaturarPed,desfaturarPed,baixarPedArquivo,delPed,fecharPreviewPed,salvarPedidoPreview,editPed,fecharEditPed,salvarEditPed,analisePed,fecharAnalisePed,reprocessarFiscal,calcSimNota,delFatDir,toggleMovDono,anexarComprovante,enviarComprovante,verComprovante,carregarWhatsapp,waConectar,waDesconectar,waSalvarConfig,waTestarGrok,waAtualizarGrupos};
 checkAuth();
 })();

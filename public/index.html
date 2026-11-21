@@ -352,6 +352,7 @@
                         <button class="btn btn-outline" onclick="NR.limparSelecaoCp()" style="font-size:11px"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
+                <input type="file" id="cp-comprovante-file" accept=".pdf,image/*" style="display:none" onchange="NR.enviarComprovante(this)">
                 <div class="table-wrap"><table class="data-table" id="tabelaContasPagar"><thead><tr><th style="width:30px"><input type="checkbox" id="cpSelectAll" onchange="NR.toggleAllCp(this.checked)" title="Selecionar todas pendentes"></th><th>Venc.</th><th>Descrição</th><th>Valor</th><th>Cat.</th><th>Forn.</th><th>Rec.</th><th>D/F</th><th>Boleto Chegou</th><th>Pago por</th><th>Saiu do Caixa</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
         </section>
 
@@ -1101,6 +1102,46 @@
         <!-- CONFIGURAÇÕES -->
         <section class="content-section" id="section-configuracoes">
             <div class="panel" id="corPickerBox" style="margin-bottom:20px"></div>
+            <div class="panel" style="margin-bottom:20px" id="painelWhatsapp">
+                <h3><i class="fab fa-whatsapp" style="color:#25D366"></i> WhatsApp + IA (Grok)</h3>
+                <p class="config-desc">Conecte seu WhatsApp e mande comprovantes com um texto curto (ex.: "lavagem caminhão branco pago da clc"). A IA acha a conta a pagar, marca como paga e anexa o comprovante — ou cria a conta se ela não existir. Em grupos vinculados a uma empresa não precisa dizer a empresa.</p>
+                <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;align-items:flex-start">
+                    <div style="min-width:260px;flex:1">
+                        <div id="wa-status" style="font-weight:600;margin-bottom:8px">Carregando...</div>
+                        <div id="wa-erro" style="color:var(--amber);font-size:12px;margin-bottom:8px"></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-primary btn-sm" id="wa-btn-conectar" onclick="NR.waConectar()"><i class="fab fa-whatsapp"></i> Conectar</button>
+                            <button class="btn btn-outline btn-sm" onclick="NR.waDesconectar(false)"><i class="fas fa-power-off"></i> Desligar</button>
+                            <button class="btn btn-danger btn-sm" onclick="NR.waDesconectar(true)" title="Remove a sessão; precisa ler o QR de novo"><i class="fas fa-sign-out-alt"></i> Sair do WhatsApp</button>
+                        </div>
+                        <div id="wa-qr-box" style="display:none;margin-top:12px;text-align:center;background:#fff;border-radius:10px;padding:10px;width:fit-content">
+                            <img id="wa-qr" alt="QR Code" style="width:260px;height:260px;display:block">
+                            <div style="color:#333;font-size:12px;margin-top:6px">WhatsApp → ⋮ → Dispositivos conectados → Conectar dispositivo</div>
+                        </div>
+                    </div>
+                    <div style="min-width:280px;flex:2">
+                        <div class="form-grid" style="grid-template-columns:1fr 1fr">
+                            <div class="form-group"><label>Chave da API do Grok (xAI)</label><input type="password" id="wa-grok-key" placeholder="xai-..." autocomplete="new-password"></div>
+                            <div class="form-group"><label>Modelo</label><input type="text" id="wa-grok-model" placeholder="grok-4.3"></div>
+                            <div class="form-group"><label>Empresa padrão (conversa privada / "mensagem para você mesmo")</label><select id="wa-empresa-padrao"><option value="">— perguntar qual empresa —</option></select></div>
+                            <div class="form-group"><label>Números autorizados (um por linha: número e nome)</label><textarea id="wa-autorizados" rows="3" placeholder="5531999999999 Cássio&#10;5531988888888 Celso" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:13px"></textarea></div>
+                        </div>
+                        <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
+                            <button class="btn btn-primary btn-sm" onclick="NR.waSalvarConfig()"><i class="fas fa-check"></i> Salvar</button>
+                            <button class="btn btn-outline btn-sm" onclick="NR.waTestarGrok()"><i class="fas fa-robot"></i> Testar Grok</button>
+                            <button class="btn btn-outline btn-sm" onclick="NR.waAtualizarGrupos()"><i class="fas fa-sync-alt"></i> Atualizar grupos</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:16px">
+                    <div style="font-weight:600;margin-bottom:6px"><i class="fas fa-users"></i> Grupos do WhatsApp → empresa</div>
+                    <div class="table-wrap"><table class="data-table" id="wa-grupos"><thead><tr><th>Grupo</th><th style="width:260px">Empresa</th></tr></thead><tbody><tr><td colspan="2" style="color:var(--text3)">Conecte o WhatsApp para listar os grupos.</td></tr></tbody></table></div>
+                </div>
+                <div style="margin-top:16px">
+                    <div style="font-weight:600;margin-bottom:6px"><i class="fas fa-history"></i> Últimas mensagens processadas</div>
+                    <div id="wa-log" style="font-size:12px;max-height:220px;overflow:auto;background:var(--bg3);border-radius:8px;padding:8px;color:var(--text2)">—</div>
+                </div>
+            </div>
             <div class="panel" style="margin-bottom:20px">
                 <h3><i class="fab fa-telegram" style="color:#2AABEE"></i> Notificações Telegram</h3>
                 <p class="config-desc">Receba avisos no Telegram: crie um bot com o @BotFather, cole o token aqui, mande uma mensagem pro bot e clique em "Detectar Chat ID".</p>
@@ -1618,6 +1659,6 @@
         </div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
-    <script src="app.js?v=123"></script>
+    <script src="app.js?v=124"></script>
 </body>
 </html>
