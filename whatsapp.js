@@ -395,8 +395,64 @@ function comandoRapido(texto) {
   return itens.length ? { itens } : null;
 }
 
+const NOME_TAB = { movimentacao: 'Movimentação', conta_dono: 'Conta do Celso' };
+function linhaLanc(slug, l) {
+  if (l.tabela === 'movimentacao') {
+    const r = (db.getMovimentacao(slug) || []).find(x => x.id === l.id);
+    return r ? '• Movimentação: ' + (r.saida ? '*SAÍDA* ' + fmtV(r.saida) : '*ENTRADA* ' + fmtV(r.entrada)) + ' — ' + r.descricao + ' — ' + fmtD(r.data) : '';
+  }
+  const r = (db.getContaDono(slug) || []).find(x => x.id === l.id);
+  return r ? '• Conta do Celso: ' + (r.tipo === 'credito' ? '*CRÉDITO* (Celso pagou) ' : '*DÉBITO* (Celso deve) ') + fmtV(r.valor) + ' — ' + r.descricao + ' — ' + fmtD(r.data) : '';
+}
+async function aplicarComandoLanc({ jid, m, quem, cmd, u }) {
+  const autor = 'WhatsApp (' + quem + ')';
+  const { slug } = u;
+  if (cmd.desfazer) {
+    for (const l of u.lanc) {
+      if (l.tabela === 'movimentacao') db.delMovimentacao(slug, l.id); else db.delContaDono(slug, l.id);
+      db.addAuditLog(slug, autor, 'excluiu', l.tabela === 'movimentacao' ? 'Movimentação' : 'Conta Dono', 'ID: ' + l.id + ' (desfeito pelo WhatsApp)');
+    }
+    delete ultimos[jid];
+    registrar('desfazer', 'Lançamento em ' + u.lanc.map(l => NOME_TAB[l.tabela]).join(' + '), { quem, empresa: slug });
+    await responder(jid, '↩️ Desfeito: apaguei o lançamento em ' + u.lanc.map(l => NOME_TAB[l.tabela]).join(' e ') + '.', m);
+    return;
+  }
+  const mov = {}, dono = {}, ignorados = [];
+  for (const it of (cmd.itens || [])) {
+    if (it.campo === 'valor' && it.valor) { mov.valor = it.valor; dono.valor = it.valor; }
+    else if (it.campo === 'descricao') { mov.descricao = it.valor; dono.descricao = it.valor; }
+    else if (it.campo === 'vencimento') {
+      const iso = it.iso || dataDoTexto(it.dia, it.mes || hojeISO().substring(5, 7), it.ano);
+      if (iso) { mov.data = iso; dono.data = iso; }
+    } else ignorados.push(it.campo);
+  }
+  if (!Object.keys(mov).length) { await responder(jid, 'Em lançamento de Movimentação/Conta do Celso dá para corrigir: valor 9500, desc <texto>, venc 20/11 (data) ou desfazer.', m); return; }
+  for (const l of u.lanc) {
+    if (l.tabela === 'movimentacao') {
+      const r = (db.getMovimentacao(slug) || []).find(x => x.id === l.id) || {};
+      const f = {};
+      if (mov.valor) { if (r.saida) f.saida = mov.valor; else f.entrada = mov.valor; }
+      if (mov.descricao) f.descricao = mov.descricao;
+      if (mov.data) f.data = mov.data;
+      db.updateMovimentacao(slug, l.id, f);
+      db.addAuditLog(slug, autor, 'alterou', 'Movimentação', 'ID: ' + l.id + ' - ' + JSON.stringify(f));
+    } else {
+      const f = {};
+      if (dono.valor) f.valor = dono.valor;
+      if (dono.descricao) f.descricao = dono.descricao;
+      if (dono.data) f.data = dono.data;
+      db.updateContaDono(slug, l.id, f);
+      db.addAuditLog(slug, autor, 'alterou', 'Conta Dono', 'ID: ' + l.id + ' - ' + JSON.stringify(f));
+    }
+  }
+  u.quando = Date.now();
+  registrar('corrigir', 'Lançamento ' + Object.keys(mov).join(', '), { quem, empresa: slug });
+  await responder(jid, '✏️ Corrigido:\n' + u.lanc.map(l => linhaLanc(slug, l)).filter(Boolean).join('\n'), m);
+}
+
 async function aplicarComando({ jid, m, quem, cmd }) {
   const u = ultimos[jid];
+  if (u.tipo === 'lanc') return aplicarComandoLanc({ jid, m, quem, cmd, u });
   const { slug, ids } = u;
   const contas = ids.map(id => db.getContaPagarById(slug, id)).filter(Boolean);
   if (!contas.length) { delete ultimos[jid]; await responder(jid, 'Não achei mais o último lançamento (pode ter sido apagado no sistema).', m); return; }
@@ -515,6 +571,10 @@ async function tratarMensagem(m) {
         if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, cancelado. Nada foi alterado.', m); return; }
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { forcar: escolha.modo }) });
       }
+      if (pend.tipo === 'lanc_tipo') {
+        const l = Object.assign({}, pend.analise.lancamento, { [pend.campo]: escolha.v });
+        return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { lancamento: l }) });
+      }
       if (pend.tipo === 'boleto_troca') {
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, escolha.novo ? { conta_id: null, forcarNovo: true } : { conta_id: escolha.id }) });
       }
@@ -570,7 +630,7 @@ function montarContexto(slugs, cfg) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"alterar"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
@@ -584,6 +644,7 @@ Regras:
 - tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
 - recorrente: true se disser mensal / todo mês / fixa / recorrente; false se disser avulsa / única; senão null.
 - parcelas: só quando falar em parcelas ("3x", "em 4 parcelas", "10 vezes"). valor_parcela = valor de CADA parcela (se informou o total, divida pela quantidade, 2 casas). primeiro_vencimento = data da 1ª parcela (se não disser, hoje + 30 dias). Nesse caso preencha também valor = valor_parcela.
+- "lancamento": SÓ quando a mensagem citar a aba MOVIMENTAÇÃO ("movimentação", "mov", "na movimentação") e/ou a CONTA DO CELSO ("conta do Celso", "conta do dono", "Celso deve", "Celso pagou", "retirada do Celso"). Não é conta a pagar. movimentacao=true se citar movimentação; conta_celso=true se citar conta do Celso (pode ser as duas). tipo_mov: "entrada" ou "saida" pelo texto (null se não disser). tipo_celso: "debito" = Celso deve (retirou/pegou dinheiro, a empresa pagou algo dele); "credito" = Celso pagou (colocou dinheiro, pagou algo da empresa); null se não der para saber. descricao curta (ex.: "Reserva"), data só se citada.
 - "consultar": perguntas sobre as contas ("o que vence hoje", "quanto falta pagar essa semana", "quais estão atrasadas", "quanto paguei de combustível em novembro"). Preencha consulta: status ("pendentes" para a vencer/atrasadas, "pagas" para o que já foi pago, "todas"), de/ate (período pelo vencimento; atrasadas = de hoje-365 até ontem; "essa semana" = hoje até domingo), categoria (se citar uma categoria da empresa) e texto (palavra para filtrar descrição/fornecedor, ex.: "combustível", "cemig"). empresa = slug se a pergunta citar uma empresa, senão null (todas).
 - Se a empresa não estiver definida e a mensagem não deixar claro qual é (exceto "consultar"), use "perguntar" com empresa=null (o sistema lista as empresas).
 - pago_por: só preencha se a mensagem citar quem pagou e o nome existir em colaboradores da empresa; senão null.
@@ -614,7 +675,7 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
       }
     } else { await responder(jid, 'Formato ' + (media.mimeType || 'desconhecido') + ' não suportado. Envie foto (JPG/PNG) ou PDF.', m); return; }
   }
-  const ult = !media && ultimos[jid] && Date.now() - ultimos[jid].quando < 3 * 3600000 ? ultimos[jid] : null;
+  const ult = !media && ultimos[jid] && ultimos[jid].tipo !== 'lanc' && Date.now() - ultimos[jid].quando < 3 * 3600000 ? ultimos[jid] : null;
   const ultimoCtx = ult ? ult.ids.slice(0, 3).map(id => db.getContaPagarById(ult.slug, id)).filter(Boolean).map(c => ({ descricao: c.descricao, valor: c.valor, vencimento: c.vencimento, fornecedor: c.fornecedor, categoria: c.categoria, tipo_nota: c.tipo_nota, recorrente: !!c.recorrente })) : null;
   const prompt = 'Mensagem do usuário: ' + (texto ? JSON.stringify(texto) : '(sem texto, só o anexo)') + '\n'
     + (!multi ? 'Empresa desta conversa (fixa): ' + empresaFixa + '\n'
@@ -747,6 +808,8 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
       if (c) return avisarDuplicado({ jid, m, slug, media, analise, texto: 'Esse mesmo arquivo já foi enviado em ' + fmtD(visto.quando.substring(0, 10)) + ' (conta "' + c.descricao + '", ' + fmtV(c.valor) + ').' });
     }
   }
+
+  if (analise.acao === 'lancamento') return executarLancamento({ jid, m, quem, slug, nomeEmp, analise, media });
 
   if (analise.acao === 'quitar') {
     const conta = db.getContaPagarById(slug, analise.conta_id);
@@ -882,6 +945,44 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     return;
   }
   await responder(jid, analise.mensagem || 'Não entendi o que fazer com essa mensagem.', m);
+}
+
+// Lançamento direto em Movimentação e/ou Conta do Celso
+async function executarLancamento({ jid, m, quem, slug, nomeEmp, analise, media }) {
+  const l = Object.assign({}, analise.lancamento || {});
+  const valor = parseFloat(l.valor || analise.valor);
+  if (!valor) { await responder(jid, 'Não entendi o valor do lançamento. Ex.: "saída 10.000 reserva na movimentação".', m); return; }
+  if (!l.movimentacao && !l.conta_celso) l.movimentacao = true;
+  // falta saber entrada/saída ou débito/crédito: pergunta
+  if (l.movimentacao && l.tipo_mov !== 'entrada' && l.tipo_mov !== 'saida') {
+    pendentes[jid] = { tipo: 'lanc_tipo', campo: 'tipo_mov', opcoes: [{ v: 'entrada' }, { v: 'saida' }], slug, media, analise: Object.assign({}, analise, { lancamento: l }), quando: Date.now() };
+    await responder(jid, 'Na Movimentação, ' + fmtV(valor) + ' é:\n1. Entrada\n2. Saída', m); return;
+  }
+  if (l.conta_celso && l.tipo_celso !== 'debito' && l.tipo_celso !== 'credito') {
+    pendentes[jid] = { tipo: 'lanc_tipo', campo: 'tipo_celso', opcoes: [{ v: 'debito' }, { v: 'credito' }], slug, media, analise: Object.assign({}, analise, { lancamento: l }), quando: Date.now() };
+    await responder(jid, 'Na Conta do Celso, ' + fmtV(valor) + ' é:\n1. Débito (Celso deve)\n2. Crédito (Celso pagou)', m); return;
+  }
+  const data = /^\d{4}-\d{2}-\d{2}$/.test(l.data || '') ? l.data : hojeISO();
+  const desc = String(l.descricao || analise.descricao || 'Lançamento via WhatsApp').trim();
+  const autor = 'WhatsApp (' + quem + ')';
+  const feitos = [];
+  if (l.movimentacao) {
+    const item = { id: novoId(), data, descricao: desc, entrada: l.tipo_mov === 'entrada' ? valor : 0, saida: l.tipo_mov === 'saida' ? valor : 0, diferenca: 0 };
+    db.addMovimentacao(slug, item);
+    db.addAuditLog(slug, autor, 'criou', 'Movimentação', 'ID: ' + item.id + ' - ' + desc + ' - Entrada: ' + item.entrada + ' Saída: ' + item.saida);
+    feitos.push({ tabela: 'movimentacao', id: item.id });
+  }
+  if (l.conta_celso) {
+    const item = { id: novoId(), data, tipo: l.tipo_celso, descricao: desc, valor };
+    db.addContaDono(slug, item);
+    db.addAuditLog(slug, autor, 'criou', 'Conta Dono', 'ID: ' + item.id + ' - ' + desc + ' - R$ ' + valor);
+    feitos.push({ tabela: 'conta_dono', id: item.id });
+  }
+  ultimos[jid] = { slug, ids: [], tipo: 'lanc', lanc: feitos, quando: Date.now() };
+  registrar('criar', nomeEmp + ': ' + feitos.map(f => NOME_TAB[f.tabela]).join(' + ') + ' — ' + desc + ' ' + fmtV(valor), { quem, empresa: slug });
+  await responder(jid, '💰 *' + nomeEmp + '* — lancei:\n' + feitos.map(f => linhaLanc(slug, f)).filter(Boolean).join('\n')
+    + (media ? '\n(o anexo não fica guardado nessas abas)' : '')
+    + '\n\n_Para corrigir: valor 9500, desc <texto>, venc 20/11 (muda a data) ou desfazer._', m);
 }
 
 // Linha digitável numa mensagem separada, só com os números (fácil de copiar para pagar)
