@@ -284,7 +284,7 @@ function guardarHash(media, slug, contaId) {
 const APELIDOS_PADRAO = {
   nunesrocha: ['nunes rocha', 'nr casa', 'casa nunes rocha', 'geraldo celso', 'geraldo celso rocha', 'llc.com', 'llc com', '20606315000194', '68378016000176'],
   spntelecom: ['spn', 'spn servicos', 'spn servicos net', 'spn telecom', 'suprinet', '20753858000134', '55010237000145'],
-  tmtnetc: ['tmt', 'tmt servicos', 'tmt telecom', 'tmt net', 'tmtnet'],
+  tmtnetc: ['tmt', 'tmt servicos', 'tmt telecom', 'tmt net', 'tmtnet', 'masternet', 'masternet telecomunicacao', 'masternet telecom', '28653847000194'],
   clc: ['clc', 'clc transportadora', '64139263000169'],
   drogaria: ['drogaria', 'drugstore', 'drugstore rocha', '05916046000179'],
 };
