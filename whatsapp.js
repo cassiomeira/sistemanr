@@ -276,9 +276,9 @@ function resumoConta(c) {
   return '• ' + c.descricao + ' — *' + fmtV(c.valor) + '* — venc. ' + fmtD(c.vencimento)
     + (c.fornecedor ? '\n   Fornecedor: ' + c.fornecedor : '')
     + '\n   ' + (c.categoria || 'Outros') + ' · ' + txtDF(c.tipo_nota) + ' · ' + (c.recorrente ? 'recorrente' : 'não recorrente')
-    + ' · ' + (estaPaga(c) ? 'paga (' + c.pago_por + ')' : 'pendente');
+    + ' · ' + (estaPaga(c) ? 'paga (' + c.pago_por + ')' : 'pendente') + (c.a_chegar ? ' · 🚚 produto a chegar' : '');
 }
-const DICA = '\n\n_Para corrigir, responda (pode juntar na mesma mensagem, ex.: "rec d" ou "valor 350 f"): D, F, rec, não rec, cat <categoria>, venc 10/12, valor 450, forn <nome>, desc <texto> ou desfazer._';
+const DICA = '\n\n_Para corrigir, responda (pode juntar na mesma mensagem, ex.: "rec d" ou "valor 350 f"): D, F, rec, não rec, cat <categoria>, venc 10/12, valor 450, forn <nome>, desc <texto>, a chegar, chegou ou desfazer._';
 
 // ---------- comprovantes repetidos (hash do arquivo) ----------
 const hashesPath = path.join(dataDir, 'whatsapp', 'hashes.json');
@@ -374,11 +374,13 @@ function lembrarUltimo(jid, slug, ids, tipo, antes) { ultimos[jid] = { slug, ids
 
 // Lê uma ou mais correções na mesma mensagem: "rec d", "350 forn CEMIG rec sim", "ven 10", "D/F: D".
 // Devolve null se sobrar texto que não é comando (aí a mensagem segue para a IA).
-const FIM_CMD = String.raw`(?=\s+(?:d|f|dentro|fora|rec|recorrente|mensal|fixa|n[aã]o\s+rec\w*|ven\w*|valor|forn\w*|desc\w*|cat\w*)(?:[\s,;]|$)|\s*[,;]|$)`;
+const FIM_CMD = String.raw`(?=\s+(?:d|f|dentro|fora|rec|recorrente|mensal|fixa|n[aã]o\s+rec\w*|ven\w*|valor|forn\w*|desc\w*|cat\w*|a\s+chegar|chegou|j[aá]\s+chegou)(?:[\s,;]|$)|\s*[,;]|$)`;
 const REGRAS_CMD = [
   [/^(?:d\s*\/\s*f|d-f|df)\s*:?\s*/i, () => null],
   [/^(?:n[aã]o\s+rec(?:orrente)?|rec(?:orrente)?\s+n[aã]o|nrec|avulsa?)(?=[\s,;]|$)/i, () => ({ campo: 'recorrente', valor: 0 })],
   [/^(?:rec(?:orrente)?|mensal|fixa)(?:\s+sim)?(?=[\s,;]|$)/i, () => ({ campo: 'recorrente', valor: 1 })],
+  [/^(?:produto\s+)?a\s+chegar(?=[\s,;]|$)/i, () => ({ campo: 'a_chegar', valor: 1 })],
+  [/^(?:j[aá]\s+)?chegou(?=[\s,;]|$)/i, () => ({ campo: 'a_chegar', valor: 0 })],
   [/^(?:dentro|d)(?=[\s,;]|$)/i, () => ({ campo: 'tipo_nota', valor: 'D' })],
   [/^(?:fora|f)(?=[\s,;]|$)/i, () => ({ campo: 'tipo_nota', valor: 'F' })],
   [/^ven(?:c|ce|cimento)?\s*(?:dia\s+)?(\d{1,2})(?:[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?)?(?=[\s,;]|$)/i, m => ({ campo: 'vencimento', dia: m[1], mes: m[2], ano: m[3] })],
@@ -695,10 +697,11 @@ function montarContexto(slugs, cfg) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"pedido"|"responder"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"tipo_documento":"comprovante"|"boleto"|"nota"|null,"pedido":{"numero":string|null,"data":"YYYY-MM-DD"|null,"parcelas":[{"vencimento":"YYYY-MM-DD","valor":number}],"condicao":string|null}|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"pedido"|"responder"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"tipo_documento":"comprovante"|"boleto"|"nota"|null,"produto_a_chegar":true|false|null,"pedido":{"numero":string|null,"data":"YYYY-MM-DD"|null,"parcelas":[{"vencimento":"YYYY-MM-DD","valor":number}],"condicao":string|null}|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"a_chegar":true|false|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
+- produto_a_chegar: true quando é compra de MERCADORIA/produto físico que ainda vai ser entregue (pedido de compra, compra em loja virtual/Mercado Livre, print do pedido, nota de mercadoria, "comprei X", "pedido"); false para serviço, conta de consumo, combustível, imposto, salário, aluguel etc.; null se não der para saber. Em "pedido" é sempre true. Se o usuário disser que já chegou/recebeu, false.
 - tipo_documento: "comprovante" = prova de pagamento (PIX, TED, boleto pago, recibo de pagamento); "boleto" = boleto a pagar; "nota" = ordem de serviço, nota fiscal, pedido, orçamento ou fatura (documento da compra, NÃO prova pagamento). Se o texto diz que foi pago e o anexo é uma nota/OS, use acao "criar"/"quitar" com pago=true e tipo_documento "nota".
 - Em comprovante de pagamento de boleto, se aparecer o código de barras ou a linha digitável, copie os dígitos em linha_digitavel (o sistema usa para achar a conta exata).
 - "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje). NUNCA quite uma parcela/conta com vencimento mais de 20 dias depois da data do comprovante (é parcela futura; o pagamento provavelmente já foi lançado) — nesse caso use "criar" com pago=true e data_pagamento.
@@ -780,6 +783,7 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     if (c.valor) itens.push({ campo: 'valor', valor: parseFloat(c.valor) });
     if (c.fornecedor) itens.push({ campo: 'fornecedor', valor: c.fornecedor });
     if (c.descricao) itens.push({ campo: 'descricao', valor: c.descricao });
+    if (c.a_chegar === true || c.a_chegar === false) itens.push({ campo: 'a_chegar', valor: c.a_chegar ? 1 : 0 });
     return aplicarComando({ jid, m, quem, cmd: c.desfazer ? { desfazer: true } : { itens } });
   }
   if (analise.acao === 'alterar' && analise.conta_id) {
@@ -795,6 +799,7 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
       if (c.valor) itens.push({ campo: 'valor', valor: parseFloat(c.valor) });
       if (c.fornecedor) itens.push({ campo: 'fornecedor', valor: c.fornecedor });
       if (c.descricao) itens.push({ campo: 'descricao', valor: c.descricao });
+      if (c.a_chegar === true || c.a_chegar === false) itens.push({ campo: 'a_chegar', valor: c.a_chegar ? 1 : 0 });
       return aplicarComando({ jid, m, quem, cmd: { itens } });
     }
   }
@@ -1034,7 +1039,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
         descricao: qtd > 1 ? descBase + ' (' + (i + 1) + '/' + qtd + ')' : descBase,
         valor: valorParc, recorrente: comp.recorrente, boleto_chegou: (media || pago) ? 1 : 0,
         pago_por: '', categoria: comp.categoria, tipo_nota: comp.tipo_nota,
-        fornecedor: comp.fornecedor, a_chegar: 0, grupo_parcela: grupo,
+        fornecedor: comp.fornecedor, a_chegar: analise.produto_a_chegar === true ? 1 : 0, grupo_parcela: grupo,
         linha_digitavel: i === 0 && analise.ehBoleto ? analise.ehBoleto.linha || '' : '',
       };
       deps.criarConta(slug, item, autor);
@@ -1093,7 +1098,7 @@ async function executarPedido({ jid, m, quem, slug, nomeEmp, analise, media, pad
   const ids = [];
   let arq = '';
   parcelas.forEach((pc, i) => {
-    const item = { id: novoId(), vencimento: pc.vencimento, descricao: qtd > 1 ? descBase + ' (' + (i + 1) + '/' + qtd + ')' : descBase, valor: pc.valor, recorrente: 0, boleto_chegou: 0, pago_por: '', categoria: comp.categoria, tipo_nota: comp.tipo_nota, fornecedor: comp.fornecedor, a_chegar: 0, grupo_parcela: grupo, linha_digitavel: '' };
+    const item = { id: novoId(), vencimento: pc.vencimento, descricao: qtd > 1 ? descBase + ' (' + (i + 1) + '/' + qtd + ')' : descBase, valor: pc.valor, recorrente: 0, boleto_chegou: 0, pago_por: '', categoria: comp.categoria, tipo_nota: comp.tipo_nota, fornecedor: comp.fornecedor, a_chegar: analise.produto_a_chegar === false ? 0 : 1, grupo_parcela: grupo, linha_digitavel: '' };
     deps.criarConta(slug, item, autor);
     if (i === 0) arq = salvarComprovante(slug, item.id, media, 'pedido_');
     if (arq) deps.atualizarConta(slug, item.id, { pedido_arquivo: arq }, autor);
@@ -1106,6 +1111,7 @@ async function executarPedido({ jid, m, quem, slug, nomeEmp, analise, media, pad
   let txt = '📦 *' + nomeEmp + '* — pedido lançado no Contas a Pagar (' + (comp.fornecedor || '-') + ', ' + comp.categoria + ', ' + (comp.tipo_nota || 'D/F não definido') + '):\n'
     + parcelas.map((x, i) => '   ' + (i + 1) + '/' + qtd + ' — venc. ' + fmtD(x.vencimento) + ' — ' + fmtV(x.valor)).join('\n')
     + '\n   Total: ' + fmtV(soma) + (total && Math.abs(total - soma) > 0.05 ? ' ⚠️ (pedido diz ' + fmtV(total) + ')' : '')
+    + (analise.produto_a_chegar === false ? '' : '\n🚚 Marcado como *produto a chegar* (aparece em Produtos a Chegar). Quando a mercadoria chegar, responda "chegou" ou marque na tela.')
     + '\nQuando chegarem os boletos, mande aqui: confiro valor e vencimento e anexo em cada parcela.';
   if (!comp.tipo_nota) txt += '\n⚠️ Dentro/Fora não definido — responda D ou F.';
   await responder(jid, txt + DICA, m);
