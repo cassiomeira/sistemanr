@@ -173,7 +173,20 @@ const fmtD = d => (d && /^\d{4}-\d{2}-\d{2}/.test(d)) ? d.substring(0, 10).split
 const hojeISO = () => new Date(Date.now() - 3 * 3600000).toISOString().substring(0, 10); // Brasília
 function somaDias(iso, n) { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().substring(0, 10); }
 
+// Memória curta da conversa (últimas mensagens de cada grupo, 2 h) — a IA usa para entender "esse", "aquela conta", "não é comprovante"
+const conversa = {};
+function anotar(jid, quem, texto) {
+  if (!jid || !texto) return;
+  const l = (conversa[jid] = (conversa[jid] || []).filter(x => Date.now() - x.t < 2 * 3600000));
+  l.push({ t: Date.now(), quem, texto: String(texto).slice(0, 500) });
+  if (l.length > 12) l.splice(0, l.length - 12);
+}
+function conversaRecente(jid) {
+  return (conversa[jid] || []).filter(x => Date.now() - x.t < 2 * 3600000).map(x => ({ hora: new Date(x.t).toISOString().slice(11, 16), quem: x.quem, texto: x.texto }));
+}
+
 async function responder(jid, texto, quoted) {
+  anotar(jid, 'robô', texto);
   if (!sock) return;
   try {
     const r = await sock.sendMessage(jid, { text: MARCA + ' ' + texto }, quoted ? { quoted } : undefined);
@@ -563,6 +576,9 @@ async function tratarMensagem(m) {
     await responder(jid, '🎤 Entendi: "' + texto + '"', m);
   }
 
+  const historicoAntes = conversaRecente(jid);
+  anotar(jid, quem, (texto || '') + (media ? ' [anexo: ' + (media.fileName || (msg.imageMessage ? 'imagem' : 'arquivo')) + ']' : ''));
+
   // Resposta a uma pergunta pendente ("1", "2", "cancelar")
   const pend = pendentes[jid];
   if (pend && !media) {
@@ -597,12 +613,21 @@ async function tratarMensagem(m) {
       }
       if (pend.tipo === 'duplicado') {
         if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, não lancei de novo.', m); return; }
+        if (escolha.modo === 'anexar') return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { acao: 'quitar', conta_id: escolha.id, confianca: 1, adiantado: true, valor: null }) });
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { ignorarDup: true }) });
       }
     }
     if (Date.now() - pend.quando > 15 * 60000) delete pendentes[jid]; // expirou: segue como mensagem nova
     else if (ultimos[jid] && Date.now() - ultimos[jid].quando < 3 * 3600000 && comandoRapido(texto)) { /* correção do último lançamento: segue abaixo, a pergunta continua valendo */ }
-    else { await responder(jid, 'Responda com o número de uma das opções (1 a ' + pend.opcoes.length + ') ou "cancelar".', m); return; }
+    else if (texto && texto.trim().length >= 3 && !/^\d+$/.test(texto.trim())) {
+      // respondeu com uma frase ("é o comprovante da conta X", "não é comprovante, é a nota"): a IA decide, com o mesmo anexo
+      delete pendentes[jid];
+      const leitura = pend.analise ? Object.assign({}, pend.analise) : null;
+      if (leitura) { delete leitura.boletoPdf; delete leitura.ehBoleto; }
+      return analisarEExecutar({ jid, m, texto: (pend.texto ? pend.texto + '\n' : '') + texto, media: pend.media, quem, empresaFixa: pend.slug || empresaFixa, cfg, padraoGrupo,
+        extra: 'O usuário respondeu com texto livre à última pergunta do robô (veja a conversa recente). ' + (pend.media ? 'O anexo é o mesmo daquela pergunta. ' : '') + (leitura ? 'Leitura anterior do anexo: ' + JSON.stringify(leitura) + '. ' : '') + 'Siga o que o usuário disse (ex.: se disse que é o comprovante de uma conta já lançada, use "quitar" com o conta_id dela — mesmo que já esteja paga; o sistema só anexa).' });
+    }
+    else { await responder(jid, 'Responda com o número de uma das opções (1 a ' + pend.opcoes.length + '), "cancelar" ou explique com suas palavras.', m); return; }
   }
 
   // Correção rápida do último lançamento (D, F, rec, cat ..., venc ..., valor ..., desfazer)
@@ -618,7 +643,7 @@ async function tratarMensagem(m) {
       arquivo = { buffer, mimeType: (media.mimetype || '').split(';')[0].toLowerCase(), nome: media.fileName || '' };
     } catch (e) { await responder(jid, 'Não consegui baixar o arquivo: ' + e.message, m); return; }
   }
-  await analisarEExecutar({ jid, m, texto, media: arquivo, quem, empresaFixa, cfg, padraoGrupo });
+  await analisarEExecutar({ jid, m, texto, media: arquivo, quem, empresaFixa, cfg, padraoGrupo, historico: historicoAntes });
 }
 
 async function transcreverAudio(buffer, mimeType) {
@@ -634,6 +659,7 @@ function montarContexto(slugs, cfg) {
   for (const slug of slugs) {
     try {
       ctx.contas_pendentes.push(...db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180)).map(c => Object.assign({ id: c.id, empresa: slug, vencimento: c.vencimento, descricao: c.descricao, valor: c.valor, fornecedor: c.fornecedor || '' }, c.pedido_arquivo ? { do_pedido: true, tem_boleto: !!c.boleto_arquivo } : {})));
+      try { (ctx.contas_pagas_sem_comprovante = ctx.contas_pagas_sem_comprovante || []).push(...db.getContasPagasSemComprovante(slug, somaDias(hoje, -45), slugs.length > 2 ? 10 : 30).map(c => ({ id: c.id, empresa: slug, vencimento: c.vencimento, descricao: c.descricao, valor: c.valor, fornecedor: c.fornecedor || '' }))); } catch (e) {}
       ctx.colaboradores[slug] = db.getColaboradores(slug).map(c => c.nome);
       ctx.categorias[slug] = db.getConfig(slug).categoriasLoja || [];
       if (slugs.length <= 2) ctx.fornecedores_conhecidos[slug] = [...new Set(historico(slug).map(h => h.fornecedor).filter(Boolean))].slice(0, 150);
@@ -656,6 +682,8 @@ Regras:
 - "alterar": o TEXTO pede para mudar uma conta pendente que NÃO é o último lançamento (ex.: "o boleto da ISPS mudou pra dia 30", "a conta da Cemig agora é 480"). Preencha conta_id (das contas_pendentes) e correcao só com os campos citados.
 - "pedido": o anexo é um PEDIDO DE COMPRA (ou orçamento/pedido aprovado de fornecedor) ainda NÃO pago e SEM boleto/comprovante. Preencha fornecedor, valor (total do pedido), descricao curta (o que foi comprado), categoria e pedido: numero, data (data do pedido), parcelas (vencimento e valor de cada uma, se o pedido trouxer as datas) e condicao (texto da condição de pagamento, ex.: "30/60/90 dias", "28 DDL", "à vista"). O sistema lança as parcelas no Contas a Pagar com o pedido anexado.
 - Boleto de um pedido já lançado: as contas pendentes com do_pedido=true são parcelas de pedidos; escolha a parcela do mesmo fornecedor que ainda não tem boleto (tem_boleto=false) com valor e vencimento mais próximos.
+- Comprovante de uma conta que JÁ está paga mas ainda sem comprovante (lista contas_pagas_sem_comprovante, mesmo valor e data próxima): use "quitar" com o conta_id dela — o sistema só anexa o comprovante, não paga de novo.
+- O usuário pode conversar livremente: leia a "Conversa recente" para entender correções ("não é comprovante", "é da TMT", "anexa naquela conta"). Se ele explicar o que é o anexo, siga a explicação.
 - "criar": despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
 - fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
 - tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
@@ -668,7 +696,8 @@ Regras:
 - "ignorar": conversa sem relação com finanças (cumprimentos etc.). Nunca invente valores: se não houver valor legível, deixe null.
 - Datas no formato YYYY-MM-DD. "mensagem" deve resumir o que você entendeu (1 ou 2 frases).`;
 
-async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg, padraoGrupo }) {
+async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg, padraoGrupo, extra, historico }) {
+  const conv = (historico || conversaRecente(jid)).slice(-10);
   const g = grokCfg();
   if (!g.apiKey) { await responder(jid, 'A chave da API do Grok não está configurada no sistema (Configurações → WhatsApp).', m); return; }
   const empresas = db.getEmpresas();
@@ -702,6 +731,8 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     + (anexoTexto ? 'Texto extraído do PDF anexo:\n"""' + anexoTexto.slice(0, 6000) + '"""\n' : '')
     + (ultimoCtx ? 'Último lançamento desta conversa (se a mensagem for uma correção dele, use acao "corrigir"): ' + JSON.stringify(ultimoCtx) + '\n' : '')
     + (boletoPdf ? 'O PDF tem uma linha digitável de boleto: ' + JSON.stringify(boletoPdf) + ' (decida se é um boleto a pagar ou o comprovante de pagamento dele).\n' : '')
+    + (conv.length ? 'Conversa recente neste grupo (mais antiga primeiro; use para entender referências como "esse", "aquela conta", "não é comprovante"): ' + JSON.stringify(conv) + '\n' : '')
+    + (extra ? extra + '\n' : '')
     + 'Contexto (JSON): ' + JSON.stringify(ctx);
   let analise;
   try { analise = await grok.perguntarJson(g, { system: SYSTEM, texto: prompt, imagens }); }
@@ -805,9 +836,11 @@ function completarCampos(slug, analise, padraoGrupo) {
   return out;
 }
 
-async function avisarDuplicado({ jid, m, slug, media, analise, texto }) {
-  pendentes[jid] = { tipo: 'duplicado', opcoes: [{ modo: 'seguir' }, { modo: 'cancelar' }], slug, media, analise, quando: Date.now() };
-  await responder(jid, '⚠️ ' + texto + '\n1. Lançar mesmo assim\n2. Cancelar', m);
+async function avisarDuplicado({ jid, m, slug, media, analise, texto, conta }) {
+  const podeAnexar = conta && media && !analise.ehBoleto && analise.tipo_documento !== 'nota' && !conta.comprovante;
+  const opcoes = (podeAnexar ? [{ modo: 'anexar', id: conta.id }] : []).concat([{ modo: 'seguir' }, { modo: 'cancelar' }]);
+  pendentes[jid] = { tipo: 'duplicado', opcoes, slug, media, analise, quando: Date.now() };
+  await responder(jid, '⚠️ ' + texto + '\n' + opcoes.map((o, i) => (i + 1) + '. ' + (o.modo === 'anexar' ? (estaPaga(conta) ? 'É o comprovante dela — só anexar' : 'É o pagamento dela — quitar e anexar') : o.modo === 'seguir' ? 'Lançar mesmo assim (é outra despesa)' : 'Cancelar')).join('\n') + '\n(ou explique com suas palavras)', m);
 }
 
 async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
@@ -958,7 +991,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
 
     if (!analise.ignorarDup) {
       const parecidas = db.contasParecidas(slug, valorParc, primeiro, 3);
-      if (parecidas.length) return avisarDuplicado({ jid, m, slug, media, analise, texto: 'Já existe conta de ' + fmtV(valorParc) + ' perto dessa data: "' + parecidas[0].descricao + '" (venc. ' + fmtD(parecidas[0].vencimento) + ', ' + (estaPaga(parecidas[0]) ? 'paga' : 'pendente') + '). Pode ser repetido.' });
+      if (parecidas.length) return avisarDuplicado({ jid, m, slug, media, analise, texto: 'Já existe conta de ' + fmtV(valorParc) + ' perto dessa data: "' + parecidas[0].descricao + '" (venc. ' + fmtD(parecidas[0].vencimento) + ', ' + (estaPaga(parecidas[0]) ? 'paga' : 'pendente') + '). Pode ser repetido.', conta: parecidas[0] });
     }
 
     const grupo = qtd > 1 ? 'grp_' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex') : '';

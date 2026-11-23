@@ -758,6 +758,10 @@ module.exports = {
   contasParecidas(slug, valor, data, dias = 3) {
     return query(slug, "SELECT * FROM contas_pagar WHERE ABS(valor - ?) < 0.01 AND vencimento BETWEEN date(?, ?) AND date(?, ?) ORDER BY vencimento", [valor, data, '-' + dias + ' days', data, '+' + dias + ' days']);
   },
+  // Contas já pagas e sem comprovante (o WhatsApp anexa o comprovante quando ele chega depois)
+  getContasPagasSemComprovante(slug, de, limite = 30) {
+    return query(slug, "SELECT id, vencimento, descricao, valor, fornecedor FROM contas_pagar WHERE pago_por IS NOT NULL AND pago_por<>'' AND pago_por<>'A Pagar' AND COALESCE(comprovante, '')='' AND vencimento >= ? ORDER BY vencimento DESC LIMIT ?", [de, limite]);
+  },
   // Consulta livre das contas a pagar (perguntas pelo WhatsApp)
   consultarContas(slug, f) {
     const w = [], v = [];
