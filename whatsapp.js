@@ -712,7 +712,7 @@ Regras:
 - Boleto de um pedido já lançado: as contas pendentes com do_pedido=true são parcelas de pedidos; escolha a parcela do mesmo fornecedor que ainda não tem boleto (tem_boleto=false) com valor e vencimento mais próximos.
 - Comprovante de uma conta que JÁ está paga mas ainda sem comprovante (lista contas_pagas_sem_comprovante, mesmo valor e data próxima): use "quitar" com o conta_id dela — o sistema só anexa o comprovante, não paga de novo.
 - O usuário pode conversar livremente: leia a "Conversa recente" para entender correções ("não é comprovante", "é da TMT", "anexa naquela conta"). Se ele explicar o que é o anexo, siga a explicação.
-- "criar": despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
+- "criar": despesa que NÃO está nas pendentes. Print/nota/pedido de COMPRA ("compra feita", Mercado Livre, loja virtual, pedido, nota fiscal, OS) NÃO é pagamento: pago=false — a conta fica no Contas a Pagar até chegar o comprovante. Compra no cartão de crédito também é pago=false (vence na fatura). Se veio COMPROVANTE de pagamento ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
 - fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
 - tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
 - recorrente: true se disser mensal / todo mês / fixa / recorrente; false se disser avulsa / única; senão null.
@@ -839,6 +839,13 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
       return;
     }
     if (analise.acao === 'perguntar') { await responder(jid, analise.mensagem || 'Não entendi. Pode detalhar (empresa, descrição e valor)?', m); return; }
+  }
+  // Contas a Pagar só vai para o Acerto quando é paga: compra/pedido/nota/cartão não é pagamento
+  if (analise.acao === 'criar' && analise.tipo_documento !== 'comprovante') {
+    const t = (texto || '') + ' ' + (extra || '');
+    const cartao = /cart[aã]o|cr[eé]dito|fatura|parcelad/i.test(t);
+    const disse = /\b(paguei|pagamos|pago|paga|pagou|quitad[ao]|quitei)\b/i.test(t) && !cartao;
+    if ((analise.tipo_documento === 'nota' || analise.produto_a_chegar === true || cartao) && !disse) analise = Object.assign({}, analise, { pago: false, naoPago: true });
   }
   await executar({ jid, m, quem, slug, media, analise, padraoGrupo });
 }
@@ -1009,7 +1016,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     const qtd = analise.parcelas && parseInt(analise.parcelas.qtd, 10) > 1 ? Math.min(parseInt(analise.parcelas.qtd, 10), 60) : 1;
     const valorParc = qtd > 1 ? (parseFloat(analise.parcelas.valor_parcela) || Math.round(parseFloat(analise.valor) / qtd * 100) / 100) : parseFloat(analise.valor);
     const primeiro = (qtd > 1 && analise.parcelas.primeiro_vencimento) || analise.vencimento || analise.data_pagamento || hojeISO();
-    const pago = !!(analise.pago || (media && !analise.ehBoleto));
+    const pago = !analise.naoPago && !!(analise.pago || (media && !analise.ehBoleto));
 
     // Comprovante de um pagamento que já está no Acerto (lançado à mão ou por uma conta paga sem comprovante): anexa nele
     if (media && pago && !analise.ehBoleto && analise.tipo_documento !== 'nota' && qtd === 1 && !analise.ignorarAcerto) {
