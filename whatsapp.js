@@ -585,6 +585,8 @@ async function tratarMensagem(m) {
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, escolha.novo ? { conta_id: null, forcarNovo: true } : { conta_id: escolha.id }) });
       }
       if (pend.tipo === 'acerto_comp') {
+        if (escolha.cancelar) { await responder(jid, 'Ok, cancelado. Nada foi alterado.', m); return; }
+        if (escolha.adiantar) return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { adiantado: true }) });
         if (escolha.novo) return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { ignorarAcerto: true }) });
         return anexarNoAcerto({ jid, m, quem, slug: pend.slug, media: pend.media, acertoId: escolha.id });
       }
@@ -642,7 +644,7 @@ Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
 - Em comprovante de pagamento de boleto, se aparecer o código de barras ou a linha digitável, copie os dígitos em linha_digitavel (o sistema usa para achar a conta exata).
-- "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje).
+- "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje). NUNCA quite uma parcela/conta com vencimento mais de 20 dias depois da data do comprovante (é parcela futura; o pagamento provavelmente já foi lançado) — nesse caso use "criar" com pago=true e data_pagamento.
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
 - "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar". Se a conta pendente foi lançada à mão com outro nome/sem fornecedor mas tem o mesmo valor (±3%) e vencimento próximo, é a mesma conta: use conta_id dela. Boleto REEMITIDO/ALTERADO (mesmo fornecedor de uma conta pendente, com outro vencimento ou outro valor, ou o texto diz "novo boleto", "mudou", "prorrogou") também é "boleto" com conta_id da conta pendente — o sistema troca valor e vencimento.
 - "alterar": o TEXTO pede para mudar uma conta pendente que NÃO é o último lançamento (ex.: "o boleto da ISPS mudou pra dia 30", "a conta da Cemig agora é 480"). Preencha conta_id (das contas_pendentes) e correcao só com os campos citados.
@@ -826,6 +828,19 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     if (diverge && !analise.forcar) {
       pendentes[jid] = { tipo: 'confirmar', opcoes: [{ modo: 'manter' }, { modo: 'corrigir' }, { modo: 'cancelar' }], slug, media, analise, quando: Date.now() };
       await responder(jid, '⚠️ O comprovante é de ' + fmtV(analise.valor) + ', mas a conta "' + conta.descricao + '" está lançada com ' + fmtV(conta.valor) + ' (venc. ' + fmtD(conta.vencimento) + ').\n1. Quitar mesmo assim (mantém ' + fmtV(conta.valor) + ')\n2. Quitar e corrigir o valor para ' + fmtV(analise.valor) + '\n3. Cancelar', m);
+      return;
+    }
+    const dataPg = /^\d{4}-\d{2}-\d{2}$/.test(analise.data_pagamento || '') ? analise.data_pagamento : hojeISO();
+    if (media && !jaPaga && !analise.pelaLinha && !analise.adiantado && conta.vencimento > somaDias(dataPg, 20)) {
+      // parcela futura: o mais provável é o comprovante ser de um pagamento que já está no Acerto
+      let cands = [];
+      try { cands = db.acertoSemComprovante(slug, analise.valor || conta.valor, somaDias(dataPg, -10), somaDias(dataPg, 5)); } catch (e) {}
+      if (cands.length === 1) return anexarNoAcerto({ jid, m, quem, slug, media, acertoId: cands[0].id });
+      const opcoes = cands.map(c => ({ id: c.id })).concat([{ adiantar: true }, { cancelar: true }]);
+      pendentes[jid] = { tipo: 'acerto_comp', opcoes, slug, media, analise, quando: Date.now() };
+      await responder(jid, '📎 Comprovante de ' + fmtV(analise.valor || conta.valor) + ' (' + fmtD(dataPg) + '). A conta pendente parecida é "' + conta.descricao + '" com vencimento ' + fmtD(conta.vencimento) + ' — muito à frente, então não quitei sozinho.\n'
+        + cands.map((c, i) => (i + 1) + '. Anexar no Acerto: ' + c.descricao + ' — ' + fmtV(c.saida) + ' — ' + fmtD(c.data)).join('\n') + (cands.length ? '\n' : '')
+        + (cands.length + 1) + '. Quitar "' + conta.descricao + '" adiantado\n' + (cands.length + 2) + '. Cancelar', m);
       return;
     }
     const antes = { [conta.id]: Object.assign({}, conta) };
