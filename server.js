@@ -328,6 +328,26 @@ app.get('/api/acerto/:id/comprovante', (req, res) => {
   res.send(fs.readFileSync(abs));
 });
 // Boleto recebido pelo WhatsApp (arquivo guardado junto dos comprovantes)
+// Pedido de compra / OS / nota anexado à conta (WhatsApp)
+app.get('/api/contas-pagar/:id/pedido', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  const abs = conta && whatsapp.comprovantePath(conta.pedido_arquivo);
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ error: 'Pedido não encontrado' });
+  const ext = path.extname(abs).toLowerCase();
+  res.setHeader('Content-Type', ext === '.pdf' ? 'application/pdf' : (ext === '.png' ? 'image/png' : 'image/jpeg'));
+  res.setHeader('Content-Disposition', 'inline; filename="pedido_' + conta.id + ext + '"');
+  res.send(fs.readFileSync(abs));
+});
+// Pedido de compra / OS / nota anexado à conta (WhatsApp)
+app.get('/api/contas-pagar/:id/pedido', (req, res) => {
+  const conta = db.getContaPagarById(req.emp, req.params.id);
+  const abs = conta && whatsapp.comprovantePath(conta.pedido_arquivo);
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ error: 'Pedido não encontrado' });
+  const ext = path.extname(abs).toLowerCase();
+  res.setHeader('Content-Type', ext === '.pdf' ? 'application/pdf' : (ext === '.png' ? 'image/png' : 'image/jpeg'));
+  res.setHeader('Content-Disposition', 'inline; filename="pedido_' + conta.id + ext + '"');
+  res.send(fs.readFileSync(abs));
+});
 app.get('/api/contas-pagar/:id/boleto', (req, res) => {
   const conta = db.getContaPagarById(req.emp, req.params.id);
   const abs = conta && whatsapp.comprovantePath(conta.boleto_arquivo);

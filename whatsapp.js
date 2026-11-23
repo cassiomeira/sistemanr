@@ -469,7 +469,7 @@ async function aplicarComando({ jid, m, quem, cmd }) {
     for (const c of contas) {
       if (u.tipo === 'criar') {
         db.delAcertoPorConta(slug, c.id);
-        for (const rel of [c.comprovante, c.boleto_arquivo]) { const abs = comprovantePath(rel); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
+        for (const rel of [c.comprovante, c.boleto_arquivo, c.pedido_arquivo]) { const abs = comprovantePath(rel); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } }
         deps.excluirConta(slug, c.id, autor);
       } else {
         const a = u.antes[c.id] || {};
@@ -567,6 +567,11 @@ async function tratarMensagem(m) {
   const pend = pendentes[jid];
   if (pend && !media) {
     if (/^(cancela|cancelar|não|nao|esquece)/i.test(texto)) { delete pendentes[jid]; await responder(jid, 'Ok, cancelado.', m); return; }
+    if (pend.tipo === 'pedido_cond' && (/\d/.test(texto) || /vista/i.test(texto))) {
+      delete pendentes[jid];
+      const p = Object.assign({}, pend.analise.pedido || {}, { parcelas: [], condicao: /vista/i.test(texto) ? '0' : texto });
+      return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { pedido: p }) });
+    }
     const n = parseInt(texto, 10);
     if (n >= 1 && n <= pend.opcoes.length && /^\d+$/.test(texto.trim())) {
       delete pendentes[jid];
@@ -628,7 +633,7 @@ function montarContexto(slugs, cfg) {
   const ctx = { hoje, dia_semana: dias[new Date(hoje + 'T12:00:00Z').getUTCDay()], empresas: empresas.filter(e => slugs.includes(e.slug)).map(e => slugs.length > 1 ? { slug: e.slug, nome: e.nome, tambem_aparece_como: (apelidosCfg(cfg)[e.slug] || []) } : { slug: e.slug, nome: e.nome }), contas_pendentes: [], colaboradores: {}, categorias: {}, fornecedores_conhecidos: {} };
   for (const slug of slugs) {
     try {
-      ctx.contas_pendentes.push(...db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 90)).map(c => ({ id: c.id, empresa: slug, vencimento: c.vencimento, descricao: c.descricao, valor: c.valor, fornecedor: c.fornecedor || '' })));
+      ctx.contas_pendentes.push(...db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180)).map(c => Object.assign({ id: c.id, empresa: slug, vencimento: c.vencimento, descricao: c.descricao, valor: c.valor, fornecedor: c.fornecedor || '' }, c.pedido_arquivo ? { do_pedido: true, tem_boleto: !!c.boleto_arquivo } : {})));
       ctx.colaboradores[slug] = db.getColaboradores(slug).map(c => c.nome);
       ctx.categorias[slug] = db.getConfig(slug).categoriasLoja || [];
       if (slugs.length <= 2) ctx.fornecedores_conhecidos[slug] = [...new Set(historico(slug).map(h => h.fornecedor).filter(Boolean))].slice(0, 150);
@@ -639,7 +644,7 @@ function montarContexto(slugs, cfg) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"tipo_documento":"comprovante"|"boleto"|"nota"|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"pedido"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"tipo_documento":"comprovante"|"boleto"|"nota"|null,"pedido":{"numero":string|null,"data":"YYYY-MM-DD"|null,"parcelas":[{"vencimento":"YYYY-MM-DD","valor":number}],"condicao":string|null}|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
@@ -649,6 +654,8 @@ Regras:
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
 - "boleto": o anexo é um BOLETO/FATURA DE COBRANÇA ainda a pagar (tem linha digitável/código de barras e vencimento, sem autenticação de pagamento). Preencha valor, vencimento, fornecedor (beneficiário), linha_digitavel (só dígitos, se legível) e conta_id se uma conta pendente corresponder a esse boleto (mesmo fornecedor e valor ±3%); senão conta_id=null. Comprovante de pagamento de boleto NÃO é "boleto": é "quitar"/"criar". Se a conta pendente foi lançada à mão com outro nome/sem fornecedor mas tem o mesmo valor (±3%) e vencimento próximo, é a mesma conta: use conta_id dela. Boleto REEMITIDO/ALTERADO (mesmo fornecedor de uma conta pendente, com outro vencimento ou outro valor, ou o texto diz "novo boleto", "mudou", "prorrogou") também é "boleto" com conta_id da conta pendente — o sistema troca valor e vencimento.
 - "alterar": o TEXTO pede para mudar uma conta pendente que NÃO é o último lançamento (ex.: "o boleto da ISPS mudou pra dia 30", "a conta da Cemig agora é 480"). Preencha conta_id (das contas_pendentes) e correcao só com os campos citados.
+- "pedido": o anexo é um PEDIDO DE COMPRA (ou orçamento/pedido aprovado de fornecedor) ainda NÃO pago e SEM boleto/comprovante. Preencha fornecedor, valor (total do pedido), descricao curta (o que foi comprado), categoria e pedido: numero, data (data do pedido), parcelas (vencimento e valor de cada uma, se o pedido trouxer as datas) e condicao (texto da condição de pagamento, ex.: "30/60/90 dias", "28 DDL", "à vista"). O sistema lança as parcelas no Contas a Pagar com o pedido anexado.
+- Boleto de um pedido já lançado: as contas pendentes com do_pedido=true são parcelas de pedidos; escolha a parcela do mesmo fornecedor que ainda não tem boleto (tem_boleto=false) com valor e vencimento mais próximos.
 - "criar": despesa que NÃO está nas pendentes. Se veio comprovante ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
 - fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
 - tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
@@ -820,6 +827,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
   }
 
   if (analise.acao === 'lancamento') return executarLancamento({ jid, m, quem, slug, nomeEmp, analise, media });
+  if (analise.acao === 'pedido') return executarPedido({ jid, m, quem, slug, nomeEmp, analise, media, padraoGrupo });
 
   if (analise.acao === 'quitar') {
     const conta = db.getContaPagarById(slug, analise.conta_id);
@@ -850,7 +858,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     const comprovante = salvarComprovante(slug, conta.id, media, ehNota ? 'doc_' : '');
     const fields = {};
     if (!jaPaga) fields.pago_por = pagoPor;
-    if (comprovante) fields[ehNota ? 'boleto_arquivo' : 'comprovante'] = comprovante;
+    if (comprovante) fields[ehNota ? 'pedido_arquivo' : 'comprovante'] = comprovante;
     if (Object.keys(fields).length) deps.atualizarConta(slug, conta.id, fields, autor);
     guardarHash(media, slug, conta.id);
     lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
@@ -872,7 +880,13 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     // data fora do razoável (fator de vencimento mal lido): não usa
     if (dados.vencimento && (dados.vencimento < somaDias(hojeISO(), -120) || dados.vencimento > somaDias(hojeISO(), 400))) dados.vencimento = analise.vencimento || '';
     if (!dados.valor) { await responder(jid, 'Não consegui ler o valor do boleto. Manda o PDF ou uma foto mais nítida (ou escreva o valor).', m); return; }
-    const conta = analise.conta_id ? db.getContaPagarById(slug, analise.conta_id) : null;
+    let conta = analise.conta_id ? db.getContaPagarById(slug, analise.conta_id) : null;
+    if (conta && conta.pedido_arquivo && conta.boleto_arquivo) {
+      let irmas = [];
+      try { irmas = db.getContasPagarPendentes(slug, somaDias(hojeISO(), -120), somaDias(hojeISO(), 400)).filter(c => c.pedido_arquivo === conta.pedido_arquivo && !c.boleto_arquivo); } catch (e) {}
+      const dist = c => Math.abs(new Date(c.vencimento) - new Date(dados.vencimento || conta.vencimento));
+      if (irmas.length) conta = db.getContaPagarById(slug, irmas.sort((x, y) => dist(x) - dist(y))[0].id);
+    }
     if (conta && !estaPaga(conta)) {
       // boleto novo/reemitido de uma conta que já existe: anexa e atualiza vencimento e valor
       const antes = { [conta.id]: Object.assign({}, conta) };
@@ -887,7 +901,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
       guardarHash(media, slug, conta.id);
       lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
       registrar('boleto', nomeEmp + ': boleto anexado em ' + conta.descricao + (mudou.length ? ' (' + mudou.join('; ').replace(/\*/g, '') + ')' : ''), { quem, empresa: slug });
-      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia' + (analise.porValorData ? ' (mesmo valor e vencimento)' : '') + (antes[conta.id].linha_digitavel || antes[conta.id].boleto_arquivo ? ' (substituiu o boleto anterior)' : '') + ':\n'
+      await responder(jid, '📄 *' + nomeEmp + '* — boleto anexado à conta que já existia' + (analise.porValorData ? ' (mesmo valor e vencimento)' : '') + (conta.pedido_arquivo ? ' (parcela do pedido)' : '') + (antes[conta.id].linha_digitavel || antes[conta.id].boleto_arquivo ? ' (substituiu o boleto anterior)' : '') + ':\n'
         + (mudou.length ? '🔁 Atualizei: ' + mudou.join('; ') + '\n' : '') + resumoConta(db.getContaPagarById(slug, conta.id)) + DICA, m);
       if (dados.linha) await enviarLinha(jid, dados.linha);
       return;
@@ -903,6 +917,10 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
       const pend = db.getContasPagarPendentes(slug, somaDias(hoje, -120), somaDias(hoje, 180));
       const exatas = dados.vencimento ? pend.filter(c => Math.abs((c.valor || 0) - dados.valor) < 0.01 && c.vencimento === dados.vencimento) : [];
       if (exatas.length === 1) return executar({ jid, m, quem, slug, media, padraoGrupo, analise: Object.assign({}, analise, { conta_id: exatas[0].id, porValorData: true }) });
+      // parcela de pedido do mesmo fornecedor, ainda sem boleto, valor parecido e vencimento até 20 dias de diferença
+      const parcPed = pend.filter(c => c.pedido_arquivo && !c.boleto_arquivo && (mesmoNome(c) || !nomeB) && Math.abs((c.valor || 0) - dados.valor) <= Math.max(1, (c.valor || 0) * 0.02) && diasEntre(c.vencimento, dados.vencimento || hoje) <= 20)
+        .sort((x, y) => diasEntre(x.vencimento, dados.vencimento) - diasEntre(y.vencimento, dados.vencimento));
+      if (parcPed.length) return executar({ jid, m, quem, slug, media, padraoGrupo, analise: Object.assign({}, analise, { conta_id: parcPed[0].id, porPedido: true }) });
       const mesmas = pend.filter(c => mesmoNome(c) || mesmoValor(c))
         .sort((x, y) => (mesmoNome(y) && mesmoValor(y)) - (mesmoNome(x) && mesmoValor(x)) || diasEntre(x.vencimento, dados.vencimento) - diasEntre(y.vencimento, dados.vencimento)).slice(0, 4);
       if (mesmas.length) {
@@ -965,7 +983,7 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
           if (pago) fields.pago_por = pagoPor;
           const ehNota = analise.tipo_documento === 'nota';
           const comprovante = salvarComprovante(slug, item.id, media, ehNota ? 'doc_' : '');
-          if (comprovante) fields[ehNota ? 'boleto_arquivo' : 'comprovante'] = comprovante;
+          if (comprovante) fields[ehNota ? 'pedido_arquivo' : 'comprovante'] = comprovante;
         }
         if (Object.keys(fields).length) deps.atualizarConta(slug, item.id, fields, autor);
       }
@@ -983,6 +1001,51 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     return;
   }
   await responder(jid, analise.mensagem || 'Não entendi o que fazer com essa mensagem.', m);
+}
+
+// Pedido de compra: lança as parcelas no Contas a Pagar com o pedido anexado (boletos e comprovante chegam depois)
+async function executarPedido({ jid, m, quem, slug, nomeEmp, analise, media, padraoGrupo }) {
+  const p = analise.pedido || {};
+  const total = Math.round((parseFloat(analise.valor) || 0) * 100) / 100;
+  const dataPed = /^\d{4}-\d{2}-\d{2}$/.test(p.data || '') ? p.data : hojeISO();
+  let parcelas = (p.parcelas || []).filter(x => x && parseFloat(x.valor) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(x.vencimento || '')).map(x => ({ vencimento: x.vencimento, valor: Math.round(parseFloat(x.valor) * 100) / 100 }));
+  if (!parcelas.length && total && p.condicao) {
+    const dias = (String(p.condicao).match(/\d{1,3}/g) || []).map(Number).filter(d => d <= 400);
+    if (dias.length) {
+      const v = Math.floor(total / dias.length * 100) / 100;
+      parcelas = dias.map((d, i) => ({ vencimento: somaDias(dataPed, d), valor: i === dias.length - 1 ? Math.round((total - v * (dias.length - 1)) * 100) / 100 : v }));
+    }
+  }
+  if (!parcelas.length) {
+    if (!total) { await responder(jid, 'Não consegui ler o valor do pedido. Manda o PDF ou uma foto mais nítida.', m); return; }
+    pendentes[jid] = { tipo: 'pedido_cond', opcoes: [], slug, media, analise, quando: Date.now() };
+    await responder(jid, '📦 Pedido de ' + (analise.fornecedor || 'fornecedor') + ' — ' + fmtV(total) + '. Não achei as condições de pagamento. Responda os prazos em dias a partir de ' + fmtD(dataPed) + ' (ex.: 30/60/90) ou "à vista".', m);
+    return;
+  }
+  const comp = completarCampos(slug, Object.assign({}, analise, { recorrente: false }), padraoGrupo);
+  const autor = 'WhatsApp (' + quem + ')';
+  const qtd = parcelas.length;
+  const grupo = qtd > 1 ? 'grp_' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex') : '';
+  const descBase = ('Pedido ' + (p.numero ? p.numero + ' ' : '') + (comp.fornecedor || analise.descricao || '')).trim();
+  const ids = [];
+  let arq = '';
+  parcelas.forEach((pc, i) => {
+    const item = { id: novoId(), vencimento: pc.vencimento, descricao: qtd > 1 ? descBase + ' (' + (i + 1) + '/' + qtd + ')' : descBase, valor: pc.valor, recorrente: 0, boleto_chegou: 0, pago_por: '', categoria: comp.categoria, tipo_nota: comp.tipo_nota, fornecedor: comp.fornecedor, a_chegar: 0, grupo_parcela: grupo, linha_digitavel: '' };
+    deps.criarConta(slug, item, autor);
+    if (i === 0) arq = salvarComprovante(slug, item.id, media, 'pedido_');
+    if (arq) deps.atualizarConta(slug, item.id, { pedido_arquivo: arq }, autor);
+    ids.push(item.id);
+  });
+  guardarHash(media, slug, ids[0]);
+  lembrarUltimo(jid, slug, ids, 'criar');
+  const soma = Math.round(parcelas.reduce((s, x) => s + x.valor, 0) * 100) / 100;
+  registrar('criar', nomeEmp + ': ' + descBase + ' ' + fmtV(soma) + ' em ' + qtd + 'x (pedido)', { quem, empresa: slug });
+  let txt = '📦 *' + nomeEmp + '* — pedido lançado no Contas a Pagar (' + (comp.fornecedor || '-') + ', ' + comp.categoria + ', ' + (comp.tipo_nota || 'D/F não definido') + '):\n'
+    + parcelas.map((x, i) => '   ' + (i + 1) + '/' + qtd + ' — venc. ' + fmtD(x.vencimento) + ' — ' + fmtV(x.valor)).join('\n')
+    + '\n   Total: ' + fmtV(soma) + (total && Math.abs(total - soma) > 0.05 ? ' ⚠️ (pedido diz ' + fmtV(total) + ')' : '')
+    + '\nQuando chegarem os boletos, mande aqui: confiro valor e vencimento e anexo em cada parcela.';
+  if (!comp.tipo_nota) txt += '\n⚠️ Dentro/Fora não definido — responda D ou F.';
+  await responder(jid, txt + DICA, m);
 }
 
 // Anexa o comprovante a um lançamento que já está no Acerto (não cria conta nova)

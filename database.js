@@ -143,6 +143,8 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN linha_digitavel TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN comprovante TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN boleto_arquivo TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN pedido_arquivo TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE contas_pagar ADD COLUMN pedido_arquivo TEXT DEFAULT ""'); } catch(e) {}
   // Controle Fiscal
   dbInstance.run(`CREATE TABLE IF NOT EXISTS controle_fiscal (
     id TEXT PRIMARY KEY, data TEXT NOT NULL,
@@ -640,7 +642,7 @@ module.exports = {
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
     // comprovante_conta: comprovante anexado na conta a pagar que gerou esta saída (para abrir pelo Acerto)
-    const sel = "SELECT a.*, COALESCE(NULLIF(a.comprovante, ''), cp.comprovante, '') AS comprovante_conta, COALESCE(cp.boleto_arquivo, '') AS documento_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
+    const sel = "SELECT a.*, COALESCE(NULLIF(a.comprovante, ''), cp.comprovante, '') AS comprovante_conta, COALESCE(cp.boleto_arquivo, '') AS documento_conta, COALESCE(cp.pedido_arquivo, '') AS pedido_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
     if (mes) return query(slug, sel + ' WHERE a.data LIKE ? ORDER BY a.data DESC', [mes + '%']);
     return query(slug, sel + ' ORDER BY a.data DESC');
   },
@@ -740,6 +742,8 @@ module.exports = {
     if (fields.comprovante !== undefined) { sets.push('comprovante=?'); vals.push(fields.comprovante || ''); }
     if (fields.linha_digitavel !== undefined) { sets.push('linha_digitavel=?'); vals.push(fields.linha_digitavel || ''); }
     if (fields.boleto_arquivo !== undefined) { sets.push('boleto_arquivo=?'); vals.push(fields.boleto_arquivo || ''); }
+    if (fields.pedido_arquivo !== undefined) { sets.push('pedido_arquivo=?'); vals.push(fields.pedido_arquivo || ''); }
+    if (fields.pedido_arquivo !== undefined) { sets.push('pedido_arquivo=?'); vals.push(fields.pedido_arquivo || ''); }
     if (sets.length) { vals.push(id); run(slug, 'UPDATE contas_pagar SET ' + sets.join(',') + ' WHERE id=?', vals); }
   },
   // Contas pendentes com linha digitável (casar comprovante de pagamento com o boleto)
@@ -775,7 +779,7 @@ module.exports = {
   },
   // Contas ainda não pagas numa janela de datas (usado pelo WhatsApp para casar comprovantes)
   getContasPagarPendentes(slug, de, ate, limite = 80) {
-    return query(slug, "SELECT id, vencimento, descricao, valor, fornecedor, categoria, pago_por FROM contas_pagar WHERE (pago_por IS NULL OR pago_por='' OR pago_por='A Pagar') AND vencimento BETWEEN ? AND ? ORDER BY vencimento DESC LIMIT ?", [de, ate, limite]);
+    return query(slug, "SELECT id, vencimento, descricao, valor, fornecedor, categoria, pago_por, COALESCE(boleto_arquivo, '') AS boleto_arquivo, COALESCE(pedido_arquivo, '') AS pedido_arquivo FROM contas_pagar WHERE (pago_por IS NULL OR pago_por='' OR pago_por='A Pagar') AND vencimento BETWEEN ? AND ? ORDER BY vencimento DESC LIMIT ?", [de, ate, limite]);
   },
   marcarChegou(slug, grupoParcela) {
     run(slug, 'UPDATE contas_pagar SET a_chegar=0 WHERE grupo_parcela=?', [grupoParcela]);
