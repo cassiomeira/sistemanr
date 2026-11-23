@@ -109,7 +109,7 @@ async function conectar() {
     });
     sock.ev.on('messages.upsert', ({ messages, type }) => {
       if (type !== 'notify') return;
-      for (const m of messages) tratarMensagem(m).catch(e => registrar('erro', 'Falha ao tratar mensagem: ' + e.message));
+      for (const m of messages) enfileirar(m);
     });
   } catch (e) {
     estado = Object.assign(estado, { status: 'desligado', erro: 'Erro ao iniciar WhatsApp: ' + e.message });
@@ -532,6 +532,25 @@ async function aplicarComando({ jid, m, quem, cmd }) {
 }
 
 // ---------- fluxo principal ----------
+// Fila por conversa: uma mensagem por vez, na ordem em que chegaram.
+// Arquivo que chega enquanto há pergunta aberta espera a resposta (senão a pergunta nova apagaria a anterior).
+const filas = {}, espera = {};
+const PERGUNTA_VALE = 15 * 60000;
+const perguntaAberta = jid => pendentes[jid] && Date.now() - pendentes[jid].quando <= PERGUNTA_VALE;
+function enfileirar(m, liberada) {
+  const jid = (m && m.key && m.key.remoteJid) || '_';
+  if (liberada) m._liberada = true;
+  filas[jid] = (filas[jid] || Promise.resolve())
+    .then(() => tratarMensagem(m))
+    .catch(e => registrar('erro', 'Falha ao tratar mensagem: ' + e.message))
+    .then(() => liberarEspera(jid));
+  return filas[jid];
+}
+function liberarEspera(jid) {
+  if (perguntaAberta(jid) || !espera[jid] || !espera[jid].length) return;
+  enfileirar(espera[jid].shift(), true);
+}
+
 async function tratarMensagem(m) {
   if (!m || !m.message || !m.key) return;
   const jid = m.key.remoteJid || '';
@@ -576,6 +595,12 @@ async function tratarMensagem(m) {
     await responder(jid, '🎤 Entendi: "' + texto + '"', m);
   }
 
+  if (media && !m._liberada && perguntaAberta(jid)) {
+    (espera[jid] = espera[jid] || []).push(m);
+    if (espera[jid].length === 1) await responder(jid, '📥 Recebi — analiso este' + ' (e os próximos que chegarem) depois que você responder a pergunta acima.', m);
+    setTimeout(() => { filas[jid] = (filas[jid] || Promise.resolve()).then(() => liberarEspera(jid)); }, PERGUNTA_VALE + 2000);
+    return;
+  }
   const historicoAntes = conversaRecente(jid);
   anotar(jid, quem, (texto || '') + (media ? ' [anexo: ' + (media.fileName || (msg.imageMessage ? 'imagem' : 'arquivo')) + ']' : ''));
 
@@ -1240,4 +1265,4 @@ function comprovantePath(rel) {
 }
 
 module.exports = { init, conectar, desconectar, status, atualizarGrupos, lerConfig, salvarConfig, grokCfg, salvarComprovante, comprovantePath, comprovantesDir, enviarResumoDiario,
-  _interno: { tratarMensagem, identificarEmpresa, comandoRapido, variantesNumero, parseValorBR, somaMeses, dataDoTexto, norm, acharNoHistorico, montarResumoDiario, setSock(s) { sock = s; }, setEstado(e) { Object.assign(estado, e); }, setBaileys(b) { baileys = b; } } };
+  _interno: { tratarMensagem, enfileirar, identificarEmpresa, comandoRapido, variantesNumero, parseValorBR, somaMeses, dataDoTexto, norm, acharNoHistorico, montarResumoDiario, setSock(s) { sock = s; }, setEstado(e) { Object.assign(estado, e); }, setBaileys(b) { baileys = b; } } };
