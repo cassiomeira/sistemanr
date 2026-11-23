@@ -189,14 +189,11 @@ async function extrairPdfTexto(buffer) {
   } catch (e) { return ''; }
 }
 
-async function transcreverComGemini(slug, buffer, mimeType) {
+async function transcreverPdf(buffer, nome) {
   try {
-    const pedidos = require('./pedidos');
-    const r = await pedidos.chamarGemini(slug, buffer, mimeType, 'Este arquivo é um comprovante de pagamento/transferência brasileiro. Transcreva TODOS os textos legíveis e devolva SOMENTE JSON: {"texto":"transcrição completa, linha por linha","valor":0.00,"data":"YYYY-MM-DD","favorecido":"quem recebeu","pagador":"quem pagou","descricao":"tipo (PIX, boleto, TED...) e finalidade se houver"}. Valores com ponto decimal. Se algo não estiver legível, deixe vazio — nunca invente.');
-    if (r.error) return { error: r.error };
-    let j = {}; try { j = pedidos.parseJsonResposta(r.text); } catch (e) { return { texto: r.text }; }
+    const j = await grok.perguntarPdfJson(grokCfg(), buffer, nome, 'Este arquivo é um comprovante de pagamento/transferência brasileiro. Transcreva TODOS os textos legíveis e devolva SOMENTE JSON: {"texto":"transcrição completa, linha por linha","valor":0.00,"data":"YYYY-MM-DD","favorecido":"quem recebeu","pagador":"quem pagou","descricao":"tipo (PIX, boleto, TED...) e finalidade se houver"}. Valores com ponto decimal. Se algo não estiver legível, deixe vazio — nunca invente.');
     return { texto: (j.texto || '') + '\nVALOR: ' + (j.valor || '') + '\nDATA: ' + (j.data || '') + '\nFAVORECIDO: ' + (j.favorecido || '') + '\nPAGADOR: ' + (j.pagador || '') + '\nDESCRICAO: ' + (j.descricao || '') };
-  } catch (e) { return { error: e.message }; }
+  } catch (e) { registrar('erro', 'Leitura do PDF: ' + e.message); return { error: e.message }; }
 }
 
 // ---------- histórico do fornecedor / normalização ----------
@@ -453,6 +450,15 @@ async function aplicarComandoLanc({ jid, m, quem, cmd, u }) {
 async function aplicarComando({ jid, m, quem, cmd }) {
   const u = ultimos[jid];
   if (u.tipo === 'lanc') return aplicarComandoLanc({ jid, m, quem, cmd, u });
+  if (u.tipo === 'acerto_comp') {
+    if (!cmd.desfazer) { await responder(jid, 'O último foi só o anexo do comprovante num lançamento do Acerto — não tem o que corrigir aí. Para tirar o anexo, responda "desfazer".', m); return; }
+    const a = db.getAcertoById(u.slug, u.ids[0]);
+    if (a && a.comprovante) { const abs = comprovantePath(a.comprovante); if (abs) { try { fs.unlinkSync(abs); } catch (e) {} } db.setAcertoComprovante(u.slug, a.id, ''); }
+    delete ultimos[jid];
+    registrar('desfazer', 'Anexo do comprovante no Acerto' + (a ? ': ' + a.descricao : ''), { quem, empresa: u.slug });
+    await responder(jid, '↩️ Desfeito: tirei o comprovante do lançamento do Acerto' + (a ? ' "' + a.descricao + '"' : '') + '.', m);
+    return;
+  }
   const { slug, ids } = u;
   const contas = ids.map(id => db.getContaPagarById(slug, id)).filter(Boolean);
   if (!contas.length) { delete ultimos[jid]; await responder(jid, 'Não achei mais o último lançamento (pode ter sido apagado no sistema).', m); return; }
@@ -546,12 +552,12 @@ async function tratarMensagem(m) {
   const media = msg.imageMessage || msg.documentMessage || null;
   if (!media && !texto && !audio) return;
 
-  // Áudio: transcreve com o Gemini e segue como se fosse texto
+  // Áudio: transcreve com o Grok e segue como se fosse texto
   if (audio) {
     let buffer;
     try { buffer = await baileys.downloadMediaMessage({ key: m.key, message: msg }, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage }); }
     catch (e) { await responder(jid, 'Não consegui baixar o áudio: ' + e.message, m); return; }
-    const t = await transcreverAudio(empresaFixa && empresaFixa !== '*' ? empresaFixa : 'nunesrocha', buffer, (audio.mimetype || 'audio/ogg').split(';')[0].toLowerCase());
+    const t = await transcreverAudio(buffer, (audio.mimetype || 'audio/ogg').split(';')[0].toLowerCase());
     if (t.error || !t.texto) { await responder(jid, 'Não consegui entender o áudio' + (t.error ? ': ' + t.error : '') + '. Pode mandar por escrito?', m); return; }
     texto = t.texto;
     await responder(jid, '🎤 Entendi: "' + texto + '"', m);
@@ -578,12 +584,17 @@ async function tratarMensagem(m) {
       if (pend.tipo === 'boleto_troca') {
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, escolha.novo ? { conta_id: null, forcarNovo: true } : { conta_id: escolha.id }) });
       }
+      if (pend.tipo === 'acerto_comp') {
+        if (escolha.novo) return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { ignorarAcerto: true }) });
+        return anexarNoAcerto({ jid, m, quem, slug: pend.slug, media: pend.media, acertoId: escolha.id });
+      }
       if (pend.tipo === 'duplicado') {
         if (escolha.modo === 'cancelar') { await responder(jid, 'Ok, não lancei de novo.', m); return; }
         return executar({ jid, m, quem, slug: pend.slug, media: pend.media, padraoGrupo, analise: Object.assign({}, pend.analise, { ignorarDup: true }) });
       }
     }
     if (Date.now() - pend.quando > 15 * 60000) delete pendentes[jid]; // expirou: segue como mensagem nova
+    else if (ultimos[jid] && Date.now() - ultimos[jid].quando < 3 * 3600000 && comandoRapido(texto)) { /* correção do último lançamento: segue abaixo, a pergunta continua valendo */ }
     else { await responder(jid, 'Responda com o número de uma das opções (1 a ' + pend.opcoes.length + ') ou "cancelar".', m); return; }
   }
 
@@ -603,13 +614,9 @@ async function tratarMensagem(m) {
   await analisarEExecutar({ jid, m, texto, media: arquivo, quem, empresaFixa, cfg, padraoGrupo });
 }
 
-async function transcreverAudio(slug, buffer, mimeType) {
-  try {
-    const pedidos = require('./pedidos');
-    const r = await pedidos.chamarGemini(slug, buffer, mimeType || 'audio/ogg', 'Transcreva este áudio em português do Brasil, exatamente como foi falado (é um comando financeiro curto, ex.: "paguei 120 de lavagem do caminhão, fora"). Escreva valores em números (ex.: 120,50). Devolva SOMENTE JSON: {"texto":"transcrição"}');
-    if (r.error) return { error: r.error };
-    try { const j = pedidos.parseJsonResposta(r.text); return { texto: String(j.texto || '').trim() }; } catch (e) { return { texto: String(r.text || '').trim() }; }
-  } catch (e) { return { error: e.message }; }
+async function transcreverAudio(buffer, mimeType) {
+  try { return { texto: await grok.transcreverAudio(grokCfg(), buffer, mimeType || 'audio/ogg') }; }
+  catch (e) { registrar('erro', 'Transcrição do áudio: ' + e.message); return { error: e.message }; }
 }
 
 function montarContexto(slugs, cfg) {
@@ -666,8 +673,8 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     else if (media.mimeType === 'application/pdf') {
       anexoTexto = await extrairPdfTexto(media.buffer);
       if (!anexoTexto || anexoTexto.length < 25) {
-        // PDF escaneado (só imagem): o Gemini lê PDF nativamente — usa ele para transcrever
-        const t = await transcreverComGemini(slugs[0], media.buffer, 'application/pdf');
+        // PDF escaneado (só imagem): o Grok lê o PDF pela API de arquivos
+        const t = await transcreverPdf(media.buffer, media.nome);
         if (t.error) { await responder(jid, 'O PDF veio sem texto (escaneado) e não consegui ler com a IA: ' + t.error + '\nManda uma foto/print do comprovante.', m); return; }
         anexoTexto = '(transcrito por OCR da IA — confira o valor)\n' + t.texto;
       } else {
@@ -901,6 +908,19 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     const primeiro = (qtd > 1 && analise.parcelas.primeiro_vencimento) || analise.vencimento || analise.data_pagamento || hojeISO();
     const pago = !!(analise.pago || (media && !analise.ehBoleto));
 
+    // Comprovante de um pagamento que já está no Acerto (lançado à mão ou por uma conta paga sem comprovante): anexa nele
+    if (media && pago && !analise.ehBoleto && qtd === 1 && !analise.ignorarAcerto) {
+      let cands = [];
+      try { cands = db.acertoSemComprovante(slug, valorParc, somaDias(primeiro, -10), somaDias(primeiro, 5)); } catch (e) {}
+      if (cands.length === 1) return anexarNoAcerto({ jid, m, quem, slug, media, acertoId: cands[0].id });
+      if (cands.length > 1) {
+        pendentes[jid] = { tipo: 'acerto_comp', opcoes: cands.map(c => ({ id: c.id })).concat([{ novo: true }]), slug, media, analise, quando: Date.now() };
+        await responder(jid, '📎 Comprovante de ' + fmtV(valorParc) + '. Já tem pagamento desse valor no Acerto. Em qual anexo?\n'
+          + cands.map((c, i) => (i + 1) + '. ' + c.descricao + ' — ' + fmtV(c.saida) + ' — ' + fmtD(c.data)).join('\n') + '\n' + (cands.length + 1) + '. Nenhum, é um pagamento novo', m);
+        return;
+      }
+    }
+
     if (!analise.ignorarDup) {
       const parecidas = db.contasParecidas(slug, valorParc, primeiro, 3);
       if (parecidas.length) return avisarDuplicado({ jid, m, slug, media, analise, texto: 'Já existe conta de ' + fmtV(valorParc) + ' perto dessa data: "' + parecidas[0].descricao + '" (venc. ' + fmtD(parecidas[0].vencimento) + ', ' + (estaPaga(parecidas[0]) ? 'paga' : 'pendente') + '). Pode ser repetido.' });
@@ -945,6 +965,30 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     return;
   }
   await responder(jid, analise.mensagem || 'Não entendi o que fazer com essa mensagem.', m);
+}
+
+// Anexa o comprovante a um lançamento que já está no Acerto (não cria conta nova)
+async function anexarNoAcerto({ jid, m, quem, slug, media, acertoId }) {
+  const nomeEmp = (db.getEmpresas().find(e => e.slug === slug) || {}).nome || slug;
+  const a = db.getAcertoById(slug, acertoId);
+  if (!a) { await responder(jid, 'Não achei mais esse lançamento no Acerto.', m); return; }
+  const conta = a.origem_conta_pagar ? db.getContaPagarById(slug, a.origem_conta_pagar) : null;
+  const autor = 'WhatsApp (' + quem + ')';
+  if (conta && !conta.comprovante) {
+    // saída veio de uma conta a pagar já paga: o comprovante vai na conta (aparece nas duas telas)
+    const antes = { [conta.id]: Object.assign({}, conta) };
+    const rel = salvarComprovante(slug, conta.id, media);
+    deps.atualizarConta(slug, conta.id, { comprovante: rel }, autor);
+    lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
+  } else {
+    const rel = salvarComprovante(slug, a.id, media, 'acerto_');
+    db.setAcertoComprovante(slug, a.id, rel);
+    db.addAuditLog(slug, autor, 'alterou', 'Acerto', 'ID: ' + a.id + ' - anexou comprovante');
+    lembrarUltimo(jid, slug, [a.id], 'acerto_comp');
+  }
+  guardarHash(media, slug, a.id);
+  registrar('quitar', nomeEmp + ': comprovante anexado no Acerto "' + a.descricao + '" ' + fmtV(a.saida), { quem, empresa: slug });
+  await responder(jid, '📎 *' + nomeEmp + '* — esse pagamento já estava no Acerto: "' + a.descricao + '" ' + fmtV(a.saida) + ' em ' + fmtD(a.data) + '. Anexei o comprovante nele (não lancei de novo).\nSe não for esse, responda "desfazer".', m);
 }
 
 // Lançamento direto em Movimentação e/ou Conta do Celso

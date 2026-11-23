@@ -237,7 +237,7 @@ async function renderAcerto(){
     let fornSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'fornecedor\',this.value)"><option value=""'+((!i.fornecedor||i.fornecedor==='')?' selected':'')+'>—</option>'+(CFG.fornecedores||[]).map(f=>'<option'+(f===i.fornecedor?' selected':'')+'>'+f+'</option>').join('')+'</select>';
     let recSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'recorrente\',this.value)"><option value="0"'+(i.recorrente?'':' selected')+'>Não</option><option value="1"'+(i.recorrente?' selected':'')+'>Sim</option></select>';
     let dfSel='<select class="inline-select" onchange="NR.setAcField(\''+i.id+'\',\'tipo_nota\',this.value)"><option value=""'+(!i.tipo_nota?' selected':'')+'>—</option><option value="D"'+(i.tipo_nota==='D'?' selected':'')+'>D</option><option value="F"'+(i.tipo_nota==='F'?' selected':'')+'>F</option></select>';
-    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+achegar+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+(i.comprovante_conta?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px;margin-right:4px" onclick="NR.verComprovanteAcerto(\''+i.origem_conta_pagar+'\')" title="Ver comprovante (anexado na conta a pagar)"><i class="fas fa-paperclip"></i></button>':'')+chqBtn+chegarBtn+'<button class="btn-edit" onclick="NR.editRow(\'acerto\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
+    return'<tr data-id="'+i.id+'" data-row="'+encodeURIComponent(JSON.stringify(i))+'"><td>'+fD(i.data)+'</td><td>'+i.descricao+achegar+'</td><td class="tipo-entrada">'+(i.entrada?fmt(i.entrada):'')+'</td><td class="tipo-saida">'+(i.saida?fmt(i.saida):'')+'</td><td>'+catSel+'</td><td>'+fornSel+'</td><td>'+recSel+'</td><td>'+dfSel+'</td><td><div style="display:flex;align-items:center">'+(i.comprovante_conta?'<button class="btn btn-sm" style="background:var(--green);color:#fff;font-size:10px;margin-right:4px" onclick="NR.verComprovanteAcerto(\''+i.id+'\')" title="Ver comprovante (anexado na conta a pagar)"><i class="fas fa-paperclip"></i></button>':'')+chqBtn+chegarBtn+'<button class="btn-edit" onclick="NR.editRow(\'acerto\',\''+i.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="NR.delAc(\''+i.id+'\')"><i class="fas fa-trash"></i></button></div></td></tr>';}).join('');
   document.getElementById('ac-total-ent').textContent=fmt(te);
   document.getElementById('ac-total-sai').textContent=fmt(ts);
   document.getElementById('ac-saldo').textContent=fmt(te-ts);
@@ -4106,7 +4106,7 @@ async function enviarComprovante(input){
 }
 async function verComprovanteAcerto(contaId){
   try{
-    const resp=await fetch('/api/contas-pagar/'+contaId+'/comprovante',{headers:{'Authorization':'Bearer '+authToken,'X-Empresa':currentEmpresa}});
+    const resp=await fetch('/api/acerto/'+contaId+'/comprovante',{headers:{'Authorization':'Bearer '+authToken,'X-Empresa':currentEmpresa}});
     if(!resp.ok){toast('Comprovante não disponível','error');return;}
     const blob=await resp.blob();const url=URL.createObjectURL(blob);
     let w=window.open(url,'_blank');

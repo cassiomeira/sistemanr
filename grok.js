@@ -61,9 +61,60 @@ async function perguntarJson(cfg, entrada) {
   }
 }
 
+// Áudio → texto (Voice API do xAI: POST /v1/stt, multipart; o campo "file" tem de ser o último)
+const EXT_AUDIO = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/wav': 'wav', 'audio/webm': 'webm', 'audio/flac': 'flac', 'audio/opus': 'opus' };
+async function transcreverAudio(cfg, buffer, mimeType) {
+  if (!cfg || !cfg.apiKey) throw new Error('Chave da API do Grok não configurada');
+  const mime = String(mimeType || 'audio/ogg').split(';')[0].toLowerCase();
+  const tentativas = [{ language: 'pt', format: 'true' }, { language: 'pt' }, {}];
+  let ultimo;
+  for (const extra of tentativas) {
+    const fd = new FormData();
+    fd.append('model', 'grok-voice-transcribe-2.0');
+    for (const k of Object.keys(extra)) fd.append(k, extra[k]);
+    fd.append('file', new Blob([buffer], { type: mime }), 'audio.' + (EXT_AUDIO[mime] || 'ogg'));
+    const resp = await fetch(BASE + '/stt', { method: 'POST', headers: { Authorization: 'Bearer ' + cfg.apiKey }, body: fd });
+    const txt = await resp.text();
+    let data = {}; try { data = JSON.parse(txt); } catch (e) {}
+    if (resp.ok) return String(data.text || '').trim();
+    const msg = (data.error && (data.error.message || data.error)) || data.message || txt.slice(0, 200);
+    ultimo = new Error('Grok (áudio) ' + resp.status + ': ' + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
+    ultimo.status = resp.status;
+    if (resp.status !== 400) break; // 400 pode ser idioma/formatação não aceitos: tenta sem eles
+  }
+  throw ultimo;
+}
+
+// PDF (inclusive escaneado) → resposta JSON: sobe em /v1/files, pergunta em /v1/responses e apaga o arquivo
+async function perguntarPdfJson(cfg, buffer, nome, instrucao) {
+  if (!cfg || !cfg.apiKey) throw new Error('Chave da API do Grok não configurada');
+  const fd = new FormData();
+  fd.append('purpose', 'assistants');
+  fd.append('expires_after', '3600');
+  fd.append('file', new Blob([buffer], { type: 'application/pdf' }), (nome && /\.pdf$/i.test(nome) ? nome : 'documento.pdf'));
+  const up = await fetch(BASE + '/files', { method: 'POST', headers: { Authorization: 'Bearer ' + cfg.apiKey }, body: fd });
+  const upTxt = await up.text();
+  let arq = {}; try { arq = JSON.parse(upTxt); } catch (e) {}
+  if (!up.ok || !arq.id) throw new Error('Grok (envio do PDF) ' + up.status + ': ' + ((arq.error && (arq.error.message || arq.error)) || upTxt.slice(0, 200)));
+  try {
+    const modelos = [...new Set([cfg.modelo || MODELO_PADRAO, 'grok-4.7'])];
+    let erro;
+    for (const modelo of modelos) {
+      try {
+        const data = await post(cfg.apiKey, '/responses', { model: modelo, input: [{ role: 'user', content: [{ type: 'input_text', text: instrucao + '\n\nResponda somente com o JSON.' }, { type: 'input_file', file_id: arq.id }] }] });
+        const txt = (data.output || []).flatMap(o => o.content || []).map(c => c.text || '').join('') || data.output_text || '';
+        return parseJson(txt);
+      } catch (e) { erro = e; if (!(e.status >= 400 && e.status < 500) || e.status === 401 || e.status === 429) break; }
+    }
+    throw erro;
+  } finally {
+    fetch(BASE + '/files/' + encodeURIComponent(arq.id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + cfg.apiKey } }).catch(() => {});
+  }
+}
+
 async function testar(cfg) {
   const r = await perguntarJson(cfg, { system: 'Responda apenas JSON.', texto: 'Devolva {"ok":true,"modelo":"<seu nome de modelo>"}' });
   return { ok: true, resposta: r };
 }
 
-module.exports = { perguntarJson, testar, MODELO_PADRAO };
+module.exports = { perguntarJson, transcreverAudio, perguntarPdfJson, testar, MODELO_PADRAO };

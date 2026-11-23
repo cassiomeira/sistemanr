@@ -302,6 +302,18 @@ app.get('/api/contas-pagar/:id/comprovante', (req, res) => {
   res.setHeader('Content-Disposition', 'inline; filename="comprovante_' + conta.id + ext + '"');
   res.send(fs.readFileSync(abs));
 });
+// Comprovante de um lançamento do Acerto (próprio ou da conta a pagar que gerou a saída)
+app.get('/api/acerto/:id/comprovante', (req, res) => {
+  const a = db.getAcertoById(req.emp, req.params.id);
+  let rel = a && a.comprovante;
+  if (a && !rel && a.origem_conta_pagar) { const c = db.getContaPagarById(req.emp, a.origem_conta_pagar); rel = c && c.comprovante; }
+  const abs = rel && whatsapp.comprovantePath(rel);
+  if (!abs || !fs.existsSync(abs)) return res.status(404).json({ error: 'Comprovante não encontrado' });
+  const ext = path.extname(abs).toLowerCase();
+  res.setHeader('Content-Type', ext === '.pdf' ? 'application/pdf' : (ext === '.png' ? 'image/png' : 'image/jpeg'));
+  res.setHeader('Content-Disposition', 'inline; filename="comprovante_' + a.id + ext + '"');
+  res.send(fs.readFileSync(abs));
+});
 // Boleto recebido pelo WhatsApp (arquivo guardado junto dos comprovantes)
 app.get('/api/contas-pagar/:id/boleto', (req, res) => {
   const conta = db.getContaPagarById(req.emp, req.params.id);

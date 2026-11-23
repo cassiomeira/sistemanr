@@ -162,6 +162,7 @@ function initDB(dbInstance) {
   try { dbInstance.run('ALTER TABLE acerto ADD COLUMN km TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE acerto ADD COLUMN localidade TEXT DEFAULT ""'); } catch(e) {}
   try { dbInstance.run('ALTER TABLE acerto ADD COLUMN condutor TEXT DEFAULT ""'); } catch(e) {}
+  try { dbInstance.run('ALTER TABLE acerto ADD COLUMN comprovante TEXT DEFAULT ""'); } catch(e) {}
   // Garantir categoria Abastecimento
   try {
     const catRaw = dbInstance.exec("SELECT valor FROM configuracoes WHERE chave='categoriasLoja'")[0]?.values[0][0];
@@ -639,7 +640,7 @@ module.exports = {
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
     // comprovante_conta: comprovante anexado na conta a pagar que gerou esta saída (para abrir pelo Acerto)
-    const sel = "SELECT a.*, COALESCE(cp.comprovante, '') AS comprovante_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
+    const sel = "SELECT a.*, COALESCE(NULLIF(a.comprovante, ''), cp.comprovante, '') AS comprovante_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
     if (mes) return query(slug, sel + ' WHERE a.data LIKE ? ORDER BY a.data DESC', [mes + '%']);
     return query(slug, sel + ' ORDER BY a.data DESC');
   },
@@ -805,6 +806,11 @@ module.exports = {
   },
   getContaPagarById(slug, id) { const r = query(slug, 'SELECT * FROM contas_pagar WHERE id=?', [id]); return r[0]; },
   getAcertoById(slug, id) { const r = query(slug, 'SELECT * FROM acerto WHERE id=?', [id]); return r[0]; },
+  setAcertoComprovante(slug, id, rel) { run(slug, 'UPDATE acerto SET comprovante=? WHERE id=?', [rel || '', id]); },
+  // Saídas do Acerto com o mesmo valor, numa janela de datas, ainda sem comprovante (nem na conta de origem)
+  acertoSemComprovante(slug, valor, de, ate) {
+    return query(slug, "SELECT a.id, a.data, a.descricao, a.saida, a.origem_conta_pagar FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar WHERE ABS(a.saida - ?) < 0.01 AND a.data BETWEEN ? AND ? AND COALESCE(a.comprovante, '') = '' AND COALESCE(cp.comprovante, '') = '' ORDER BY a.data DESC LIMIT 5", [valor, de, ate]);
+  },
   getContasPendentes(slug, hoje) {
     return query(slug, "SELECT * FROM contas_pagar WHERE vencimento <= ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [hoje]);
   },
