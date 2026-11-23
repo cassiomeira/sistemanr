@@ -640,7 +640,7 @@ module.exports = {
   // -- Acerto Financeiro --
   getAcerto(slug, mes) {
     // comprovante_conta: comprovante anexado na conta a pagar que gerou esta saída (para abrir pelo Acerto)
-    const sel = "SELECT a.*, COALESCE(NULLIF(a.comprovante, ''), cp.comprovante, '') AS comprovante_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
+    const sel = "SELECT a.*, COALESCE(NULLIF(a.comprovante, ''), cp.comprovante, '') AS comprovante_conta, COALESCE(cp.boleto_arquivo, '') AS documento_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar";
     if (mes) return query(slug, sel + ' WHERE a.data LIKE ? ORDER BY a.data DESC', [mes + '%']);
     return query(slug, sel + ' ORDER BY a.data DESC');
   },
@@ -807,9 +807,10 @@ module.exports = {
   getContaPagarById(slug, id) { const r = query(slug, 'SELECT * FROM contas_pagar WHERE id=?', [id]); return r[0]; },
   getAcertoById(slug, id) { const r = query(slug, 'SELECT * FROM acerto WHERE id=?', [id]); return r[0]; },
   setAcertoComprovante(slug, id, rel) { run(slug, 'UPDATE acerto SET comprovante=? WHERE id=?', [rel || '', id]); },
-  // Saídas do Acerto com o mesmo valor, numa janela de datas, ainda sem comprovante (nem na conta de origem)
+  // Saídas do Acerto com o mesmo valor, numa janela de datas, sem comprovante próprio.
+  // tem_anexo_conta=1: a conta de origem já tem um arquivo (pode ser só a nota/OS, não o comprovante)
   acertoSemComprovante(slug, valor, de, ate) {
-    return query(slug, "SELECT a.id, a.data, a.descricao, a.saida, a.origem_conta_pagar FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar WHERE ABS(a.saida - ?) < 0.01 AND a.data BETWEEN ? AND ? AND COALESCE(a.comprovante, '') = '' AND COALESCE(cp.comprovante, '') = '' ORDER BY a.data DESC LIMIT 5", [valor, de, ate]);
+    return query(slug, "SELECT a.id, a.data, a.descricao, a.saida, a.origem_conta_pagar, CASE WHEN COALESCE(cp.comprovante, '') = '' THEN 0 ELSE 1 END AS tem_anexo_conta FROM acerto a LEFT JOIN contas_pagar cp ON cp.id = a.origem_conta_pagar WHERE ABS(a.saida - ?) < 0.01 AND a.data BETWEEN ? AND ? AND COALESCE(a.comprovante, '') = '' ORDER BY tem_anexo_conta, a.data DESC LIMIT 5", [valor, de, ate]);
   },
   getContasPendentes(slug, hoje) {
     return query(slug, "SELECT * FROM contas_pagar WHERE vencimento <= ? AND (pago_por = '' OR pago_por = 'A Pagar' OR pago_por IS NULL) ORDER BY vencimento", [hoje]);

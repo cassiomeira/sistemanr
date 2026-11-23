@@ -302,6 +302,19 @@ app.get('/api/contas-pagar/:id/comprovante', (req, res) => {
   res.setHeader('Content-Disposition', 'inline; filename="comprovante_' + conta.id + ext + '"');
   res.send(fs.readFileSync(abs));
 });
+app.post('/api/acerto/:id/comprovante', upload.single('arquivo'), (req, res) => {
+  const a = db.getAcertoById(req.emp, req.params.id);
+  if (!a) return res.status(404).json({ error: 'Lançamento não encontrado' });
+  if (!req.file) return res.status(400).json({ error: 'Envie o arquivo' });
+  const mime = (req.file.mimetype || '').toLowerCase();
+  if (!/^(image\/(jpe?g|png)|application\/pdf)$/.test(mime)) return res.status(400).json({ error: 'Envie JPG, PNG ou PDF' });
+  const ant = whatsapp.comprovantePath(a.comprovante);
+  if (ant && fs.existsSync(ant)) { try { fs.unlinkSync(ant); } catch (e) {} }
+  const rel = whatsapp.salvarComprovante(req.emp, a.id, { buffer: req.file.buffer, mimeType: mime }, 'acerto_');
+  db.setAcertoComprovante(req.emp, a.id, rel);
+  db.addAuditLog(req.emp, req.user.nome, 'alterou', 'Acerto', 'ID: ' + a.id + ' - anexou comprovante');
+  res.json({ ok: true, comprovante: rel });
+});
 // Comprovante de um lançamento do Acerto (próprio ou da conta a pagar que gerou a saída)
 app.get('/api/acerto/:id/comprovante', (req, res) => {
   const a = db.getAcertoById(req.emp, req.params.id);

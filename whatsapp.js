@@ -639,10 +639,11 @@ function montarContexto(slugs, cfg) {
 
 const SYSTEM = `Você é o assistente financeiro do sistema Nunes Rocha. O dono das empresas te manda, pelo WhatsApp, comprovantes de pagamento (foto/PDF), boletos a pagar, perguntas e textos curtos como "lavagem caminhão branco pago da clc", "criar conta energia 450 vence dia 10 fora mensal" ou "o que vence hoje?".
 Decida UMA ação e devolva SOMENTE um JSON com este formato:
-{"acao":"quitar"|"criar"|"boleto"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
+{"acao":"quitar"|"criar"|"boleto"|"alterar"|"lancamento"|"consultar"|"corrigir"|"perguntar"|"ignorar","empresa":slug|null,"conta_id":string|null,"candidatos":[ids],"valor":number|null,"data_pagamento":"YYYY-MM-DD"|null,"descricao":string|null,"fornecedor":string|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"pago":true|false,"pago_por":string|null,"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"parcelas":{"qtd":number,"valor_parcela":number,"primeiro_vencimento":"YYYY-MM-DD"}|null,"linha_digitavel":string|null,"tipo_documento":"comprovante"|"boleto"|"nota"|null,"pagador":string|null,"consulta":{"status":"pendentes"|"pagas"|"todas","de":"YYYY-MM-DD"|null,"ate":"YYYY-MM-DD"|null,"categoria":string|null,"texto":string|null}|null,"lancamento":{"movimentacao":true|false,"tipo_mov":"entrada"|"saida"|null,"conta_celso":true|false,"tipo_celso":"debito"|"credito"|null,"valor":number,"data":"YYYY-MM-DD"|null,"descricao":string}|null,"correcao":{"tipo_nota":"D"|"F"|null,"recorrente":true|false|null,"categoria":string|null,"vencimento":"YYYY-MM-DD"|null,"valor":number|null,"fornecedor":string|null,"descricao":string|null,"desfazer":true|false}|null,"confianca":0..1,"mensagem":"texto curto em português para o usuário"}
 Regras:
 - "corrigir": a mensagem ajusta o "Último lançamento desta conversa" (ex.: "rec d", "muda pra dentro", "é recorrente", "categoria aluguel", "vence dia 15", "o valor é 350", "apaga esse"). Preencha em correcao SÓ os campos citados (os outros null); "apaga/cancela esse lançamento" = desfazer true.
 - NUNCA diga em "mensagem" que você alterou, criou ou quitou algo: quem executa e confirma é o sistema.
+- tipo_documento: "comprovante" = prova de pagamento (PIX, TED, boleto pago, recibo de pagamento); "boleto" = boleto a pagar; "nota" = ordem de serviço, nota fiscal, pedido, orçamento ou fatura (documento da compra, NÃO prova pagamento). Se o texto diz que foi pago e o anexo é uma nota/OS, use acao "criar"/"quitar" com pago=true e tipo_documento "nota".
 - Em comprovante de pagamento de boleto, se aparecer o código de barras ou a linha digitável, copie os dígitos em linha_digitavel (o sistema usa para achar a conta exata).
 - "quitar": é um COMPROVANTE de pagamento (ou o texto diz que pagou) e existe uma conta pendente que corresponde (compare descrição, fornecedor, valor com tolerância de 3% e vencimento próximo). Preencha conta_id e data_pagamento (data do comprovante, ou hoje). NUNCA quite uma parcela/conta com vencimento mais de 20 dias depois da data do comprovante (é parcela futura; o pagamento provavelmente já foi lançado) — nesse caso use "criar" com pago=true e data_pagamento.
 - Se houver 2 ou mais contas plausíveis e não dá para decidir, use "perguntar" com candidatos (até 5 ids, do mais provável ao menos).
@@ -831,11 +832,11 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
       return;
     }
     const dataPg = /^\d{4}-\d{2}-\d{2}$/.test(analise.data_pagamento || '') ? analise.data_pagamento : hojeISO();
-    if (media && !jaPaga && !analise.pelaLinha && !analise.adiantado && conta.vencimento > somaDias(dataPg, 20)) {
+    if (media && !jaPaga && !analise.pelaLinha && !analise.adiantado && analise.tipo_documento !== 'nota' && conta.vencimento > somaDias(dataPg, 20)) {
       // parcela futura: o mais provável é o comprovante ser de um pagamento que já está no Acerto
       let cands = [];
       try { cands = db.acertoSemComprovante(slug, analise.valor || conta.valor, somaDias(dataPg, -10), somaDias(dataPg, 5)); } catch (e) {}
-      if (cands.length === 1) return anexarNoAcerto({ jid, m, quem, slug, media, acertoId: cands[0].id });
+      if (cands.length === 1 && !cands[0].tem_anexo_conta) return anexarNoAcerto({ jid, m, quem, slug, media, acertoId: cands[0].id });
       const opcoes = cands.map(c => ({ id: c.id })).concat([{ adiantar: true }, { cancelar: true }]);
       pendentes[jid] = { tipo: 'acerto_comp', opcoes, slug, media, analise, quando: Date.now() };
       await responder(jid, '📎 Comprovante de ' + fmtV(analise.valor || conta.valor) + ' (' + fmtD(dataPg) + '). A conta pendente parecida é "' + conta.descricao + '" com vencimento ' + fmtD(conta.vencimento) + ' — muito à frente, então não quitei sozinho.\n'
@@ -845,16 +846,17 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     }
     const antes = { [conta.id]: Object.assign({}, conta) };
     if (analise.forcar === 'corrigir' && analise.valor) { deps.atualizarConta(slug, conta.id, { valor: analise.valor }, autor); conta.valor = analise.valor; }
-    const comprovante = salvarComprovante(slug, conta.id, media);
+    const ehNota = analise.tipo_documento === 'nota';
+    const comprovante = salvarComprovante(slug, conta.id, media, ehNota ? 'doc_' : '');
     const fields = {};
     if (!jaPaga) fields.pago_por = pagoPor;
-    if (comprovante) fields.comprovante = comprovante;
+    if (comprovante) fields[ehNota ? 'boleto_arquivo' : 'comprovante'] = comprovante;
     if (Object.keys(fields).length) deps.atualizarConta(slug, conta.id, fields, autor);
     guardarHash(media, slug, conta.id);
     lembrarUltimo(jid, slug, [conta.id], 'alterar', antes);
     registrar('quitar', nomeEmp + ': ' + conta.descricao + ' ' + fmtV(conta.valor), { quem, empresa: slug });
     const atual = db.getContaPagarById(slug, conta.id);
-    await responder(jid, '✅ *' + nomeEmp + '* — ' + (analise.pelaLinha ? '(comprovante reconhecido pela linha digitável do boleto) ' : '') + (jaPaga ? 'a conta já estava paga' + (comprovante ? '; anexei o comprovante.' : '.') : 'marquei como paga' + (comprovante ? ' e anexei o comprovante.' : '.')) + '\n' + resumoConta(atual)
+    await responder(jid, '✅ *' + nomeEmp + '* — ' + (analise.pelaLinha ? '(comprovante reconhecido pela linha digitável do boleto) ' : '') + (jaPaga ? 'a conta já estava paga' + (comprovante ? '; anexei ' + (ehNota ? 'a nota/OS.' : 'o comprovante.') : '.') : 'marquei como paga' + (comprovante ? ' e anexei ' + (ehNota ? 'a nota/OS (mande o comprovante quando tiver).' : 'o comprovante.') : '.')) + '\n' + resumoConta(atual)
       + (analise.valor && Math.abs(analise.valor - atual.valor) > 0.01 ? '\n⚠️ Valor do comprovante (' + fmtV(analise.valor) + ') difere do lançado (' + fmtV(atual.valor) + ').' : '') + DICA, m);
     return;
   }
@@ -924,14 +926,14 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
     const pago = !!(analise.pago || (media && !analise.ehBoleto));
 
     // Comprovante de um pagamento que já está no Acerto (lançado à mão ou por uma conta paga sem comprovante): anexa nele
-    if (media && pago && !analise.ehBoleto && qtd === 1 && !analise.ignorarAcerto) {
+    if (media && pago && !analise.ehBoleto && analise.tipo_documento !== 'nota' && qtd === 1 && !analise.ignorarAcerto) {
       let cands = [];
       try { cands = db.acertoSemComprovante(slug, valorParc, somaDias(primeiro, -10), somaDias(primeiro, 5)); } catch (e) {}
-      if (cands.length === 1) return anexarNoAcerto({ jid, m, quem, slug, media, acertoId: cands[0].id });
-      if (cands.length > 1) {
+      if (cands.length === 1 && !cands[0].tem_anexo_conta) return anexarNoAcerto({ jid, m, quem, slug, media, acertoId: cands[0].id });
+      if (cands.length) {
         pendentes[jid] = { tipo: 'acerto_comp', opcoes: cands.map(c => ({ id: c.id })).concat([{ novo: true }]), slug, media, analise, quando: Date.now() };
-        await responder(jid, '📎 Comprovante de ' + fmtV(valorParc) + '. Já tem pagamento desse valor no Acerto. Em qual anexo?\n'
-          + cands.map((c, i) => (i + 1) + '. ' + c.descricao + ' — ' + fmtV(c.saida) + ' — ' + fmtD(c.data)).join('\n') + '\n' + (cands.length + 1) + '. Nenhum, é um pagamento novo', m);
+        await responder(jid, '📎 Comprovante de ' + fmtV(valorParc) + '. Já tem pagamento desse valor no Acerto' + (cands.length === 1 ? ' — é este?' : '. Em qual anexo?') + '\n'
+          + cands.map((c, i) => (i + 1) + '. Anexar em: ' + c.descricao + ' — ' + fmtV(c.saida) + ' — ' + fmtD(c.data) + (c.tem_anexo_conta ? ' (a conta já tem um arquivo, ex.: nota/OS)' : '')).join('\n') + '\n' + (cands.length + 1) + '. Não, é um pagamento novo', m);
         return;
       }
     }
@@ -961,8 +963,9 @@ async function executar({ jid, m, quem, slug, media, analise, padraoGrupo }) {
         if (analise.ehBoleto) { const arq = salvarComprovante(slug, item.id, media, 'boleto_'); if (arq) fields.boleto_arquivo = arq; }
         else {
           if (pago) fields.pago_por = pagoPor;
-          const comprovante = salvarComprovante(slug, item.id, media);
-          if (comprovante) fields.comprovante = comprovante;
+          const ehNota = analise.tipo_documento === 'nota';
+          const comprovante = salvarComprovante(slug, item.id, media, ehNota ? 'doc_' : '');
+          if (comprovante) fields[ehNota ? 'boleto_arquivo' : 'comprovante'] = comprovante;
         }
         if (Object.keys(fields).length) deps.atualizarConta(slug, item.id, fields, autor);
       }
