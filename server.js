@@ -247,7 +247,7 @@ function aplicarAlteracaoConta(slug, id, b, quem) {
         if (!jaExiste) {
           db.addAcerto(slug, {
             id: uid(), data: new Date().toISOString().split('T')[0],
-            descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + b.pago_por + ')',
+            descricao: (/\(cart[aã]o\)/i.test(conta.descricao) ? 'Cartão: ' : 'Boleto: ') + conta.descricao + ' (pago por ' + b.pago_por + ')',
             entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
             fornecedor: conta.fornecedor || '',
             recorrente: conta.recorrente ? 1 : 0,
@@ -396,7 +396,7 @@ app.post('/api/contas-pagar/:id/enviar-acerto', (req, res) => {
   if (jaExiste) return res.json({ ok: false, error: 'Já existe no acerto' });
   db.addAcerto(req.emp, {
     id: uid(), data: new Date().toISOString().split('T')[0],
-    descricao: 'Boleto: ' + conta.descricao + ' (pago por ' + conta.pago_por + ')',
+    descricao: (/\(cart[aã]o\)/i.test(conta.descricao) ? 'Cartão: ' : 'Boleto: ') + conta.descricao + ' (pago por ' + conta.pago_por + ')',
     entrada: 0, saida: conta.valor, categoria: conta.categoria || 'Outros',
     fornecedor: conta.fornecedor || '',
     recorrente: conta.recorrente ? 1 : 0,
