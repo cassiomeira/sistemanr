@@ -1502,6 +1502,10 @@ app.delete('/api/clear/conta-dono', adminOnly, (req, res) => { db.clearContaDono
 // === CONFIG ===
 app.get('/api/config', (req, res) => res.json(db.getConfig(req.emp)));
 app.put('/api/config', (req, res) => {
+  // nomes de lista com espaço repetido somem do <select> (o navegador junta os espaços ao gravar) — normaliza e tira repetidos
+  for (const k of ['categoriasLoja', 'categoriasDrog', 'fornecedores']) {
+    if (Array.isArray(req.body[k])) req.body[k] = [...new Set(req.body[k].map(c => typeof c === 'string' ? c.replace(/\s+/g, ' ').trim() : c).filter(c => c !== ''))];
+  }
   for(let k in req.body){
     if(req.body[k] !== undefined) {
       db.updateConfig(req.emp, k, req.body[k]);
