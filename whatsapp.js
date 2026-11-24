@@ -141,11 +141,14 @@ async function atualizarGrupos() {
 // ---------- utilidades de mensagem ----------
 function desembrulhar(msg) {
   let m = msg || {};
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     if (m.ephemeralMessage) m = m.ephemeralMessage.message || {};
     else if (m.viewOnceMessage) m = m.viewOnceMessage.message || {};
     else if (m.viewOnceMessageV2) m = m.viewOnceMessageV2.message || {};
+    else if (m.viewOnceMessageV2Extension) m = m.viewOnceMessageV2Extension.message || {};
     else if (m.documentWithCaptionMessage) m = m.documentWithCaptionMessage.message || {};
+    else if (m.associatedChildMessage) m = m.associatedChildMessage.message || {}; // foto de álbum (várias fotos de uma vez)
+    else if (m.editedMessage) m = m.editedMessage.message || {};
     else break;
   }
   return m;
@@ -584,7 +587,11 @@ async function tratarMensagem(m) {
 
   const audio = msg.audioMessage || null;
   const media = msg.imageMessage || msg.documentMessage || null;
-  if (!media && !texto && !audio) return;
+  if (!media && !texto && !audio) {
+    const tipos = Object.keys(msg).filter(k => !/^(messageContextInfo|senderKeyDistributionMessage|albumMessage|stickerMessage|pollUpdateMessage|keepInChatMessage|pinInChatMessage)$/.test(k));
+    if (tipos.length) registrar('ignorado', 'Mensagem de ' + quem + ' com formato não reconhecido (' + tipos.join(', ') + ') — não analisada');
+    return;
+  }
 
   // Áudio: transcreve com o Grok e segue como se fosse texto
   if (audio) {
