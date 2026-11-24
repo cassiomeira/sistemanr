@@ -556,8 +556,17 @@ function liberarEspera(jid) {
   enfileirar(espera[jid].shift(), true);
 }
 
+const ASSOC_DUPLICADA = new Set([5, 10, 12, 'HD_VIDEO_DUAL_UPLOAD', 'HD_IMAGE_DUAL_UPLOAD', 'MOTION_PHOTO']);
 async function tratarMensagem(m) {
+  if (m && m.key && !m.message && m.messageStubType === 2 && !m.key.fromMe) {
+    registrar('ignorado', 'Mensagem recebida mas não pôde ser lida (criptografia do WhatsApp): ' + ((m.messageStubParameters || []).join(' ') || 'sem detalhe') + ' — peça para reenviar');
+    return;
+  }
   if (!m || !m.message || !m.key) return;
+  // foto/vídeo em HD: o WhatsApp manda a normal + uma cópia HD "associada"; só a normal é analisada
+  const filha = m.message.associatedChildMessage && m.message.associatedChildMessage.message;
+  const assoc = filha && filha.messageContextInfo && filha.messageContextInfo.messageAssociation;
+  if (assoc && ASSOC_DUPLICADA.has(assoc.associationType)) return;
   const jid = m.key.remoteJid || '';
   if (!jid || jid === 'status@broadcast' || /@newsletter$/.test(jid)) return;
   if (idsEnviados.has(m.key.id)) { idsEnviados.delete(m.key.id); return; }
@@ -720,6 +729,7 @@ Regras:
 - Comprovante de uma conta que JÁ está paga mas ainda sem comprovante (lista contas_pagas_sem_comprovante, mesmo valor e data próxima): use "quitar" com o conta_id dela — o sistema só anexa o comprovante, não paga de novo.
 - O usuário pode conversar livremente: leia a "Conversa recente" para entender correções ("não é comprovante", "é da TMT", "anexa naquela conta"). Se ele explicar o que é o anexo, siga a explicação.
 - "criar": despesa que NÃO está nas pendentes. Print/nota/pedido de COMPRA ("compra feita", Mercado Livre, loja virtual, pedido, nota fiscal, OS) NÃO é pagamento: pago=false — a conta fica no Contas a Pagar até chegar o comprovante. Compra no cartão de crédito também é pago=false (vence na fatura). Compra do Mercado Livre: fornecedor "Mercado Livre". Se veio COMPROVANTE de pagamento ou o texto diz "pago/paguei", pago=true e vencimento=data do pagamento; se fala em vencimento/a pagar, pago=false e vencimento=data informada (ano atual, ou o próximo se a data já passou). descricao curta e clara, valor, fornecedor (quem recebeu) e categoria (escolha entre as da empresa, senão "Outros").
+- VÁRIAS notas/cupons/notinhas/recibos na MESMA foto ou PDF (ex.: 2 notinhas da mesma compra): SOME os valores de todas — valor = soma total — e na descricao cite as partes, ex.: "Material elétrico (2 notinhas: R$ 150,00 + R$ 250,00)". Se forem de fornecedores diferentes, cite os fornecedores na descrição. Em "mensagem" diga quantas notas viu e o valor de cada uma.
 - fornecedor: se corresponder a um nome em fornecedores_conhecidos da empresa, use EXATAMENTE aquele nome.
 - tipo_nota: "D" se o texto disser dentro / com nota; "F" se disser fora / sem nota; senão null (o sistema usa o histórico).
 - recorrente: true se disser mensal / todo mês / fixa / recorrente; false se disser avulsa / única; senão null.
