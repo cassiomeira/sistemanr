@@ -108,6 +108,16 @@ async function conectar() {
       }
     });
     sock.ev.on('messages.upsert', ({ messages, type }) => {
+      // diagnóstico: registra no log do servidor tudo que chega (tipo do evento e formato), sem conteúdo
+      for (const m of messages) {
+        try {
+          const j = (m.key && m.key.remoteJid) || '';
+          if (!j || j === 'status@broadcast' || /@newsletter$/.test(j)) continue;
+          const crua = Object.keys(m.message || {}).join(',');
+          const aberta = Object.keys(desembrulhar(m.message || {})).join(',');
+          console.log('[WA-RAW]', type, j, (m.key.participant || '').split('@')[0].slice(-4), m.key.fromMe ? 'eu' : '', 'stub=' + (m.messageStubType || ''), (m.messageStubParameters || []).join('|').slice(0, 80), 'msg=' + crua, crua !== aberta ? 'aberta=' + aberta : '');
+        } catch (e) {}
+      }
       if (type !== 'notify') return;
       for (const m of messages) enfileirar(m);
     });
