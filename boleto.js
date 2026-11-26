@@ -108,6 +108,8 @@ function parseBoletosPdf(text) {
     const dec = decodeLinhaDigitavel(res.linha);
     if (dec.valor) res.valor = dec.valor;
     if (dec.vencimento) res.vencimento = dec.vencimento;
+    // trecho do texto deste boleto (não vai no JSON da API; o robô do WhatsApp usa para analisar um por um)
+    Object.defineProperty(res, 'trecho', { value: trecho, enumerable: false });
     if (res.valor || res.linha) out.push(res);
   }
   return out;

@@ -296,7 +296,13 @@ const DICA = '\n\n_Para corrigir, responda (pode juntar na mesma mensagem, ex.: 
 // ---------- comprovantes repetidos (hash do arquivo) ----------
 const hashesPath = path.join(dataDir, 'whatsapp', 'hashes.json');
 function lerHashes() { try { return JSON.parse(fs.readFileSync(hashesPath, 'utf8')); } catch (e) { return {}; } }
-function hashArquivo(media) { return media && media.buffer ? crypto.createHash('sha1').update(media.buffer).digest('hex') : ''; }
+// parteChave: boleto N de um PDF com vários — cada boleto conta como um arquivo diferente
+function hashArquivo(media) {
+  if (!media || !media.buffer) return '';
+  const h = crypto.createHash('sha1').update(media.buffer);
+  if (media.parteChave) h.update('#' + media.parteChave);
+  return h.digest('hex');
+}
 function arquivoJaVisto(media) { const h = hashArquivo(media); return h ? lerHashes()[h] || null : null; }
 function guardarHash(media, slug, contaId) {
   const h = hashArquivo(media); if (!h) return;
@@ -550,6 +556,8 @@ async function aplicarComando({ jid, m, quem, cmd }) {
 // Fila por conversa: uma mensagem por vez, na ordem em que chegaram.
 // Arquivo que chega enquanto há pergunta aberta espera a resposta (senão a pergunta nova apagaria a anterior).
 const filas = {}, espera = {};
+// PDF com vários boletos: cada boleto vira uma análise separada, na fila da conversa (pergunta aberta segura os próximos)
+const partesFila = {};
 const PERGUNTA_VALE = 15 * 60000;
 const perguntaAberta = jid => pendentes[jid] && Date.now() - pendentes[jid].quando <= PERGUNTA_VALE;
 function enfileirar(m, liberada) {
@@ -562,7 +570,16 @@ function enfileirar(m, liberada) {
   return filas[jid];
 }
 function liberarEspera(jid) {
-  if (perguntaAberta(jid) || !espera[jid] || !espera[jid].length) return;
+  if (perguntaAberta(jid)) return;
+  if (partesFila[jid] && partesFila[jid].length) {
+    const p = partesFila[jid].shift();
+    filas[jid] = (filas[jid] || Promise.resolve())
+      .then(() => analisarEExecutar(p))
+      .catch(e => registrar('erro', 'Falha ao tratar boleto ' + ((p.media && p.media.parte && p.media.parte.i) || '?') + ' do PDF: ' + e.message))
+      .then(() => liberarEspera(jid));
+    return;
+  }
+  if (!espera[jid] || !espera[jid].length) return;
   enfileirar(espera[jid].shift(), true);
 }
 
@@ -752,6 +769,14 @@ Regras:
 - "ignorar": conversa sem relação com finanças (cumprimentos etc.). Nunca invente valores: se não houver valor legível, deixe null.
 - Datas no formato YYYY-MM-DD. "mensagem" deve resumir o que você entendeu (1 ou 2 frases).`;
 
+// Linha digitável (47/48) ou código de barras (44) → código de barras (44), para comparar o mesmo boleto escrito dos dois jeitos
+function chaveBarras(linha) {
+  const l = soDigitos(linha);
+  if (l.length === 47) return l.slice(0, 4) + l[32] + l.slice(33, 47) + l.slice(4, 9) + l.slice(10, 20) + l.slice(21, 31);
+  if (l.length === 48) return l.slice(0, 11) + l.slice(12, 23) + l.slice(24, 35) + l.slice(36, 47);
+  return l;
+}
+
 async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg, padraoGrupo, extra, historico }) {
   const conv = (historico || conversaRecente(jid)).slice(-10);
   const g = grokCfg();
@@ -763,7 +788,12 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
   const peloTexto = multi ? identificarEmpresa(texto, cfg) : null;
   const imagens = [];
   let anexoTexto = '', boletoPdf = null;
-  if (media) {
+  const parte = media && media.parte; // boleto N de um PDF com vários
+  if (parte) {
+    anexoTexto = parte.texto || '';
+    boletoPdf = parte.boleto || null;
+    extra = (extra ? extra + '\n' : '') + 'ATENÇÃO: o PDF anexo tem ' + parte.n + ' boletos/documentos; este é o ' + parte.i + 'º. Trate SOMENTE este (linha digitável ' + (parte.boleto && parte.boleto.linha) + ', valor ' + fmtV(parte.boleto && parte.boleto.valor) + (parte.boleto && parte.boleto.vencimento ? ', vencimento ' + parte.boleto.vencimento : '') + '); o texto do PDF abaixo é só o trecho dele. Os outros são lançados à parte.';
+  } else if (media) {
     if (/^image\/(jpe?g|png)$/.test(media.mimeType)) imagens.push({ buffer: media.buffer, mimeType: media.mimeType });
     else if (media.mimeType === 'application/pdf') {
       anexoTexto = await extrairPdfTexto(media.buffer);
@@ -774,6 +804,22 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
         anexoTexto = '(transcrito por OCR da IA — confira o valor)\n' + t.texto;
       } else {
         try { const b = boletoLib.parseBoletoPdf(anexoTexto); if (b.linha) boletoPdf = b; } catch (e) {}
+        // Vários boletos (linhas digitáveis diferentes) no mesmo PDF: um lançamento para cada
+        let varios = [];
+        try {
+          // linha digitável e código de barras do MESMO boleto contam uma vez só
+          const vistos = new Set();
+          varios = boletoLib.parseBoletosPdf(anexoTexto).filter(b => { const k = b.linha && chaveBarras(b.linha); if (!k || vistos.has(k)) return false; vistos.add(k); return true; });
+        } catch (e) {}
+        if (varios.length >= 2) {
+          const n = varios.length;
+          registrar('analise', 'PDF com ' + n + ' boletos — analisando um por um', { quem, texto });
+          await responder(jid, '📄 Esse PDF tem *' + n + ' boletos*. Vou analisar um por um:\n' + varios.map((b, i) => (i + 1) + '. ' + fmtV(b.valor) + (b.vencimento ? ' — venc. ' + fmtD(b.vencimento) : '') + (b.beneficiario ? ' — ' + String(b.beneficiario).slice(0, 40) : '')).join('\n'), m);
+          const partes = varios.map((b, i) => ({ jid, m, texto, quem, empresaFixa, cfg, padraoGrupo, extra, historico,
+            media: Object.assign({}, media, { parteChave: b.linha, parte: { i: i + 1, n, texto: b.trecho || '', boleto: { linha: b.linha, valor: b.valor, vencimento: b.vencimento, beneficiario: b.beneficiario, cnpj: b.cnpj } } }) }));
+          partesFila[jid] = partes.concat(partesFila[jid] || []);
+          return; // a fila da conversa (liberarEspera) analisa um por um
+        }
       }
     } else { await responder(jid, 'Formato ' + (media.mimeType || 'desconhecido') + ' não suportado. Envie foto (JPG/PNG) ou PDF.', m); return; }
   }
