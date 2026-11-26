@@ -4165,6 +4165,8 @@ async function carregarWhatsapp(){
     document.getElementById('wa-btn-conectar').style.display=st.status==='conectado'?'none':'';
     let km=document.getElementById('wa-grok-model');if(document.activeElement!==km&&!km.value)km.value=st.grok_model||'';
     let kk=document.getElementById('wa-grok-key');if(document.activeElement!==kk)kk.placeholder=st.temGrokKey?'•••••• (chave salva — cole outra para trocar)':'xai-...';
+    let nm=document.getElementById('wa-nv-model');if(nm&&document.activeElement!==nm&&!nm.value)nm.value=st.nvidia_model||'';
+    let nk=document.getElementById('wa-nv-key');if(nk&&document.activeElement!==nk)nk.placeholder=st.temNvidiaKey?'•••••• (chave salva — cole outra para trocar)':'nvapi-...';
     let ep=document.getElementById('wa-empresa-padrao');
     if(document.activeElement!==ep){ep.innerHTML='<option value="">— perguntar qual empresa —</option>'+(st.empresas||[]).map(e=>'<option value="'+e.slug+'"'+(e.slug===st.empresa_padrao?' selected':'')+'>'+e.nome+'</option>').join('');}
     let ta=document.getElementById('wa-autorizados');if(document.activeElement!==ta)ta.value=(st.autorizados||[]).map(a=>a.numero+' '+(a.nome||'')).join('\n');
@@ -4198,20 +4200,26 @@ async function waSalvarConfig(){
   let apEl=document.getElementById('wa-apelidos');
   if(apEl){let ap={};apEl.value.split('\n').forEach(l=>{let m=l.match(/^\s*([a-z0-9]+)\s*:\s*(.*)$/i);if(m)ap[m[1].toLowerCase()]=m[2].split(',').map(x=>x.trim()).filter(Boolean);});body.apelidos=ap;}
   let k=document.getElementById('wa-grok-key').value.trim();if(k)body.grok_api_key=k;
+  let nvk=document.getElementById('wa-nv-key'),nvm=document.getElementById('wa-nv-model');
+  if(nvm)body.nvidia_model=nvm.value.trim();if(nvk&&nvk.value.trim())body.nvidia_api_key=nvk.value.trim();
   let r=await api('POST','/api/whatsapp/config',body);
   if(r&&r.error){toast('Erro: '+r.error,'error');return;}
-  document.getElementById('wa-grok-key').value='';toast('Configuração do WhatsApp salva!');carregarWhatsapp();
+  document.getElementById('wa-grok-key').value='';if(nvk)nvk.value='';toast('Configuração do WhatsApp salva!');carregarWhatsapp();
 }
-async function waTestarGrok(){
+async function waTestarGrok(reserva){
+  reserva=reserva===true;
   let body={grok_api_key:document.getElementById('wa-grok-key').value.trim(),grok_model:document.getElementById('wa-grok-model').value.trim()};
-  let btn=document.getElementById('wa-btn-testar'),res=document.getElementById('wa-teste-res');
+  let nvk=document.getElementById('wa-nv-key'),nvm=document.getElementById('wa-nv-model');
+  if(reserva){body={reserva:true,nvidia_api_key:nvk?nvk.value.trim():'',nvidia_model:nvm?nvm.value.trim():''};}
+  let nome=reserva?'Reserva NVIDIA':'Grok',rot=reserva?'<i class="fas fa-life-ring"></i> Testar reserva':'<i class="fas fa-robot"></i> Testar Grok';
+  let btn=document.getElementById(reserva?'wa-btn-testar-nv':'wa-btn-testar'),res=document.getElementById('wa-teste-res');
   btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Testando... (pode levar ~10 s)';res.textContent='';
   let t0=Date.now(),r;
   try{r=await api('POST','/api/whatsapp/testar-grok',body);}catch(e){r={error:'falha de conexão com o servidor'};}
-  btn.disabled=false;btn.innerHTML='<i class="fas fa-robot"></i> Testar Grok';
-  let seg=((Date.now()-t0)/1000).toFixed(1);
-  if(r&&r.error){res.innerHTML='<span style="color:var(--red)"><i class="fas fa-times-circle"></i> Grok falhou: '+r.error+'</span>';toast('Grok falhou: '+r.error,'error');}
-  else{res.innerHTML='<span style="color:var(--green)"><i class="fas fa-check-circle"></i> Grok respondeu OK em '+seg+' s'+(body.grok_model?' ('+body.grok_model+')':'')+'</span>';toast('Grok respondeu OK em '+seg+' s');}
+  btn.disabled=false;btn.innerHTML=rot;
+  let seg=((Date.now()-t0)/1000).toFixed(1),mod=reserva?body.nvidia_model:body.grok_model;
+  if(r&&r.error){res.innerHTML='<span style="color:var(--red)"><i class="fas fa-times-circle"></i> '+nome+' falhou: '+r.error+'</span>';toast(nome+' falhou: '+r.error,'error');}
+  else{res.innerHTML='<span style="color:var(--green)"><i class="fas fa-check-circle"></i> '+nome+' respondeu OK em '+seg+' s'+(mod?' ('+mod+')':'')+'</span>';toast(nome+' respondeu OK em '+seg+' s');}
 }
 async function waResumoAgora(){
   let r=await api('POST','/api/whatsapp/resumo-agora',{});

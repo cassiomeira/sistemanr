@@ -36,7 +36,7 @@ function salvarConfig(novo) {
   fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
   return cfg;
 }
-function grokCfg() { const c = lerConfig(); return { apiKey: c.grok_api_key, modelo: c.grok_model || grok.MODELO_PADRAO }; }
+function grokCfg() { const c = lerConfig(); return { apiKey: c.grok_api_key, modelo: c.grok_model || grok.MODELO_PADRAO, reserva: { apiKey: c.nvidia_api_key || '', modelo: c.nvidia_model || grok.NV_MODELO } }; }
 
 function registrar(tipo, texto, extra) {
   logEventos.unshift(Object.assign({ quando: new Date().toISOString(), tipo, texto }, extra || {}));
@@ -780,7 +780,7 @@ function chaveBarras(linha) {
 async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg, padraoGrupo, extra, historico }) {
   const conv = (historico || conversaRecente(jid)).slice(-10);
   const g = grokCfg();
-  if (!g.apiKey) { await responder(jid, 'A chave da API do Grok não está configurada no sistema (Configurações → WhatsApp).', m); return; }
+  if (!g.apiKey && !g.reserva.apiKey) { await responder(jid, 'A chave da API do Grok não está configurada no sistema (Configurações → WhatsApp).', m); return; }
   const empresas = db.getEmpresas();
   const multi = !empresaFixa || empresaFixa === '*';
   const slugs = multi ? empresas.map(e => e.slug) : [empresaFixa];
@@ -837,6 +837,7 @@ async function analisarEExecutar({ jid, m, texto, media, quem, empresaFixa, cfg,
     + (extra ? extra + '\n' : '')
     + 'Contexto (JSON): ' + JSON.stringify(ctx);
   let analise;
+  g.onReserva = e => registrar('aviso', 'Grok falhou (' + String(e.message).slice(0, 120) + ') — usando a IA reserva (NVIDIA ' + g.reserva.modelo + ')', { quem });
   try { analise = await grok.perguntarJson(g, { system: SYSTEM, texto: prompt, imagens }); }
   catch (e) { registrar('erro', 'Grok: ' + e.message, { quem }); await responder(jid, 'Não consegui consultar a IA agora: ' + e.message, m); return; }
   registrar('analise', (analise.acao || '?') + ' — ' + (analise.mensagem || ''), { quem, texto, empresa: analise.empresa || empresaFixa });
@@ -1350,6 +1351,7 @@ function status() {
     status: estado.status, qr: estado.qr, numero: estado.numero, erro: estado.erro, desde: estado.desde,
     ativo: cfg.ativo, temSessao: fs.existsSync(path.join(authDir, 'creds.json')),
     grok_model: cfg.grok_model || grok.MODELO_PADRAO, temGrokKey: !!cfg.grok_api_key,
+    nvidia_model: cfg.nvidia_model || grok.NV_MODELO, temNvidiaKey: !!cfg.nvidia_api_key,
     grupos: Object.keys(gruposCache).map(jid => ({ jid, nome: gruposCache[jid].nome || jid, empresa: (cfg.grupos || {})[jid] || '', padrao: (cfg.grupos_padrao || {})[jid] || {} })).sort((a, b) => a.nome.localeCompare(b.nome)),
     gruposConfig: cfg.grupos || {}, autorizados: cfg.autorizados || [], empresa_padrao: cfg.empresa_padrao || '',
     grupos_padrao: cfg.grupos_padrao || {}, resumo_diario: cfg.resumo_diario !== false, apelidos: apelidosCfg(cfg),

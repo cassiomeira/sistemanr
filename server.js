@@ -1436,6 +1436,8 @@ app.post('/api/whatsapp/config', adminOnly, (req, res) => {
   }
   if (b.grok_model !== undefined) novo.grok_model = String(b.grok_model || '').trim();
   if (b.grok_api_key) novo.grok_api_key = String(b.grok_api_key).trim();
+  if (b.nvidia_model !== undefined) novo.nvidia_model = String(b.nvidia_model || '').trim();
+  if (b.nvidia_api_key) novo.nvidia_api_key = String(b.nvidia_api_key).trim();
   whatsapp.salvarConfig(novo);
   db.addAuditLog(req.emp, req.user.nome, 'alterou', 'WhatsApp', 'Atualizou configuração do WhatsApp/Grok');
   res.json({ ok: true });
@@ -1448,7 +1450,9 @@ app.post('/api/whatsapp/testar-grok', adminOnly, async (req, res) => {
     const cfg = whatsapp.grokCfg();
     if (req.body && req.body.grok_api_key) cfg.apiKey = String(req.body.grok_api_key).trim();
     if (req.body && req.body.grok_model) cfg.modelo = String(req.body.grok_model).trim();
-    res.json(await grok.testar(cfg));
+    if (req.body && req.body.nvidia_api_key) cfg.reserva.apiKey = String(req.body.nvidia_api_key).trim();
+    if (req.body && req.body.nvidia_model) cfg.reserva.modelo = String(req.body.nvidia_model).trim();
+    res.json(await grok.testar(cfg, !!(req.body && req.body.reserva)));
   } catch (e) { res.json({ error: e.message }); }
 });
 

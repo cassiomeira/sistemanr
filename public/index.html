@@ -1123,12 +1123,15 @@
                         <div class="form-grid" style="grid-template-columns:1fr 1fr">
                             <div class="form-group"><label>Chave da API do Grok (xAI)</label><input type="password" id="wa-grok-key" placeholder="xai-..." autocomplete="new-password"></div>
                             <div class="form-group"><label>Modelo</label><input type="text" id="wa-grok-model" placeholder="grok-4.3"></div>
+                            <div class="form-group"><label>Chave reserva NVIDIA (usada se o Grok falhar)</label><input type="password" id="wa-nv-key" placeholder="nvapi-..." autocomplete="new-password"></div>
+                            <div class="form-group"><label>Modelo da reserva</label><input type="text" id="wa-nv-model" placeholder="meta/llama-4-maverick-17b-128e-instruct"></div>
                             <div class="form-group"><label>Empresa padrão (conversa privada / "mensagem para você mesmo")</label><select id="wa-empresa-padrao"><option value="">— perguntar qual empresa —</option></select></div>
                             <div class="form-group"><label>Números autorizados (um por linha: número e nome)</label><textarea id="wa-autorizados" rows="3" placeholder="5531999999999 Cássio&#10;5531988888888 Celso" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:13px"></textarea></div>
                         </div>
                         <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap">
                             <button class="btn btn-primary btn-sm" onclick="NR.waSalvarConfig()"><i class="fas fa-check"></i> Salvar</button>
                             <button class="btn btn-outline btn-sm" id="wa-btn-testar" onclick="NR.waTestarGrok()"><i class="fas fa-robot"></i> Testar Grok</button>
+                            <button class="btn btn-outline btn-sm" id="wa-btn-testar-nv" onclick="NR.waTestarGrok(true)"><i class="fas fa-life-ring"></i> Testar reserva</button>
                             <button class="btn btn-outline btn-sm" onclick="NR.waAtualizarGrupos()"><i class="fas fa-sync-alt"></i> Atualizar grupos</button>
                             <button class="btn btn-outline btn-sm" onclick="NR.waResumoAgora()" title="Manda agora o resumo de contas para o 1º número autorizado"><i class="fas fa-sun"></i> Enviar resumo agora</button>
                             <label style="font-size:12px;align-self:center;display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="wa-resumo-diario" checked> Resumo diário às 7h (1º número autorizado)</label>

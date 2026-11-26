@@ -2,16 +2,19 @@
 // API compatível com OpenAI: POST https://api.x.ai/v1/chat/completions
 const BASE = 'https://api.x.ai/v1';
 const MODELO_PADRAO = 'grok-4.3';
+// IA reserva: NVIDIA (build.nvidia.com), também compatível com OpenAI — usada quando o Grok falha (sem crédito, fora do ar...)
+const NV_BASE = 'https://integrate.api.nvidia.com/v1';
+const NV_MODELO = 'meta/llama-4-maverick-17b-128e-instruct';
 
 function parseJson(text) {
-  let t = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let t = String(text || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   const ini = t.indexOf('{'), fim = t.lastIndexOf('}');
   if (ini === -1 || fim === -1) throw new Error('A IA não devolveu JSON');
   return JSON.parse(t.substring(ini, fim + 1));
 }
 
-async function post(apiKey, rota, body) {
-  const resp = await fetch(BASE + rota, {
+async function post(apiKey, rota, body, base, rotulo) {
+  const resp = await fetch((base || BASE) + rota, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
     body: JSON.stringify(body),
@@ -21,7 +24,7 @@ async function post(apiKey, rota, body) {
   try { data = JSON.parse(txt); } catch (e) { data = { raw: txt }; }
   if (!resp.ok) {
     const msg = (data.error && (data.error.message || data.error)) || data.message || txt.slice(0, 200);
-    const err = new Error('Grok ' + resp.status + ': ' + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
+    const err = new Error((rotulo || 'Grok') + ' ' + resp.status + ': ' + (typeof msg === 'string' ? msg : JSON.stringify(msg)));
     err.status = resp.status;
     throw err;
   }
@@ -34,7 +37,36 @@ async function post(apiKey, rota, body) {
  * @param {{system:string, texto:string, imagens?:{buffer:Buffer, mimeType:string}[]}} entrada
  */
 async function perguntarJson(cfg, entrada) {
-  if (!cfg || !cfg.apiKey) throw new Error('Chave da API do Grok não configurada');
+  const reserva = cfg && cfg.reserva && cfg.reserva.apiKey ? cfg.reserva : null;
+  if (!cfg || !cfg.apiKey) {
+    if (reserva) return perguntarNvidia(reserva, entrada);
+    throw new Error('Chave da API do Grok não configurada');
+  }
+  try { return await perguntarGrok(cfg, entrada); }
+  catch (e) {
+    if (!reserva) throw e;
+    if (typeof cfg.onReserva === 'function') { try { cfg.onReserva(e); } catch (x) {} }
+    try { return await perguntarNvidia(reserva, entrada); }
+    catch (e2) { throw new Error(e.message + ' | reserva: ' + e2.message); }
+  }
+}
+
+// NVIDIA: sem response_format (nem todo modelo aceita); o JSON é extraído da resposta
+async function perguntarNvidia(cfg, entrada) {
+  const modelo = cfg.modelo || NV_MODELO;
+  const imagens = (entrada.imagens || []).filter(i => i && i.buffer && /^image\/(jpe?g|png)$/i.test(i.mimeType));
+  const user = imagens.length
+    ? imagens.map(img => ({ type: 'image_url', image_url: { url: 'data:' + img.mimeType + ';base64,' + img.buffer.toString('base64') } })).concat([{ type: 'text', text: entrada.texto + '\n\nResponda somente com o JSON.' }])
+    : entrada.texto + '\n\nResponda somente com o JSON.';
+  const data = await post(cfg.apiKey, '/chat/completions', {
+    model: modelo,
+    messages: [{ role: 'system', content: entrada.system }, { role: 'user', content: user }],
+    temperature: 0, max_tokens: 4096,
+  }, NV_BASE, 'NVIDIA');
+  return parseJson(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
+}
+
+async function perguntarGrok(cfg, entrada) {
   const modelo = cfg.modelo || MODELO_PADRAO;
   const imagens = (entrada.imagens || []).filter(i => i && i.buffer && /^image\/(jpe?g|png)$/i.test(i.mimeType));
   const partes = [];
@@ -112,9 +144,13 @@ async function perguntarPdfJson(cfg, buffer, nome, instrucao) {
   }
 }
 
-async function testar(cfg) {
-  const r = await perguntarJson(cfg, { system: 'Responda apenas JSON.', texto: 'Devolva {"ok":true,"modelo":"<seu nome de modelo>"}' });
+async function testar(cfg, soReserva) {
+  if (soReserva) {
+    if (!cfg.reserva || !cfg.reserva.apiKey) throw new Error('Chave da NVIDIA não configurada');
+    return { ok: true, resposta: await perguntarNvidia(cfg.reserva, { system: 'Responda apenas JSON.', texto: 'Devolva {"ok":true,"modelo":"<seu nome de modelo>"}' }) };
+  }
+  const r = await perguntarGrok(cfg, { system: 'Responda apenas JSON.', texto: 'Devolva {"ok":true,"modelo":"<seu nome de modelo>"}' });
   return { ok: true, resposta: r };
 }
 
-module.exports = { perguntarJson, transcreverAudio, perguntarPdfJson, testar, MODELO_PADRAO };
+module.exports = { perguntarJson, transcreverAudio, perguntarPdfJson, testar, MODELO_PADRAO, NV_MODELO };
